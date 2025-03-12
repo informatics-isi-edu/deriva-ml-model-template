@@ -13,5 +13,4 @@ except PackageNotFoundError:
 #ml_instance = DemoML()
 
 if __name__ == "__main__":
-    print
     print(__version__)

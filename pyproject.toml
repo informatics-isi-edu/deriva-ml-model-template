@@ -13,7 +13,7 @@ description = "A test template for using DerivaML"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "deriva-ml=1.7.6",
+    "deriva-ml",
 ]
 
 [tool.setuptools-git-versioning]
@@ -21,7 +21,7 @@ enabled = true
 version_file = "VERSION"
 count_commits_from_version_file = true
 dev_template = "{tag}.{branch}{ccount}"  # <--- note {branch} here
-dirty_template = "{tag}.{branch}{ccount}"
+#dirty_template = "{tag}.{branch}{ccount}"
 
 [metadata]
 license = "Apache 2.0"

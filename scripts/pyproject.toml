@@ -12,9 +12,7 @@ authors = [
 description = "A test template for using DerivaML"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = [
-    "deriva-ml=1.7.6",
-]
+dependencies = ["deriva-ml"]
 
 [tool.setuptools-git-versioning]
 enabled = true
