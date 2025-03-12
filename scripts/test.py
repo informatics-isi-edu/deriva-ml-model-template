@@ -1,10 +1,17 @@
 from deriva_ml.demo_catalog import DemoML
-import importlib
+#ml_instance = DemoML()
 
-ml_instance = DemoML()
+from deriva_ml.demo_catalog import DemoML
+from importlib.metadata import version, PackageNotFoundError
+
+try:
+    __version__ = version("test")
+except PackageNotFoundError:
+    # package is not installed
+    pass
+
+#ml_instance = DemoML()
 
 if __name__ == "__main__":
-    print("Testing ML")
-    print __file__
-    importlib
-
+    print
+    print(__version__)
