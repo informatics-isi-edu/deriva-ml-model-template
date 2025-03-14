@@ -11,6 +11,14 @@ def get_top_stack_filename():
         return Path(stack[1].filename)  # Get the caller's filename
     return None  # Stack is too shallow
 
+def repo_root():
+    repo_root = Path(__file__)
+    while repo_root != repo_root.root:
+        if (repo_root / '.git').exists():
+            break
+        else:
+            repo_root = repo_root.parent
+    return repo_root
 
 def get_version() -> str:
     repo_root = Path(__file__)
@@ -36,7 +44,8 @@ def github_url(file):
     result = subprocess.run(['git', 'branch', '--show-current'], capture_output=True, text=True)
     current_branch = result.stdout.strip()
     print(get_latest_file_commit(file))
-    url = f'{github_url}/blob/{get_sha()}/{filename}'
+    print(filename.relative_to(repo_root()))
+    url = f'{github_url}/blob/{get_sha()}/{filename.relative_to(repo_root())}'
     return url
 
 if __name__ == "__main__":
