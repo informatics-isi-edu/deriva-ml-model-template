@@ -20,7 +20,7 @@ dependencies = [
 enabled = true
 version_file = "VERSION"
 count_commits_from_version_file = true
-dev_template = "{tag}.{branch}{ccount}"  # <--- note {branch} here
+#dev_template = "{tag}.{branch}{ccount}"  # <--- note {branch} here
 #dirty_template = "{tag}.{branch}{ccount}"
 
 [metadata]
