@@ -2,6 +2,7 @@ from deriva_ml import DerivaML, ExecutionConfiguration, DatasetSpec, MLVocab
 from deriva_ml.demo_catalog import create_demo_catalog
 from deriva.core import BaseCLI, KeyValuePairArgs, format_credential, format_exception, urlparse
 
+import sys
 datasets = []
 models = []
 hostname = 'dev.eye-ai.org'
@@ -16,7 +17,6 @@ def main(hostname, catalog_id):
     deriva_ml = DerivaML(hostname, catalog_id)
     deriva_ml.add_term(MLVocab.workflow_type, "Demo Notebook", description="Initial setup of Model Notebook")
     workflow_rid = deriva_ml.create_workflow('demo-workflow', 'Demo Notebook')
-
     config = ExecutionConfiguration(
         datasets=[DatasetSpec(rid=dataset, version=deriva_ml.dataset_version(dataset)) for dataset in datasets],
         assets=models,
@@ -29,14 +29,12 @@ def main(hostname, catalog_id):
 
 class DerivaDemoCLI(BaseCLI):
     def __init__(self, description, epilog, **kwargs):
-
         BaseCLI.__init__(self, description, epilog, **kwargs)
         self.parser.add_argument("--catalog", default=1, metavar="<1>", help="Catalog number. Default: 1")
 
     def main(self):
         try:
             args = self.parse_cli()
-            catalog = create_demo_catalog(args.hostname, args.catalog)
             main(hostname=args.hostname, catalog_id=args.catalog)
         except ValueError as e:
             sys.stderr.write(str(e))
@@ -47,7 +45,6 @@ class DerivaDemoCLI(BaseCLI):
 
 
 if __name__ == "__main__":
-    cli = DerivaDemoCLI()
-
-
-    main()
+    cli = DerivaDemoCLI(description="Deriva ML Execution Script Demo",
+                        epilog="")
+    cli.main()
