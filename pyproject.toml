@@ -1,28 +1,28 @@
 [build-system]
-requires = ["setuptools>=42", "wheel",  "setuptools-git-versioning>=2.0,<3" ]
+requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 
 [project]
-name = "deriva-demo"
+name = "deriva-ml-demo"
 dynamic = ["version"]
 authors = [
     {name = "ISRD", email = "isrd-dev@isi.edu"},
 ]
-description = "A test template for using DerivaML"
+description = "Simple template to demonstrate setup and use of DerivaML"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "deriva-ml",
+    "deriva~=1.7.7",
 ]
 
-[tool.setuptools-git-versioning]
-enabled = true
-version_file = "VERSION"
-count_commits_from_version_file = true
-#dev_template = "{tag}.{branch}{ccount}"  # <--- note {branch} here
-#dirty_template = "{tag}.{branch}{ccount}"
+[tool.setuptools.dynamic]
+version = {attr = ".VERSION.__version__"}  # any module attribute compatible with ast.literal_eval
+
+[project.scripts]
+deriva-ml-create-schema = "deriva_ml.script_setup:main"
+deriva-ml-alter-annotation = "deriva_ml.schema_setup.alter_annotation:main"
 
 [metadata]
 license = "Apache 2.0"
-keywords = ["deriva-test"]
+keywords = ["deriva-ml"]
