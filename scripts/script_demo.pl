@@ -11,7 +11,6 @@ catalog_id = 'eye-ai'
 def do_stuff():
     pass
 
-
 def main(hostname, catalog_id):
     deriva_ml = DerivaML(hostname, catalog_id)
     deriva_ml.add_term(MLVocab.workflow_type, "Demo Notebook", description="Initial setup of Model Notebook")
