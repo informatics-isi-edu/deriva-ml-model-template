@@ -16,7 +16,6 @@ dependencies = [
     "deriva-ml",
 ]
 
-[tool.setuptools_scm]
 
 [metadata]
 license = "Apache 2.0"
