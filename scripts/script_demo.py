@@ -1,13 +1,17 @@
 """
 This file is a template for how to set up a stand-alone script to execute a model.
 """
+import argparse
+import logging
+
 from deriva_ml import DerivaML, ExecutionConfiguration, DatasetSpec, MLVocab, Execution
+from deriva_ml.demo_catalog import create_demo_catalog
 from deriva.core import BaseCLI
 from typing import Optional
 
 datasets = []
 models = []
-
+TEST_SERVER = 'dev.eye-ai.org'
 
 class DerivaDemoCLI(BaseCLI):
     """Main class to part command line arguments and call model"""
@@ -16,16 +20,25 @@ class DerivaDemoCLI(BaseCLI):
         BaseCLI.__init__(self, description, epilog, **kwargs)
 
         self.parser.add_argument("--catalog", default=1, metavar="<1>", help="Catalog number. Default: 1")
+        self.parser.add_argument("--test", action="store_true", help="Use demo catalog.")
+
         self.execution: Optional[Execution] = None
         self.deriva_ml: Optional[DerivaML] = None
+        self.logger = logging.getLogger(__name__)
 
     def main(self):
         """Parse arguments and set up execution environment."""
-        args = self.parser.parse_cli()
-        hostname = args.hostname
+        args = self.parse_cli()
+        hostname = args.host
         catalog_id = args.catalog
 
+        if args.test:
+            hostname = TEST_SERVER
+            catalog = create_demo_catalog(hostname)
+            catalog_id = catalog.catalog_id
+
         self.deriva_ml = DerivaML(hostname, catalog_id)  # This should be changed to the domain specific class.
+        print(f'Executing script {self.deriva_ml.executable_path} version: {self.deriva_ml.get_version()}')
 
         # Create a workflow instance for this specific version of the script.  Return an existing workflow if one is found.
         self.deriva_ml.add_term(MLVocab.workflow_type, "Demo Notebook", description="Initial setup of Model Notebook")
