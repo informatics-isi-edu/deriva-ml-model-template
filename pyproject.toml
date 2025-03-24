@@ -2,9 +2,8 @@
 requires = ["setuptools>=42", "wheel" ]
 build-backend = "setuptools.build_meta"
 
-
 [project]
-name = "deriva-demo"
+name = "deriva-model"  # Change this to be the name of the current project.
 dynamic = ["version"]
 authors = [
     {name = "ISRD", email = "isrd-dev@isi.edu"},
@@ -13,10 +12,14 @@ description = "A test template for using DerivaML"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "deriva-ml",
+    # Add a line for the domain specific classes build on DerivaML
+    "deriva-ml"
 ]
 
+[tool.setuptools.data-files]
+# install script into the user's local bin directory
+"bin" = ["bump-version"]
 
 [metadata]
 license = "Apache 2.0"
-keywords = ["deriva-test"]
+keywords = ["deriva-ml"]
