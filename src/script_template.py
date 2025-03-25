@@ -21,6 +21,8 @@ class DerivaDemoCLI(BaseCLI):
 
         self.parser.add_argument("--catalog", default=1, metavar="<1>", help="Catalog number. Default: 1")
         self.parser.add_argument("--test", action="store_true", help="Use demo catalog.")
+        self.parser.add_argument("--dry-run", action="store_true", help="Perform execution in dry-run mode.")
+
 
         self.execution: Optional[Execution] = None
         self.deriva_ml: Optional[DerivaML] = None
@@ -42,16 +44,16 @@ class DerivaDemoCLI(BaseCLI):
 
         # Create a workflow instance for this specific version of the script.  Return an existing workflow if one is found.
         self.deriva_ml.add_term(MLVocab.workflow_type, "Demo Notebook", description="Initial setup of Model Notebook")
-        workflow_rid = self.deriva_ml.create_workflow('demo-workflow', 'Demo Notebook')
+        workflow = self.deriva_ml.create_workflow('demo-workflow', 'Demo Notebook')
 
         # Create an execution instance that will work with the latest version of the input datasets.
         config = ExecutionConfiguration(
             datasets=[DatasetSpec(rid=dataset, version=self.deriva_ml.dataset_version(dataset)) for dataset in
                       datasets],
             assets=models,
-            workflow=workflow_rid
+            workflow=workflow
         )
-        self.execution = self.deriva_ml.create_execution(config)
+        self.execution = self.deriva_ml.create_execution(config, dry_run=args.dry_run)
         with self.execution as e:
             self.do_stuff(e)
         self.execution.upload_execution_outputs()
