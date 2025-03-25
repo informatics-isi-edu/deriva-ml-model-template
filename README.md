@@ -25,8 +25,9 @@ There is also a DerivaML method that will return the current version of the exec
 
 ## Recommended Workflow
 
-Every model should live in its own repository that follows this template. To enhance reproducablity, each repository should have its own Conda environment, or venv.  
-Model developers should endeavor to provide YAML files or requirements.txt to build the virtual enviroment from scratch.
+Every model should live in its own repository that follows this template. 
+To enhance reproducibility, each repository should have its own Conda environment, or venv.  
+Model developers should endeavor to provide YAML files or requirements.txt to build the virtual environment from scratch.
 The basic configuration for the environment should include deriva-ml and the domain specific modules.
 These are included as default dependencies in the template.
 
@@ -34,9 +35,14 @@ Best practice is to commit any changes to the model prior to running it.
 This will maximize the ability of DerivaML to track what code was used to produce the model result.
 We should assume that eye-ai and deriva-ml are installed as modules into the environment.  
 
+During debugging, a *dry_run* option is available in the `Execution.create_execution` method.  
+This option will download all of the input files associated with an execution, but will not create any Execution records,
+and will not upload any resulting files.  
+Once you are confident that your model/notebook is correct, the best practice is remove the dry-run option, create a new version tag and then run that model to completion,.
+
 ## Managing releases and version tags
 
-In addition to commiting, it is advisable to tag the model as significant milestones and version as a relase.
+In addition to commiting, it is advisable to tag the model as significant milestones and version as a release.
 The template includes a bash script that streamlines the process of creating release tags for a model.
 DerivaML uses semantic versioning.
 
