@@ -51,7 +51,8 @@ class DerivaDemoCLI(BaseCLI):
             datasets=[DatasetSpec(rid=dataset, version=self.deriva_ml.dataset_version(dataset)) for dataset in
                       datasets],
             assets=models,
-            workflow=workflow
+            workflow=workflow,
+            parameters='params.json'
         )
         self.execution = self.deriva_ml.create_execution(config, dry_run=args.dry_run)
         with self.execution as e:
@@ -60,6 +61,7 @@ class DerivaDemoCLI(BaseCLI):
 
     def do_stuff(self, execution: Execution):
         """Put your model here"""
+        print(f" Execution with parameters: {execution.parameters}")
         pass
 
 
