@@ -13,7 +13,8 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     # Add a line for the domain specific classes build on DerivaML
-    "deriva-ml"
+    "deriva-ml",
+    "papermill"
 ]
 
 [tool.setuptools_scm]

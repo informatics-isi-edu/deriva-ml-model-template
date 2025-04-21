@@ -21,7 +21,6 @@ You can determine the current version of the model from the command line by ente
 ```aiignore
 python -m setuptools_scm
 ```
-There is also a DerivaML method that will return the current version of the executable script.
 
 ## Recommended Workflow
 

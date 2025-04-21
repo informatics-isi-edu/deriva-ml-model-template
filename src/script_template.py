@@ -1,17 +1,15 @@
 """
 This file is a template for how to set up a stand-alone script to execute a model.
 """
-import argparse
 import logging
 
 from deriva_ml import DerivaML, ExecutionConfiguration, DatasetSpec, MLVocab, Execution
-from deriva_ml.demo_catalog import create_demo_catalog
 from deriva.core import BaseCLI
 from typing import Optional
 
+# These should be set to be the RIDs of input datasets and assets that are downloaded prior to execution.
 datasets = []
 models = []
-TEST_SERVER = 'dev.eye-ai.org'
 
 class DerivaDemoCLI(BaseCLI):
     """Main class to part command line arguments and call model"""
@@ -23,7 +21,6 @@ class DerivaDemoCLI(BaseCLI):
         self.parser.add_argument("--test", action="store_true", help="Use demo catalog.")
         self.parser.add_argument("--dry-run", action="store_true", help="Perform execution in dry-run mode.")
 
-
         self.execution: Optional[Execution] = None
         self.deriva_ml: Optional[DerivaML] = None
         self.logger = logging.getLogger(__name__)
@@ -33,11 +30,6 @@ class DerivaDemoCLI(BaseCLI):
         args = self.parse_cli()
         hostname = args.host
         catalog_id = args.catalog
-
-        if args.test:
-            hostname = TEST_SERVER
-            catalog = create_demo_catalog(hostname)
-            catalog_id = catalog.catalog_id
 
         self.deriva_ml = DerivaML(hostname, catalog_id)  # This should be changed to the domain specific class.
         print(f'Executing script {self.deriva_ml.executable_path} version: {self.deriva_ml.get_version()}')
@@ -52,17 +44,19 @@ class DerivaDemoCLI(BaseCLI):
                       datasets],
             assets=models,
             workflow=workflow,
-            parameters='params.json'
+            parameters='parameters..json'
         )
+
         self.execution = self.deriva_ml.create_execution(config, dry_run=args.dry_run)
         with self.execution as e:
             self.do_stuff(e)
         self.execution.upload_execution_outputs()
 
     def do_stuff(self, execution: Execution):
-        """Put your model here"""
+
         print(f" Execution with parameters: {execution.parameters}")
-        pass
+        print(f" Execution with input assets: {[a.as_posix() for a in execution.asset_paths]}")
+        print(f"Execution datasets: {execution.datasets}")
 
 
 if __name__ == "__main__":
