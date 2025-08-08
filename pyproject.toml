@@ -1,9 +1,6 @@
-[build-system]
-requires = ["setuptools>=42", "wheel", "setuptools-scm" ]
-build-backend = "setuptools.build_meta"
 
 [project]
-name = "deriva-model"  # Change this to be the name of the current project.
+name = "deriva-model-template"  # Change this to be the name of the current project.
 dynamic = ["version"]
 authors = [
     {name = "ISRD", email = "isrd-dev@isi.edu"},
@@ -11,17 +8,39 @@ authors = [
 description = "A test template for using DerivaML"
 readme = "README.md"
 requires-python = ">=3.10"
+
 dependencies = [
     # Add a line for the domain specific classes build on DerivaML
-    "deriva-ml",
-    "papermill"
+    "deriva-ml @ file:///Users/carl/Repos/Projects/deriva-ml"
+    # "deriva-ml",
+]
+
+[dependency-groups]
+dev = [
+    "bump-my-version",
+    "pytest>=8.4.1",
+    "pytest-coverage>=0.0",
+    "setuptools_scm",
+    "ruff",
+    "ipython"
+]
+lint = [
+    "ruff>=0.12.7",
 ]
 
 [tool.setuptools_scm]
 
+[tool.bumpversion]
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
+serialize = ["{major}.{minor}.{patch}"]
+tag = true
+tag_name = "v{new_version}"
+tag_message = "Bump version: {current_version} → {new_version}"
+message = "Bump version: {current_version} → {new_version}"
+
 [tool.setuptools.data-files]
 # install script into the user's local bin directory
-"bin" = ["bump-version"]
+
 
 [metadata]
 license = "Apache 2.0"
