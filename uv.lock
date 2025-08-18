@@ -594,15 +594,10 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "bump-my-version" },
     { name = "ipython", version = "8.37.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "ipython", version = "9.4.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "pytest" },
     { name = "pytest-coverage" },
-    { name = "ruff" },
-    { name = "setuptools-scm" },
-]
-lint = [
     { name = "ruff" },
 ]
 
@@ -611,14 +606,11 @@ requires-dist = [{ name = "deriva-ml" }]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "bump-my-version" },
     { name = "ipython" },
     { name = "pytest", specifier = ">=8.4.1" },
     { name = "pytest-coverage", specifier = ">=0.0" },
     { name = "ruff" },
-    { name = "setuptools-scm" },
 ]
-lint = [{ name = "ruff", specifier = ">=0.12.7" }]
 
 [[package]]
 name = "entrypoints"

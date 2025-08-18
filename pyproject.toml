@@ -16,20 +16,16 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "bump-my-version",
     "pytest>=8.4.1",
     "pytest-coverage>=0.0",
-    "setuptools_scm",
     "ruff",
     "ipython"
-]
-lint = [
-    "ruff>=0.12.7",
 ]
 
 [tool.uv.sources]
 
 [tool.setuptools_scm]
+version_scheme = "post-release"
 
 [tool.bumpversion]
 parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"

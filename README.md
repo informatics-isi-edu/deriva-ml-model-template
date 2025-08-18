@@ -15,12 +15,41 @@ To create a repository from the template, follow the instructions provided here 
 
 Templates for models set up as runnable python scripts, and Jupyter notebooks are provided.
 
+## Project Management
+
+This template uses uv as a project management tool.  As a prerequisite, you should install the uv tool into your execution environment.
+Once installed you should use the uv command line to manage your dependencies and virtual environment.
+
+
 ## Getting the current version
 
 You can determine the current version of the model from the command line by entering:
 ```aiignore
-python -m setuptools_scm
+uv run python -m setuptools_scm
 ```
+
+## Running a script.
+
+You can run a python script in the appropriate venv using the uv command:
+```aiignore
+uv run src/script_template.py
+```
+
+## Running a notebook.
+
+Although you can run a notebook interactivly in the regular Jupiter environment, it is recommended that once your 
+notebook has been debugged, that you run it from start to finish in the deriva-ml enviomrnent.
+
+This process is streamlined by the run-notebook command, which uses papermill to substitute values into a parameters
+cell in your notebook, and then runs every cell in sequence and uploaded the resulting notebook into the catalog.
+
+Note that run-notebook assumes that the nboutput tool has been installed so as to ensure that cell outputs are not
+commited to the repository. To install nboutput, you should type the command:
+```aiignore
+nboutput --install
+```
+You only need to do this once after which the command is installed as a git pre-commit hook and run every time you 
+commit your notebook to the repository.
 
 ## Recommended Workflow
 
@@ -51,10 +80,3 @@ The script takes a single argument whose values can be patch, minor or major. E.
 ```aiignore
 ./bump-version major
 ```
-
-### Installing the GitHub CLI
-
-The script bump-version.sh will create a new release tag in GitHub.  This script requires the 
-GitHUB CLI be installed. 
-
-See [https://cli.github.com](https://cli.github.com) for instructions on how to install and configure the CLI.
