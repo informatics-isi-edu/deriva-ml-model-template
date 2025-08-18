@@ -37,10 +37,14 @@ uv run src/script_template.py
 
 ## Running a notebook.
 
-Although you can run a notebook interactivly in the regular Jupiter environment, it is recommended that once your 
-notebook has been debugged, that you run it from start to finish in the deriva-ml enviomrnent.
+Although you can run a notebook interactively in the regular Jupiter environment, it is recommended that once your 
+notebook has been debugged, that you run it from start to finish in the deriva-ml environment.
 
-This process is streamlined by the run-notebook command, which uses papermill to substitute values into a parameters
+This process is streamlined by the command:
+```
+uv run deriva-ml-run-notebook notbook-file
+ ```
+ command, which uses papermill to substitute values into a parameters
 cell in your notebook, and then runs every cell in sequence and uploaded the resulting notebook into the catalog.
 
 Note that run-notebook assumes that the nboutput tool has been installed so as to ensure that cell outputs are not
@@ -57,7 +61,7 @@ Every model should live in its own repository that follows this template.
 To enhance reproducibility, each repository should have its own venv.
 The pyproject.toml file is set up to us uv, which makes it straight forward to create an manage Pyton enviroments.
 It is recommended that you commit the uv.lock file that is created on first setup into your repo and that you update
-your enviorment only through the uv command line.
+your environment only through the uv command line.
 The basic configuration for the environment should include deriva-ml and the domain specific modules.
 These are included as default dependencies in the template.
 
