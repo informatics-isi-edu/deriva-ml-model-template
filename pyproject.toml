@@ -11,8 +11,7 @@ requires-python = ">=3.10"
 
 dependencies = [
     # Add a line for the domain specific classes build on DerivaML
-    "deriva-ml @ file:///Users/carl/Repos/Projects/deriva-ml"
-    # "deriva-ml",
+     "deriva-ml",
 ]
 
 [dependency-groups]
@@ -27,6 +26,8 @@ dev = [
 lint = [
     "ruff>=0.12.7",
 ]
+
+[tool.uv.sources]
 
 [tool.setuptools_scm]
 

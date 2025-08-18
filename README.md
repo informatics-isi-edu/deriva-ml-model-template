@@ -25,14 +25,16 @@ python -m setuptools_scm
 ## Recommended Workflow
 
 Every model should live in its own repository that follows this template. 
-To enhance reproducibility, each repository should have its own Conda environment, or venv.  
-Model developers should endeavor to provide YAML files or requirements.txt to build the virtual environment from scratch.
+To enhance reproducibility, each repository should have its own venv.
+The pyproject.toml file is set up to us uv, which makes it straight forward to create an manage Pyton enviroments.
+It is recommended that you commit the uv.lock file that is created on first setup into your repo and that you update
+your enviorment only through the uv command line.
 The basic configuration for the environment should include deriva-ml and the domain specific modules.
 These are included as default dependencies in the template.
 
 Best practice is to commit any changes to the model prior to running it.  
 This will maximize the ability of DerivaML to track what code was used to produce the model result.
-We should assume that eye-ai and deriva-ml are installed as modules into the environment.  
+We should assume that deriva-ml are installed as modules into the environment.  
 
 During debugging, a *dry_run* option is available in the `Execution.create_execution` method.  
 This option will download all of the input files associated with an execution, but will not create any Execution records,
@@ -42,7 +44,7 @@ Once you are confident that your model/notebook is correct, the best practice is
 ## Managing releases and version tags
 
 In addition to commiting, it is advisable to tag the model as significant milestones and version as a release.
-The template includes a bash script that streamlines the process of creating release tags for a model.
+The template includes a bash script and a GitHub action that in combination that streamlines the process of creating release tags for a model.
 DerivaML uses semantic versioning.
 
 The script takes a single argument whose values can be patch, minor or major. E.G.
