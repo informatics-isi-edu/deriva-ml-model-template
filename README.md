@@ -8,27 +8,22 @@ using a deriva catalog.
 The code provenance aspects of DerivaML depend on a script or notebook being tracked in Git. 
 This template assumes that GitHub is being used.
 
-This template repository constains a basic project file, a simple Python script and equivalant notebook, along with a sample parameter file.
+This template repository contains a basic project file, a simple Python script and equivalent notebook, along with a sample parameter file.
 
 ## Creating a new repository
 
 This repository is set up as a template.  Its intended use is to create a new repository using the template and then customize it for your specific model.
 To create a repository from the template, follow the instructions provided here [GitHub Template](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template)
 
-Templates for models set up as runnable python scripts, and Jupyter notebooks are provided.
+Templates for models set up as runnable python scripts, and Jupyter notebooks are provided along with a sample parameter file.
 
 ## Project Management
 
-This template uses uv as a project management tool.  As a prerequisite, you should install the uv tool into your execution environment.
+This template uses `uv` as a project management tool.  As a prerequisite, you should install the *uv* tool into your execution environment.
 Once installed you should use the uv command line to manage your dependencies and virtual environment.
 
 
-## Getting the current version
 
-You can determine the current version of the model from the command line by entering:
-```aiignore
-uv run python -m setuptools_scm
-```
 
 ## Running a script.
 
@@ -49,8 +44,8 @@ uv run deriva-ml-run-notebook notebook-file --host HOSTHAME --catalog CATALOG_ID
  command, which uses papermill to substitute values into a parameters
 cell in your notebook, and then runs every cell in sequence and uploaded the resulting notebook into the catalog.
 
-Note that run-notebook assumes that the nboutput tool has been installed so as to ensure that cell outputs are not
-commited to the repository. To install nboutput, you should type the command:
+Note that run-notebook assumes that the `nboutput` tool has been installed so as to ensure that cell outputs are not
+commited to the repository. To install `nboutput`, you should type the command:
 ```aiignore
 uv run nbstripout --instal
 ```
@@ -68,7 +63,8 @@ These are included as default dependencies in the template.
 
 Best practice is to commit any changes to the model prior to running it.  
 This will maximize the ability of DerivaML to track what code was used to produce the model result.
-We should assume that deriva-ml are installed as modules into the environment. 
+It is recommended practice to use git branch and pull requests even if you are working on your own.
+This way you will have better records of the changes made over time as you evolve your model.
 
 During debugging, a *dry_run* option is available in the `Execution.create_execution` method.  
 This option will download all of the input files associated with an execution, but will not create any Execution records,
@@ -85,7 +81,11 @@ The script takes a single argument whose values can be patch, minor or major. E.
 ```aiignore
 ./bump-version major|minor|patch
 ```
-The bump-version code will automatically use the commit log from any pull requests to generate release notes. It is recommended practice to use git branch and pull requests even if
-you are working on your own.
-This way you will have better records of the changes made over time as you evolve your model.
+The bump-version code will automatically use the commit log from any pull requests to generate release notes. 
 
+## Getting the current version
+
+You can determine the current version of the model from the command line by entering:
+```aiignore
+uv run python -m setuptools_scm
+```
