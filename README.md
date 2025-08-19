@@ -84,8 +84,8 @@ DerivaML uses semantic versioning.
 The script takes a single argument whose values can be patch, minor or major. E.G.
 ```aiignore
 ./bump-version major|minor|patch
-
+```
 The bump-version code will automatically use the commit log from any pull requests to generate release notes. It is recommended practice to use git branch and pull requests even if
 you are working on your own.
 This way you will have better records of the changes made over time as you evolve your model.
-```
+
