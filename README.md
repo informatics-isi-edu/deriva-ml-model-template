@@ -8,6 +8,8 @@ using a deriva catalog.
 The code provenance aspects of DerivaML depend on a script or notebook being tracked in Git. 
 This template assumes that GitHub is being used.
 
+This template repository constains a basic project file, a simple Python script and equivalant notebook, along with a sample parameter file.
+
 ## Creating a new repository
 
 This repository is set up as a template.  Its intended use is to create a new repository using the template and then customize it for your specific model.
@@ -58,8 +60,7 @@ commit your notebook to the repository.
 ## Recommended Workflow
 
 Every model should live in its own repository that follows this template. 
-To enhance reproducibility, each repository should have its own venv.
-The pyproject.toml file is set up to us uv, which makes it straight forward to create an manage Pyton enviroments.
+The pyproject.toml file is set up to use uv, which makes it straight forward to create an manage Pyton enviroments.
 It is recommended that you commit the uv.lock file that is created on first setup into your repo and that you update
 your environment only through the uv command line.
 The basic configuration for the environment should include deriva-ml and the domain specific modules.
@@ -67,7 +68,7 @@ These are included as default dependencies in the template.
 
 Best practice is to commit any changes to the model prior to running it.  
 This will maximize the ability of DerivaML to track what code was used to produce the model result.
-We should assume that deriva-ml are installed as modules into the environment.  
+We should assume that deriva-ml are installed as modules into the environment. 
 
 During debugging, a *dry_run* option is available in the `Execution.create_execution` method.  
 This option will download all of the input files associated with an execution, but will not create any Execution records,
@@ -82,5 +83,9 @@ DerivaML uses semantic versioning.
 
 The script takes a single argument whose values can be patch, minor or major. E.G.
 ```aiignore
-./bump-version major
+./bump-version major|minor|patch
+
+The bump-version code will automatically use the commit log from any pull requests to generate release notes. It is recommended practice to use git branch and pull requests even if
+you are working on your own.
+This way you will have better records of the changes made over time as you evolve your model.
 ```
