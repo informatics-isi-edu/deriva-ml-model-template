@@ -42,7 +42,7 @@ notebook has been debugged, that you run it from start to finish in the deriva-m
 
 This process is streamlined by the command:
 ```
-uv run deriva-ml-run-notebook notbook-file
+uv run deriva-ml-run-notebook notebook-file --host HOSTHAME --catalog CATALOG_ID [--file PARAMETER_FILE]
  ```
  command, which uses papermill to substitute values into a parameters
 cell in your notebook, and then runs every cell in sequence and uploaded the resulting notebook into the catalog.
@@ -50,7 +50,7 @@ cell in your notebook, and then runs every cell in sequence and uploaded the res
 Note that run-notebook assumes that the nboutput tool has been installed so as to ensure that cell outputs are not
 commited to the repository. To install nboutput, you should type the command:
 ```aiignore
-nboutput --install
+uv run nbstripout --instal
 ```
 You only need to do this once after which the command is installed as a git pre-commit hook and run every time you 
 commit your notebook to the repository.
