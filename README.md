@@ -22,9 +22,26 @@ Templates for models set up as runnable python scripts, and Jupyter notebooks ar
 This template uses `uv` as a project management tool.  As a prerequisite, you should install the *uv* tool into your execution environment.
 Once installed you should use the uv command line to manage your dependencies and virtual environment.
 
+## Initializing Your Repository
 
+The baseline initialization of your reposity is achieved by running the command:
+```aiignore
+uv sync
+```
 
+This will create a new pythone virtual environment, and an associated lock file.  You should
+add the resulting uv.lock file to your Git repository.
 
+If you are planning on running notebooks, you should initialize your repository with the command:
+```aiignore
+uv sync --dependency-group=jupityer
+uv run install-kernel
+```
+
+You can now use uv to run your new jupiter kernel.  For example:
+```aiignore
+uv run jupyter kernelspec list
+```
 ## Running a script.
 
 You can run a python script in the appropriate venv using the uv command:

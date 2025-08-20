@@ -21,8 +21,15 @@ dev = [
     "ruff",
     "ipython"
 ]
+jupyter = ["ipykernel", "jupyter"]  # optional extras for local dev
+
+[project.scripts]
+install-kernel = "install_kernel:main"
 
 [tool.uv.sources]
+
+[tool.uv]
+package = true
 
 [tool.setuptools_scm]
 version_scheme = "post-release"
@@ -37,7 +44,6 @@ message = "Bump version: {current_version} → {new_version}"
 
 [tool.setuptools.data-files]
 # install script into the user's local bin directory
-
 
 [metadata]
 license = "Apache 2.0"
