@@ -106,3 +106,15 @@ You can determine the current version of the model from the command line by ente
 ```aiignore
 uv run python -m setuptools_scm
 ```
+
+## Updating Modules including DerivaML
+
+The uv tool can be used to update specific packages in your application.
+To update a package, such as DerivaML us the command:
+```
+ uv sync --upgrade-package deriva-ml
+```
+You can upgrade all of the packages in your application, however, you should procede with caution, as upgrading to the latest version of pytorch or tensorflow can cause problems if you don't have the correct version of the driver installed.
+One way around this is to pin to specific versions of these libraries when you add them to you pyproject.toml file using the `uv add` comman.
+
+Once the upgrade is complete, you will want to recommit your uv.lock file.
