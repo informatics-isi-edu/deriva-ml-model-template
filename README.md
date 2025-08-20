@@ -64,7 +64,7 @@ cell in your notebook, and then runs every cell in sequence and uploaded the res
 Note that run-notebook assumes that the `nboutput` tool has been installed so as to ensure that cell outputs are not
 commited to the repository. To install `nboutput`, you should type the command:
 ```aiignore
-uv run nbstripout --instal
+uv run nbstripout --install
 ```
 You only need to do this once after which the command is installed as a git pre-commit hook and run every time you 
 commit your notebook to the repository.
