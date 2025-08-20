@@ -24,19 +24,34 @@ Once installed you should use the uv command line to manage your dependencies an
 
 ## Initializing Your Repository
 
-The baseline initialization of your reposity is achieved by running the command:
+The baseline initialization of your repository is achieved by running the command:
 ```aiignore
 uv sync
 ```
 
-This will create a new pythone virtual environment, and an associated lock file.  You should
+This will create a new python virtual environment, and an associated lock file.  You should
 add the resulting uv.lock file to your Git repository.
 
 If you are planning on running notebooks, you should initialize your repository with the command:
 ```aiignore
-uv sync --dependency-group=jupityer
+uv sync --group=jupityer
 uv run install-kernel
 ```
+### Using pytorch
+
+If you plan on using pytorch, you need to configura your venv with the command:
+```aiignore
+uv sync --group=tensorflow
+```
+You may need to adjust versions and indexes depending on your exact configuration of CUDA, Python and tensorflow.
+
+### Using tensorflow
+
+If you plan on using pytorch, you need to configura your venv with the command:
+```aiignore
+uv sync --group=oytorch
+```
+You may need to adjust versions and indexes depending on your exact configuration of CUDA, Python and tensorflow.
 
 You can now use uv to run your new jupiter kernel.  For example:
 ```aiignore
@@ -72,7 +87,7 @@ commit your notebook to the repository.
 ## Recommended Workflow
 
 Every model should live in its own repository that follows this template. 
-The pyproject.toml file is set up to use uv, which makes it straight forward to create an manage Pyton enviroments.
+The pyproject.toml file is set up to use uv, which makes it straight forward to create an manage Pyton environments.
 It is recommended that you commit the uv.lock file that is created on first setup into your repo and that you update
 your environment only through the uv command line.
 The basic configuration for the environment should include deriva-ml and the domain specific modules.
@@ -114,7 +129,7 @@ To update a package, such as DerivaML us the command:
 ```
  uv sync --upgrade-package deriva-ml
 ```
-You can upgrade all of the packages in your application, however, you should procede with caution, as upgrading to the latest version of pytorch or tensorflow can cause problems if you don't have the correct version of the driver installed.
-One way around this is to pin to specific versions of these libraries when you add them to you pyproject.toml file using the `uv add` comman.
+You can upgrade all of the packages in your application, however, you should proceed with caution, as upgrading to the latest version of pytorch or tensorflow can cause problems if you don't have the correct version of the driver installed.
+One way around this is to pin to specific versions of these libraries when you add them to you pyproject.toml file using the `uv add` command.
 
 Once the upgrade is complete, you will want to recommit your uv.lock file.
