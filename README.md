@@ -22,6 +22,15 @@ Templates for models set up as runnable python scripts, and Jupyter notebooks ar
 This template uses `uv` as a project management tool.  As a prerequisite, you should install the *uv* tool into your execution environment.
 Once installed you should use the uv command line to manage your dependencies and virtual environment.
 
+Instructions on how to install UV can be found [here.](https://docs.astral.sh/uv/)
+## Authenticating
+
+You must be logged into Globus before you can access data in the catalog.
+You can do this by using the following command:
+
+```
+deriva-globus-aut-utils login www.eye-ai.org
+```
 ## Initializing Your Repository
 
 The baseline initialization of your repository is achieved by running the command:
