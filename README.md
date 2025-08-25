@@ -29,7 +29,7 @@ You must be logged into Globus before you can access data in the catalog.
 You can do this by using the following command:
 
 ```
-deriva-globus-aut-utils login www.eye-ai.org
+deriva-globus-auth-utils login --host www.eye-ai.org
 ```
 ## Initializing Your Repository
 
@@ -43,9 +43,15 @@ add the resulting uv.lock file to your Git repository.
 
 If you are planning on running notebooks, you should initialize your repository with the command:
 ```aiignore
+
+uv run nbstripout --install 
 uv sync --group=jupityer
-uv run install-kernel
+uv run src/install_kernel.py
 ```
+
+These commands install a Git pre-commit hook to strip output from your notebook prior to a commit
+and create a jupyter kernal so you can run your notebooks from the command line.
+
 ### Using pytorch
 
 If you plan on using pytorch, you need to configura your venv with the command:
@@ -85,13 +91,6 @@ uv run deriva-ml-run-notebook notebook-file --host HOSTHAME --catalog CATALOG_ID
  command, which uses papermill to substitute values into a parameters
 cell in your notebook, and then runs every cell in sequence and uploaded the resulting notebook into the catalog.
 
-Note that run-notebook assumes that the `nboutput` tool has been installed so as to ensure that cell outputs are not
-commited to the repository. To install `nboutput`, you should type the command:
-```aiignore
-uv run nbstripout --install
-```
-You only need to do this once after which the command is installed as a git pre-commit hook and run every time you 
-commit your notebook to the repository.
 
 ## Recommended Workflow
 
