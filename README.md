@@ -46,7 +46,7 @@ If you are planning on running notebooks, you should initialize your repository 
 
 uv run nbstripout --install 
 uv sync --group=jupityer
-uv run src/install_kernel.py
+uv run install_kernel
 ```
 
 These commands install a Git pre-commit hook to strip output from your notebook prior to a commit
@@ -119,7 +119,7 @@ DerivaML uses semantic versioning.
 
 The script takes a single argument whose values can be patch, minor or major. E.G.
 ```aiignore
-./bump-version major|minor|patch
+uv run bump-version major|minor|patch
 ```
 The bump-version code will automatically use the commit log from any pull requests to generate release notes. 
 
