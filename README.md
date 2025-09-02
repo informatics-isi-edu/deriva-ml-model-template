@@ -64,7 +64,7 @@ You may need to adjust versions and indexes depending on your exact configuratio
 
 If you plan on using pytorch, you need to configura your venv with the command:
 ```aiignore
-uv sync --group=oytorch
+uv sync --group=pytorch
 ```
 You may need to adjust versions and indexes depending on your exact configuration of CUDA, Python and tensorflow.
 
