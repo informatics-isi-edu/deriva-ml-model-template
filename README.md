@@ -46,11 +46,16 @@ If you are planning on running notebooks, you should initialize your repository 
 
 uv run nbstripout --install 
 uv sync --group=jupityer
-uv run install_kernel
+uv run deriva-ml-install-kernel
 ```
 
 These commands install a Git pre-commit hook to strip output from your notebook prior to a commit
 and create a jupyter kernal so you can run your notebooks from the command line.
+
+You can now use uv to run your new jupiter kernel.  For example:
+```aiignore
+uv run jupyter kernelspec list
+```
 
 ### Using pytorch
 
@@ -68,10 +73,6 @@ uv sync --group=pytorch
 ```
 You may need to adjust versions and indexes depending on your exact configuration of CUDA, Python and tensorflow.
 
-You can now use uv to run your new jupiter kernel.  For example:
-```aiignore
-uv run jupyter kernelspec list
-```
 ## Running a script.
 
 You can run a python script in the appropriate venv using the uv command:
