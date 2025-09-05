@@ -6,7 +6,6 @@ import logging
 from deriva_ml import DerivaML, ExecutionConfiguration, DatasetSpec, MLVocab, Execution
 from deriva.core import BaseCLI
 from pathlib import Path
-from typing import Optional
 
 # These should be set to be the RIDs of input datasets and assets that are downloaded prior to execution.
 datasets = []
@@ -23,8 +22,8 @@ class DerivaDemoCLI(BaseCLI):
         self.parser.add_argument("--test", action="store_true", help="Use demo catalog.")
         self.parser.add_argument("--dry-run", action="store_true", help="Perform execution in dry-run mode.")
 
-        self.execution: Optional[Execution] = None
-        self.deriva_ml: Optional[DerivaML] = None
+        self.execution: Execution | None = None
+        self.deriva_ml: DerivaML| None = None
         self.logger = logging.getLogger(__name__)
 
     def main(self):
