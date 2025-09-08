@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 
 dependencies = [
-    # Add a line for the domain specific classes build on DerivaML
+    # Change this to be the module with the domain specific class derived from deriva-ml.
      "deriva-ml",
 ]
 
@@ -38,6 +38,8 @@ tensorflow = [
 [tool.uv]
 package = true
 python-preference = "managed"
+
+# You may add additional dependency-groups to this list, for example, default-groups = ["dev", "jupiter", "torch"]
 default-groups = ["dev"]
 
 [[tool.uv.index]]

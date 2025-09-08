@@ -29,7 +29,7 @@ You must be logged into Globus before you can access data in the catalog.
 You can do this by using the following command:
 
 ```
-deriva-globus-auth-utils login --host www.eye-ai.org
+uv run deriva-globus-auth-utils login --host www.eye-ai.org
 ```
 ## Initializing Your Repository
 
@@ -92,6 +92,8 @@ uv run deriva-ml-run-notebook notebook-file --host HOSTHAME --catalog CATALOG_ID
  command, which uses papermill to substitute values into a parameters
 cell in your notebook, and then runs every cell in sequence and uploaded the resulting notebook into the catalog.
 
+## Default groups
+If you plan on using any of the options repeatedly, you can add then to the default-groups list in the pyproject.toml file.
 
 ## Recommended Workflow
 
