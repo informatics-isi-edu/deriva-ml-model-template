@@ -87,13 +87,30 @@ notebook has been debugged, that you run it from start to finish in the deriva-m
 
 This process is streamlined by the command:
 ```
-uv run deriva-ml-run-notebook notebook-file --host HOSTHAME --catalog CATALOG_ID [--file PARAMETER_FILE]
+uv run deriva-ml-run-notebook notebook-file --host HOSTHAME --catalog CATALOG_ID --kernel <repository-name> [--file PARAMETER_FILE]
  ```
  command, which uses papermill to substitute values into a parameters
 cell in your notebook, and then runs every cell in sequence and uploaded the resulting notebook into the catalog.
 
 ## Default groups
 If you plan on using any of the options repeatedly, you can add then to the default-groups list in the pyproject.toml file.
+
+##  Activating the Virtual Environment.
+
+If you plan on working in the same virtual environment for a period of time, it can be more confienent to activate the venv
+rather than typing *uv run* repeated. You can accomplish this with the following shell command:
+```aiignore
+source .venv/bin/activate.csh
+```
+Once this has been entered, the venv in the repository will be used for all subsaquent commands and the `uv run` 
+prefix isn't needed.
+
+When you are done working in the repository, the command
+```aiignore
+deactivate
+```
+
+will remove any default venv selection
 
 ## Recommended Workflow
 
