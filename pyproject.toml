@@ -12,6 +12,7 @@ requires-python = ">=3.10"
 dependencies = [
     # Change this to be the module with the domain specific class derived from deriva-ml.
      "deriva-ml",
+    "hydra"
 ]
 
 [dependency-groups]
@@ -37,7 +38,7 @@ tensorflow = [
 
 [tool.uv]
 package = true
-python-preference = "managed"
+python-preference = "only-managed"
 
 # You may add additional dependency-groups to this list, for example, default-groups = ["dev", "jupiter", "torch"]
 default-groups = ["dev"]

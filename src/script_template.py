@@ -2,14 +2,22 @@
 This file is a template for how to set up a stand-alone script to execute a model.
 """
 import logging
+import hydra
+from dataclasses import dataclass
 
 from deriva_ml import DerivaML, ExecutionConfiguration, DatasetSpec, MLVocab, Execution
 from deriva.core import BaseCLI
 from pathlib import Path
 
 # These should be set to be the RIDs of input datasets and assets that are downloaded prior to execution.
-datasets = []
-models = []
+
+@dataclass
+class DerivaMLConfig:
+    datasets: list[str] = []
+    models: list[str] = []
+
+cs = ConfigStore.instance()
+cs.store(name="derivaml_config", group="deriva_ml", node=DerivaMLConfig)
 
 class DerivaDemoCLI(BaseCLI):
     """Main class to part command line arguments and call model"""
@@ -26,7 +34,8 @@ class DerivaDemoCLI(BaseCLI):
         self.deriva_ml: DerivaML| None = None
         self.logger = logging.getLogger(__name__)
 
-    def main(self):
+    @hydra.main(version_base=None, config_path="config", config_name="config")
+    def main(self, config: DerviaMLConfig):
         """Parse arguments and set up execution environment."""
         args = self.parse_cli()
         hostname = args.host
