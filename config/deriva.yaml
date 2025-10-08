@@ -1,0 +1,12 @@
+host: "https://deriva.isi.edu"
+catalog_id: 1
+assets:
+  - asset1
+  - asset2
+datasets:
+  - dataset:
+    rid: dataset1
+    version:
+  - dataset:
+      rid: dataset2
+      version:

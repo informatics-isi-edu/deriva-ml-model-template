@@ -2,7 +2,7 @@
 This file is a template for how to set up a stand-alone script to execute a model.
 """
 import logging
-import hydra
+from hydra import ConfigStore
 from dataclasses import dataclass
 
 from deriva_ml import DerivaML, ExecutionConfiguration, DatasetSpec, MLVocab, Execution
@@ -12,7 +12,7 @@ from pathlib import Path
 # These should be set to be the RIDs of input datasets and assets that are downloaded prior to execution.
 
 @dataclass
-class DerivaMLConfig:
+class TemplateConfig(DerivaMLConfig):
     datasets: list[str] = []
     models: list[str] = []
 

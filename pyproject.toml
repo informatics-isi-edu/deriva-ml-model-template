@@ -11,8 +11,9 @@ requires-python = ">=3.10"
 
 dependencies = [
     # Change this to be the module with the domain specific class derived from deriva-ml.
-     "deriva-ml",
-    "hydra"
+    # "deriva-ml",
+    "deriva-ml @ git+https://github.com/informatics-isi-edu/deriva-ml@hydra-config",
+    "hydra-core"
 ]
 
 [dependency-groups]
