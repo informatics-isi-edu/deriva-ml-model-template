@@ -1,75 +1,116 @@
 """
 This file is a template for how to set up a stand-alone script to execute a model.
 """
-import logging
-from hydra import ConfigStore
-from dataclasses import dataclass
 
-from deriva_ml import DerivaML, ExecutionConfiguration, DatasetSpec, MLVocab, Execution
-from deriva.core import BaseCLI
-from pathlib import Path
+from hydra_zen import zen, ZenStore
+from hydra.conf import RunDir, HydraConf
+import hydra
+from deriva_ml import Execution, DatasetConfig, DatasetConfigList, RID, DerivaMLConfig
 
 # These should be set to be the RIDs of input datasets and assets that are downloaded prior to execution.
 
+store = ZenStore()
+
+deriva_store = store(group="deriva_ml_config")
+deriva_store(DerivaMLConfig, name="local",  hostname="localhost", catalog_id="1", working_dir="foobar")
+deriva_store(DerivaMLConfig, name="eye-ai", hostname="www.eye-ai.org", catalog_id="eye-ai")
+
+datasets_store = store(group="datasets")
+datasets_test1 = DatasetConfigList(datasets=[DatasetConfig(rid="10", version="1.0.0")],
+                                   description= "Test one datasets")
+datasets_test2 = DatasetConfigList(datasets=[DatasetConfig(rid="15", version="1.0.0")])
+datasets_test3 = DatasetConfigList(datasets =[])
+
+datasets_store(datasets_test1, name="datasets_test1")
+datasets_store(datasets_test2, name="datasets_test2")
+datasets_store(datasets_test3, name="datasets_test3")
+
+# Assets, typically the model file, but could be others as well.
+asset_store = store(group="assets")
+assets_test1 = ["asset3", "asset4"]
+assets_test2 = ["asset5", "asset6"]
+asset_store(assets_test1, name="assert1")
+asset_store(assets_test2, name="assert2")
+
+@store(name="app_config",
+           populate_full_signature=True,
+           hydra_defaults=["_self_", {"deriva_ml_config": "local"}],
+       )
+def main(
+    deriva_ml_config: DerivaMLConfig,
+    datasets: list[RID] = None,
+    assets: list[RID] = None,
+    test: bool = False,
+):
+    assets = assets or []
+    """Parse arguments and set up execution environment."""
+
+    hostname = deriva_ml_config.hostname
+    catalog_id = deriva_ml_config.catalog_id
+    print(f"hostname: {hostname}")
+    print(f"catalog_id: {catalog_id}")
+    print("working directory:", deriva_ml_config.working_dir)
+    print(f"Output directory  : {hydra.core.hydra_config.HydraConfig.get().runtime.output_dir}")
+
+    #deriva_ml = DerivaML(**deriva_ml_config)  # This should be changed to the domain specific class.
+
+    # Create a workflow instance for this specific version of the script.  Return an existing workflow if one is found.
+    #deriva_ml.add_term(MLVocab.workflow_type, "Demo Script", description="Initial setup of Model Notebook")
+    #workflow = deriva_ml.create_workflow('demo-workflow', 'Template Model Script')
+
+    # Create an execution instance that will work with the latest version of the input datasets.
+    #config = ExecutionConfiguration(
+    #    datasets=datasets.datasets,
+    #    assets=assets.assets,
+    #    workflow=workflow,
+    #)
+
+   # execution = deriva_ml.create_execution(config, dry_run=args.dry_run)
+   # with execution as e:
+   #     self.do_stuff(e)
+   # self.execution.upload_execution_outputs()
+
+
+def do_stuff(execution: Execution):
+    print(f" Execution with parameters: {execution.parameters}")
+    print(f" Execution with input assets: {[a.as_posix() for a in execution.asset_paths]}")
+    print(f"Execution datasets: {execution.datasets}")
+
+
+from dataclasses import dataclass, field
 @dataclass
-class TemplateConfig(DerivaMLConfig):
-    datasets: list[str] = []
-    models: list[str] = []
+class MyLogConf:
+    version: int = 1
+    formatters: dict = field(
+        default_factory=lambda: {
+            "simple": {"format": "[%(levelname)s] - %(message)s"}
+        }
+    )
+    handlers: dict = field(
+        default_factory=lambda: {
+            "file": {
+                "class": "logging.FileHandler",
+                "formatter": "simple",
+                "filename": "${hydra.run.dir}/my_custom_log.log",  # Use interpolation
+            },
+        }
+    )
+    root: dict = field(
+        default_factory=lambda: {"handlers": ["file"], "level": "INFO"}
+    )
+    disable_existing_loggers: bool = False
 
-cs = ConfigStore.instance()
-cs.store(name="derivaml_config", group="deriva_ml", node=DerivaMLConfig)
+store(HydraConf(run=RunDir("${deriva_ml_config.working_dir}/hydra/${now:%Y-%m-%d_%H-%M-%S}")))
 
-class DerivaDemoCLI(BaseCLI):
-    """Main class to part command line arguments and call model"""
-
-    def __init__(self, description, epilog, **kwargs):
-        BaseCLI.__init__(self, description, epilog, **kwargs)
-
-        self.parser.add_argument("--catalog", default=1, metavar="<1>", help="Catalog number. Default: 1")
-        self.parser.add_argument("--parameters", default=None, help="Parameter file to configure execution")
-        self.parser.add_argument("--test", action="store_true", help="Use demo catalog.")
-        self.parser.add_argument("--dry-run", action="store_true", help="Perform execution in dry-run mode.")
-
-        self.execution: Execution | None = None
-        self.deriva_ml: DerivaML| None = None
-        self.logger = logging.getLogger(__name__)
-
-    @hydra.main(version_base=None, config_path="config", config_name="config")
-    def main(self, config: DerviaMLConfig):
-        """Parse arguments and set up execution environment."""
-        args = self.parse_cli()
-        hostname = args.host
-        catalog_id = args.catalog
-        parameters = args.parameters and Path(args.parameters).absolute() if args.parameters else {}
-
-        self.deriva_ml = DerivaML(hostname, catalog_id)  # This should be changed to the domain specific class.
-
-        # Create a workflow instance for this specific version of the script.  Return an existing workflow if one is found.
-        self.deriva_ml.add_term(MLVocab.workflow_type, "Demo Script", description="Initial setup of Model Notebook")
-        workflow = self.deriva_ml.create_workflow('demo-workflow', 'Demo Notebook')
-
-        # Create an execution instance that will work with the latest version of the input datasets.
-        config = ExecutionConfiguration(
-            datasets=[DatasetSpec(rid=dataset, version=self.deriva_ml.dataset_version(dataset)) for dataset in
-                      datasets],
-            assets=models,
-            workflow=workflow,
-            parameters=parameters
-        )
-
-        self.execution = self.deriva_ml.create_execution(config, dry_run=args.dry_run)
-        with self.execution as e:
-            self.do_stuff(e)
-        self.execution.upload_execution_outputs()
-
-    def do_stuff(self, execution: Execution):
-
-        print(f" Execution with parameters: {execution.parameters}")
-        print(f" Execution with input assets: {[a.as_posix() for a in execution.asset_paths]}")
-        print(f"Execution datasets: {execution.datasets}")
+# Overwrite the job_logging configuration with our custom setup
+# Note: store may throw ZenStoreError if already exists, use overwrite=True
+store(MyLogConf, group="hydra/job_logging", name="custom")
 
 
 if __name__ == "__main__":
-    cli = DerivaDemoCLI(description="Deriva ML Execution Script Demo",
-                        epilog="")
-    cli.main()
+    store.add_to_hydra_store()
+    zen(main).hydra_main(
+        config_name="app_config",
+        version_base="1.3",
+        config_path=".",
+    )
