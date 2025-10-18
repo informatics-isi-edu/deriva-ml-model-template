@@ -8,7 +8,6 @@ from hydra.core.hydra_config import HydraConfig
 from deriva_ml import (
     DerivaML,
     Execution,
-    DatasetConfig,
     DatasetConfigList,
     RID,
     DerivaMLConfig,
@@ -16,34 +15,18 @@ from deriva_ml import (
     ExecutionConfiguration
 )
 
-store = ZenStore()
+import configure
 
-# Configure deriva_ml server connection.
-deriva_store = store(group="deriva_ml")
-deriva_store(DerivaMLConfig, name="local",  hostname="localhost", catalog_id="2", use_minid=False)
-deriva_store(DerivaMLConfig, name="eye-ai", hostname="www.eye-ai.org", catalog_id="eye-ai")
+store = configure.init_config()
 
-# Configure datasets to use.
-datasets_store = store(group="datasets")
-datasets_test1 = DatasetConfigList(datasets=[DatasetConfig(rid="4RP", version="1.3.0")],
-                                   description= "Test one datasets")
-datasets_test2 = DatasetConfigList(datasets=[DatasetConfig(rid="4S2", version="1.3.0")])
-datasets_test3 = DatasetConfigList(datasets =[])
+print("Initialized configurations:")
+for conf in store:
+    print(f"\t{conf['group']}.{conf['name']}")
 
-datasets_store(datasets_test1, name="test1")
-datasets_store(datasets_test2, name="test2")
-datasets_store(datasets_test3, name="test3")
-
-# Assets, typically the model file, but could be others as well.
-asset_store = store(group="assets")
-assets_test1 = ["3QG", "3QJ"]
-assets_test2 = ["3QM", "3QP"]
-asset_store(assets_test1, name="assert1")
-asset_store(assets_test2, name="assert2")
-
+# Default configuration values are defined in configure.
 @store(name="app_config",
            populate_full_signature=True,
-           hydra_defaults=["_self_", {"deriva_ml": "local"}, {"datasets": "test1"}, {"assets": "assert1"}],
+           hydra_defaults=["_self_", {"deriva_ml": "local"}, {"datasets": "test1"}, {"assets": "asset1"}],
        )
 def main(
     deriva_ml: DerivaMLConfig,
