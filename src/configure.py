@@ -11,8 +11,13 @@ from deriva_ml import (
 def init_config() -> ZenStore:
     store = ZenStore()
     deriva_store = store(group="deriva_ml")
-    deriva_store(DerivaMLConfig, name="local",  hostname="localhost", catalog_id="2", use_minid=False)
-    deriva_store(DerivaMLConfig, name="eye-ai", hostname="www.eye-ai.org", catalog_id="eye-ai")
+    deriva_store(DerivaMLConfig, name="local",
+                 hostname="localhost",
+                 catalog_id=2,
+                 use_minid=False)
+    deriva_store(DerivaMLConfig, name="eye-ai",
+                 hostname="www.eye-ai.org",
+                 catalog_id="eye-ai")
 
     # Configure datasets to use.
     datasets_store = store(group="datasets")
@@ -31,4 +36,5 @@ def init_config() -> ZenStore:
     assets_test2 = ["3QM", "3QP"]
     asset_store(assets_test1, name="asset1")
     asset_store(assets_test2, name="asset2")
+
     return store

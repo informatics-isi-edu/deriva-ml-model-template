@@ -2,8 +2,7 @@
 This file is a template for how to set up a stand-alone script to execute a model.
 """
 
-from hydra_zen import zen, ZenStore
-from hydra.core.hydra_config import HydraConfig
+from hydra_zen import zen
 
 from deriva_ml import (
     DerivaML,
@@ -23,6 +22,7 @@ print("Initialized configurations:")
 for conf in store:
     print(f"\t{conf['group']}.{conf['name']}")
 
+
 # Default configuration values are defined in configure.
 @store(name="app_config",
            populate_full_signature=True,
@@ -39,9 +39,6 @@ def main(
 
     print("Datasets", datasets)
     print("Assets", assets)
-    print("working directory:", deriva_ml.working_dir)
-    print("hydra output dir", HydraConfig.get().runtime.output_dir)
-    print("hydra output subdir", HydraConfig.get().output_subdir)
 
     ml_instance = DerivaML(**deriva_ml.model_dump())  # This should be changed to the domain specific class.
 
