@@ -18,11 +18,6 @@ import configure
 
 store = configure.init_config()
 
-print("Initialized configurations:")
-for conf in store:
-    print(f"\t{conf['group']}.{conf['name']}")
-
-
 # Default configuration values are defined in configure.
 @store(name="app_config",
            populate_full_signature=True,
@@ -55,7 +50,7 @@ def main(
     execution = ml_instance.create_execution(config, dry_run=dry_run)
     with execution as e:
         do_stuff(e)
-   # self.execution.upload_execution_outputs()
+    execution.upload_execution_outputs()
 
 
 def do_stuff(execution: Execution):
