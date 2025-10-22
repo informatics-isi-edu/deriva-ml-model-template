@@ -2,30 +2,40 @@
 This file is a template for how to set up a stand-alone script to execute a model.
 """
 
-from hydra_zen import zen
+from hydra_zen import zen, builds, instantiate
 
 from deriva_ml import (
     DerivaML,
-    Execution,
     DatasetConfigList,
     RID,
     DerivaMLConfig,
     MLVocab,
-    ExecutionConfiguration
+    ExecutionConfiguration,
 )
 
 import configure
 
 store = configure.init_config()
 
+def model(learning_rate: float, epochs: int):
+    print(f"Training with learning rate: {learning_rate} and epochs: {epochs} and dataset")
+
+ModelConfig = builds(model, learning_rate=1e-3, epochs=10, populate_full_signature=True)
+
+store(ModelConfig, name="basemodel", group="model_config")
+store(ModelConfig, learning_rate=23, epochs=20, name="model2", group="model_config")
+
+
 # Default configuration values are defined in configure.
 @store(name="app_config",
            populate_full_signature=True,
-           hydra_defaults=["_self_", {"deriva_ml": "local"}, {"datasets": "test1"}, {"assets": "asset1"}],
+           hydra_defaults=["_self_", {"deriva_ml": "local"}, {"datasets": "test1"}, {"assets": "asset1"},
+                           {"model_config": "basemodel"}],
        )
 def main(
     deriva_ml: DerivaMLConfig,
-    datasets: DatasetConfigList | None = None,
+    datasets: DatasetConfigList,
+    model_config: ModelConfig,
     assets: list[RID] = None,
     dry_run: bool = False,
 ):
@@ -48,14 +58,10 @@ def main(
         workflow=workflow)
 
     execution = ml_instance.create_execution(config, dry_run=dry_run)
-    with execution as e:
-        do_stuff(e)
+    with execution as _:
+        instantiate(model_config)
+    print("Uploading outputs...")
     execution.upload_execution_outputs()
-
-
-def do_stuff(execution: Execution):
-    print(f" Execution with input assets: {execution.asset_paths}")
-    print(f"Execution datasets: {execution.datasets}")
 
 
 if __name__ == "__main__":
