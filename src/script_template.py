@@ -51,9 +51,6 @@ def main(
     assets = assets or []
     datasets = datasets or []
 
-    print("Datasets", datasets)
-    print("Assets", assets)
-
     ml_instance = DerivaML(**deriva_ml.model_dump())  # This should be changed to the domain specific class.
 
     # Create a workflow instance for this specific version of the script.  Return an existing workflow if one is found.
