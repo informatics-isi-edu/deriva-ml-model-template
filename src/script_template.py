@@ -2,7 +2,8 @@
 This file is a template for how to set up a stand-alone script to execute a model.
 """
 
-from hydra_zen import zen, builds, instantiate
+from hydra_zen import zen, builds
+from typing import Any
 
 from deriva_ml import (
     DerivaML,
@@ -11,31 +12,39 @@ from deriva_ml import (
     DerivaMLConfig,
     MLVocab,
     ExecutionConfiguration,
+    Execution
 )
 
 import configure
 
+# Load our predefined configurations and initialize them.
 store = configure.init_config()
 
-def model(learning_rate: float, epochs: int):
+# This is our simple model function.
+def model(learning_rate: float, epochs: int, execution: Execution):
     print(f"Training with learning rate: {learning_rate} and epochs: {epochs} and dataset")
+    print(execution.datasets)
 
-ModelConfig = builds(model, learning_rate=1e-3, epochs=10, populate_full_signature=True)
 
-store(ModelConfig, name="basemodel", group="model_config")
-store(ModelConfig, learning_rate=23, epochs=20, name="model2", group="model_config")
-
+# Build a configuration interface for our model, providing default values. The execution value will be populated later
+# at runtime, not configuration time.
+ModelConfig = builds(model, learning_rate=1e-3, epochs=10,
+                     populate_full_signature=True,
+                     zen_partial=True)
+model_store = store(group="model_config")
+model_store(ModelConfig, learning_rate=1e-3, epochs=10, name="model1")
+model_store(ModelConfig, name="model2", learning_rate=23, epochs=20)
 
 # Default configuration values are defined in configure.
 @store(name="app_config",
            populate_full_signature=True,
            hydra_defaults=["_self_", {"deriva_ml": "local"}, {"datasets": "test1"}, {"assets": "asset1"},
-                           {"model_config": "basemodel"}],
+                           {"model_config": "model1"}],
        )
 def main(
     deriva_ml: DerivaMLConfig,
     datasets: DatasetConfigList,
-    model_config: ModelConfig,
+    model_config: Any,
     assets: list[RID] = None,
     dry_run: bool = False,
 ):
@@ -58,8 +67,9 @@ def main(
         workflow=workflow)
 
     execution = ml_instance.create_execution(config, dry_run=dry_run)
-    with execution as _:
-        instantiate(model_config)
+    with execution as e:
+        # The model function has been partially configured, so we need to instantiate it with the execution object.
+        model_config(execution=e)
     print("Uploading outputs...")
     execution.upload_execution_outputs()
 
