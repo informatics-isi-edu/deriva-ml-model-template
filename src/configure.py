@@ -1,11 +1,7 @@
 from hydra_zen import  ZenStore
 
-from deriva_ml import (
-    DatasetConfig,
-    DatasetConfigList,
-    DerivaMLConfig,
-)
-
+from deriva_ml import DerivaMLConfig
+from deriva_ml.dataset import DatasetConfigList, DatasetConfig
 
 # Configure deriva_ml server connection.
 def init_config() -> ZenStore:

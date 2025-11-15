@@ -7,13 +7,12 @@ from typing import Any
 
 from deriva_ml import (
     DerivaML,
-    DatasetConfigList,
     RID,
     DerivaMLConfig,
     MLVocab,
-    ExecutionConfiguration,
-    Execution
 )
+from deriva_ml.dataset import DatasetConfigList
+from deriva_ml.execution import Execution, ExecutionConfiguration
 
 import configure
 
