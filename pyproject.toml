@@ -1,6 +1,6 @@
 
 [project]
-name = "deriva-model-template"  # Change this to be the name of the current project.
+name = "deriva-ml-model-template"  # Change this to be the name of the current project.
 dynamic = ["version"]
 authors = [
     {name = "ISRD", email = "isrd-dev@isi.edu"},
@@ -11,8 +11,9 @@ requires-python = ">=3.10"
 
 dependencies = [
     # Change this to be the module with the domain specific class derived from deriva-ml.
-     "deriva-ml",
-    "hydra"
+    "deriva-ml",
+    "hydra-zen",
+    "notebook>=7.4.7",
 ]
 
 [dependency-groups]
@@ -37,10 +38,7 @@ tensorflow = [
 
 
 [tool.uv]
-package = true
 python-preference = "only-managed"
-
-# You may add additional dependency-groups to this list, for example, default-groups = ["dev", "jupiter", "torch"]
 default-groups = ["dev"]
 
 [[tool.uv.index]]
@@ -55,6 +53,8 @@ url = "https://download.pytorch.org/whl/cu124"
 explicit = true
 
 [tool.uv.sources]
+   # deriva-ml = { path = "../deriva-ml", editable = true }
+   # deriva-ml = { git = "https://github.com/informatics-isi-edu/deriva-ml", branch="hydra-config"}
     torch = [
         { index = "pytorch-cpu", marker = "(sys_platform == 'darwin' and platform_machine == 'arm64') or (platform_machine != 'x86_64' and sys_platform == 'Linux')"},
         { index = "pytorch-cuda", marker = "sys_platform == 'Linux' and platform_machine == 'x86_64'"}
@@ -70,6 +70,10 @@ tag = true
 tag_name = "v{new_version}"
 tag_message = "Bump version: {current_version} → {new_version}"
 message = "Bump version: {current_version} → {new_version}"
+
+[build-system]
+requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [metadata]
 license = "Apache 2.0"

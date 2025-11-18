@@ -15,14 +15,18 @@ This template repository contains a basic project file, a simple Python script a
 This repository is set up as a template.  Its intended use is to create a new repository using the template and then customize it for your specific model.
 To create a repository from the template, follow the instructions provided here [GitHub Template](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template)
 
-Templates for models set up as runnable python scripts, and Jupyter notebooks are provided along with a sample parameter file.
+Templates for models set up as runnable python scripts, and Jupyter notebooks are provided.
 
 ## Project Management
 
 This template uses `uv` as a project management tool.  As a prerequisite, you should install the *uv* tool into your execution environment.
 Once installed you should use the uv command line to manage your dependencies and virtual environment.
 
-Instructions on how to install UV can be found [here.](https://docs.astral.sh/uv/)
+Instructions on how to install UV and use it as a project management tool can be found [here.](https://docs.astral.sh/uv/)
+
+
+
+
 ## Authenticating
 
 You must be logged into Globus before you can access data in the catalog.
@@ -57,41 +61,6 @@ You can now use uv to run your new jupiter kernel.  For example:
 uv run jupyter kernelspec list
 ```
 
-### Using pytorch
-
-If you plan on using pytorch, you need to configura your venv with the command:
-```aiignore
-uv sync --group=tensorflow
-```
-You may need to adjust versions and indexes depending on your exact configuration of CUDA, Python and tensorflow.
-
-### Using tensorflow
-
-If you plan on using pytorch, you need to configura your venv with the command:
-```aiignore
-uv sync --group=pytorch
-```
-You may need to adjust versions and indexes depending on your exact configuration of CUDA, Python and tensorflow.
-
-## Running a script.
-
-You can run a python script in the appropriate venv using the uv command:
-```aiignore
-uv run src/script_template.py
-```
-
-## Running a notebook.
-
-Although you can run a notebook interactively in the regular Jupiter environment, it is recommended that once your 
-notebook has been debugged, that you run it from start to finish in the deriva-ml environment.
-
-This process is streamlined by the command:
-```
-uv run deriva-ml-run-notebook notebook-file --host HOSTHAME --catalog CATALOG_ID --kernel <repository-name> [--file PARAMETER_FILE]
- ```
- command, which uses papermill to substitute values into a parameters
-cell in your notebook, and then runs every cell in sequence and uploaded the resulting notebook into the catalog.
-
 ## Default groups
 If you plan on using any of the options repeatedly, you can add then to the default-groups list in the pyproject.toml file.
 
@@ -111,6 +80,57 @@ deactivate
 ```
 
 will remove any default venv selection
+## Using pytorch
+
+If you plan on using pytorch, you need to configura your venv with the command:
+```aiignore
+uv sync --group=tensorflow
+```
+You may need to adjust versions and indexes depending on your exact configuration of CUDA, Python and tensorflow.
+
+## Using tensorflow
+
+If you plan on using pytorch, you need to configura your venv with the command:
+```aiignore
+uv sync --group=pytorch
+```
+You may need to adjust versions and indexes depending on your exact configuration of CUDA, Python and tensorflow.
+
+## Running a script.
+
+You can run a python script in the appropriate venv using the uv command:
+```aiignore
+uv run src/script_template.py
+```
+The script can be configured using the hydra configuration and experiment management too.
+Please see the section on Experiment Management below.
+
+## Running a notebook.
+
+Although you can run a notebook interactively in the regular Jupiter environment, it is recommended that once your 
+notebook has been debugged, that you run it from start to finish in the deriva-ml environment.
+
+This process is streamlined by the command:
+```
+uv run deriva-ml-run-notebook notebook-file --host HOSTHAME --catalog CATALOG_ID --kernel <repository-name> 
+ ```
+ command, which uses papermill to run all of the cells in the notebook in sequence and then uploaded the resulting notebook into the catalog.
+
+The notebook can be configured using the hydra configuration and experiment management too.
+Please see the section on Experiment Management below.
+
+
+## Experiment Management
+
+DerivaML uses the hydra configuration framework to manage configurations of script, and notebooks and also to 
+conduct different types of experiments.
+
+Rather than hard coding values into the script or notebook, you can use the hydra configuration framework to 
+specify values that can be changed at runtime.  We have integrated hydra-zen, which provides a simple pythonic way to create and configure ML models.
+
+Documentation on hydra can be found [here.](https://hydra.cc/docs/intro/). Documentation on hydra-zen can be found here. 
+
+A sample configuration script is found in src/configuration.py
 
 ## Recommended Workflow
 
