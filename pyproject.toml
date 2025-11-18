@@ -38,7 +38,7 @@ tensorflow = [
 
 [tool.uv]
 python-preference = "only-managed"
-default-groups = ["dev"]
+default-groups = ["dev", "jupyter"]
 packages = [{ include = "configs", from = "src" }]
 
 [[tool.uv.index]]
