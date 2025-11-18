@@ -2,22 +2,22 @@
 This file is a template for how to set up a stand-alone script to execute a model.
 """
 
-from hydra_zen import zen, builds
 from typing import Any
 
 from deriva_ml import (
-    DerivaML,
     RID,
+    DerivaML,
     DerivaMLConfig,
     MLVocab,
 )
 from deriva_ml.dataset import DatasetConfigList
 from deriva_ml.execution import Execution, ExecutionConfiguration
+from hydra_zen import builds, store, zen
 
-import configure
+import configs.datasets
+import configs.deriva
+import configs.models
 
-# Load our predefined configurations and initialize them.
-store = configure.init_config()
 
 # This is our simple model function.
 def model(learning_rate: float, epochs: int, execution: Execution):

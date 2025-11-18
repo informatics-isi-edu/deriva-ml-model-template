@@ -36,10 +36,10 @@ tensorflow = [
 ]
 
 
-
 [tool.uv]
 python-preference = "only-managed"
 default-groups = ["dev"]
+packages = [{ include = "configs", from = "src" }]
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
