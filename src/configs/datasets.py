@@ -1,8 +1,10 @@
-# Set up deriva_ml configurations.'
+"""
+This module defines configurations for dataset collections that can be used in different model runs.
+"""
 from hydra_zen import store
 from deriva_ml.dataset import DatasetConfigList, DatasetConfig
 
-# Configure datasets to use.
+# Configure a list of datasets by specifying the RID and version of each dataset that goes into the collection.
 datasets_test1 = DatasetConfigList(
     datasets=[DatasetConfig(rid="4RP", version="1.3.0")],
     description="Test one datasets",
@@ -10,6 +12,9 @@ datasets_test1 = DatasetConfigList(
 datasets_test2 = DatasetConfigList(datasets=[DatasetConfig(rid="4S2", version="1.3.0")])
 datasets_test3 = DatasetConfigList(datasets=[])
 
+# Create three configurations and store them into hydra-zen store.
+# Note that the name of the group has to match the name of the argument in the main function that will be
+# instantiated to the configuration value.
 datasets_store = store(group="datasets")
 datasets_store(datasets_test1, name="test1")
 datasets_store(datasets_test2, name="test2")

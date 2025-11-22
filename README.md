@@ -17,14 +17,19 @@ To create a repository from the template, follow the instructions provided here 
 
 Templates for models set up as runnable python scripts, and Jupyter notebooks are provided.
 
+# GitHub Actions
+
+This template uses GitHub Actions to automate the versioning of the model.  
+GitHub Actions are configured in the `.github` directory, which you may not see by default
+in your file browser. 
+
+
 ## Project Management
 
 This template uses `uv` as a project management tool.  As a prerequisite, you should install the *uv* tool into your execution environment.
 Once installed you should use the uv command line to manage your dependencies and virtual environment.
 
 Instructions on how to install UV and use it as a project management tool can be found [here.](https://docs.astral.sh/uv/)
-
-
 
 
 ## Authenticating
@@ -150,6 +155,9 @@ During debugging, a *dry_run* option is available in the `Execution.create_execu
 This option will download all of the input files associated with an execution, but will not create any Execution records,
 and will not upload any resulting files.  
 Once you are confident that your model/notebook is correct, the best practice is remove the dry-run option, create a new version tag and then run that model to completion,.
+
+### Configuring Executions
+Executions should be managed using [hydra-zen](https://mit-ll-responsible-ai.github.io/hydra-zen/). Sample configuration files for hydra are provided in the configs module.
 
 ## Managing releases and version tags
 
