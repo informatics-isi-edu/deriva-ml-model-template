@@ -344,10 +344,7 @@ Once the upgrade is complete, you will want to recommit your uv.lock file.
 
 ## Best Practices
 
-You *SHOULD* Use an established doc string format for your code. This will make it easier for others to understand your code. DerivaML uses the google docstring format. For more information on docstring formats, please see [here.](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html)
-
-You *MUST* not commit a notebook with output cells.  This will make it difficult to track changes to the notebook.
-If you install the nbstripout as described above, this will be taken care of automatically.
+You *SHOULD* use an established doc string format for your code. This will make it easier for others to understand your code. DerivaML uses the google docstring format. For more information on docstring formats, please see [here.](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html)
 
 You *SHOULD* Use type hints wherever possible.
 
@@ -358,10 +355,18 @@ If you are running an experiment, do a bump-version before running.
 
 No change is too small to properly track in GithHub and DerivaML.
 
-As a general rule, don't commit any data files.  These should be stored in DerivaML.
+You *SHOULD* use bump-version to create version tags prior to running your model.  DerivaML uses semantic versioning. So use minor version increments for new features, patch increments for bug fixes, and major versison increments for breaking changes.
 
-If you are using notebooks, try to make sure that they are focused on a single task.  You *MUST* make sure that you can run the notebook from start to finish without any intervention and when you are satusfied, you can use deriva-ml-run-notebook to run the notebook in the deriva-ml environment.
+As a general rule, you *SHOULD NOT* commit any data files.  These should be stored in DerivaML.
+
+You *MUST* not commit a notebook with output cells.  This will make it difficult to track changes to the notebook.
+If you install the nbstripout as described above, this will be taken care of automatically.
+
+If you are using notebooks, try to make sure they *SHOULD* focused on a single task. 
 As a rule of thumb, notebooks should be used for analysis and visualization, not for training models.
+Having a lot of difference cells that you pick and choose from is a invitation to make mistakes.  
+You *MUST* make sure that you can run the notebook from start to finish without any intervention and when you are satusfied, you can use deriva-ml-run-notebook to run the notebook in the deriva-ml environment.
+Using this command will automatically upload the resulting notebook with output cells filled to the catalog.
 
 DerivaML provides functions for managing generic ML workflows.  It was designed to be extended via inheritance to provide domain specific functionality.
 If you are working on a domain specific model, you should consider creating a new module that inherits from the DerivaML class.
