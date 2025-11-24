@@ -17,6 +17,27 @@ To create a repository from the template, follow the instructions provided here 
 
 Templates for models set up as runnable python scripts, and Jupyter notebooks are provided.
 
+# Project layout
+```
+.
+├─ pyproject.toml                  # Project metadata, dependencies, uv config
+├─ README.md                       # This guide
+├─ src/
+│  ├─ deriva_run.py                # Stand-alone script entrypoint for configuration (Hydra main)
+|  ├─ model_runner.py              # Script entrypoint for running models in deriva-ml environment
+│  ├─ models/
+│  │  └─ simple_model.py           # Example model function
+│  └─ configs/
+│     ├─ deriva.py                 # DerivaML configs (catalog host, etc.)
+│     ├─ datasets.py               # Dataset configs (list(s) of dataset specs)
+│     ├─ assets.py                 # Asset list configs (e.g., weight files)
+│     ├─ simple_model.py           # Model config definitions and variants
+│     └─ experiments.py            # Placeholder for experiment presets
+├─ notebooks/
+│   └─ notebook_template.ipynb      # Example notebook
+└─ .github/workflows/ci.yml        # GitHub Actions CI workflow
+       
+```
 # GitHub Actions
 
 This template uses GitHub Actions to automate the versioning of the model.  
@@ -24,7 +45,7 @@ GitHub Actions are configured in the `.github` directory, which you may not see 
 in your file browser. 
 
 
-## Project Management
+# Project Management
 
 This template uses `uv` as a project management tool.  As a prerequisite, you should install the *uv* tool into your execution environment.
 Once installed you should use the uv command line to manage your dependencies and virtual environment.
@@ -32,7 +53,7 @@ Once installed you should use the uv command line to manage your dependencies an
 Instructions on how to install UV and use it as a project management tool can be found [here.](https://docs.astral.sh/uv/)
 
 
-## Authenticating
+# Authenticating
 
 You must be logged into Globus before you can access data in the catalog.
 You can do this by using the following command:
@@ -40,7 +61,7 @@ You can do this by using the following command:
 ```
 uv run deriva-globus-auth-utils login --host www.eye-ai.org
 ```
-## Initializing Your Repository
+# Initializing Your Repository
 
 The baseline initialization of your repository is achieved by running the command:
 ```aiignore
@@ -66,10 +87,10 @@ You can now use uv to run your new jupiter kernel.  For example:
 uv run jupyter kernelspec list
 ```
 
-## Default groups
+## Default Dependency Groups
 If you plan on using any of the options repeatedly, you can add then to the default-groups list in the pyproject.toml file.
 
-##  Activating the Virtual Environment.
+###  Activating the Virtual Environment.
 
 If you plan on working in the same virtual environment for a period of time, it can be more confienent to activate the venv
 rather than typing *uv run* repeated. You can accomplish this with the following shell command:
@@ -85,7 +106,7 @@ deactivate
 ```
 
 will remove any default venv selection
-## Using pytorch
+### Using pytorch
 
 If you plan on using pytorch, you need to configura your venv with the command:
 ```aiignore
@@ -93,7 +114,7 @@ uv sync --group=tensorflow
 ```
 You may need to adjust versions and indexes depending on your exact configuration of CUDA, Python and tensorflow.
 
-## Using tensorflow
+### Using tensorflow
 
 If you plan on using pytorch, you need to configura your venv with the command:
 ```aiignore
@@ -105,7 +126,7 @@ You may need to adjust versions and indexes depending on your exact configuratio
 
 You can run a python script in the appropriate venv using the uv command:
 ```aiignore
-uv run src/script_template.py
+uv run src/deriva_run.py
 ```
 The script can be configured using the hydra configuration and experiment management too.
 Please see the section on Experiment Management below.
@@ -123,6 +144,134 @@ uv run deriva-ml-run-notebook notebook-file --host HOSTHAME --catalog CATALOG_ID
 
 The notebook can be configured using the hydra configuration and experiment management too.
 Please see the section on Experiment Management below.
+
+
+# Configuration with Hydra & hydra‑zen
+This template uses hydra‑zen to register configuration choices into Hydra’s config store at import time. The script consumes those configs using a typed function interface.
+
+- Entrypoint: `src/deriva_run.py`
+  - Registered app config name: `app_config`
+  - Defaults (Hydra choices):
+    - `deriva_ml: local`
+    - `datasets: test1`
+    - `assets: weights_1`
+    - `model_config: default_model`
+
+The `main` signature determines the config groups and their types:
+```
+@store(
+    name="app_config",
+    populate_full_signature=True,
+    hydra_defaults=[
+        "_self_",
+        {"deriva_ml": "local"},
+        {"datasets": "test1"},
+        {"assets": "weights_1"},
+        {"model_config": "default_model"},
+    ],
+)
+def main(
+    deriva_ml: DerivaMLConfig,
+    datasets: list[DatasetSpec],
+    model_config: Any,
+    assets: list[RID] | None = None,
+    dry_run: bool = False,
+) -> None:
+    ...
+```
+
+Available groups and where they are defined:
+- `deriva_ml`: `src/configs/deriva.py`
+  - Example choices: `local`, `eye-ai`
+- `datasets`: `src/configs/datasets.py`
+  - Example choices: `test1`, `test2`, `test3`
+- `assets`: `src/configs/assets.py`
+  - Example choices: `weights_1`, `weights_2`
+- `model_config`: `src/configs/simple_model.py`
+  - Example choices: `default_model`, `epochs_20`, `epochs_100`
+
+Tip: run `uv run src/script_template.py --help` to see the Hydra help and choices.
+
+### Model configuration pattern (hydra‑zen)
+This repo demonstrates the "build once, extend by instantiation" approach:
+```
+from hydra_zen import builds, store
+from models.simple_model import simple_model
+
+SimpleModelConfig = builds(
+    simple_model,
+    learning_rate=1e-3,
+    epochs=10,
+    populate_full_signature=True,
+    zen_partial=True,
+)
+
+store(SimpleModelConfig, group="model_config", name="default_model")
+store(SimpleModelConfig, epochs=20, group="model_config", name="epochs_20")
+store(SimpleModelConfig, epochs=100, group="model_config", name="epochs_100")
+```
+- Only one `builds(...)` call; variants override fields on the built config.
+- Hydra produces a callable; the script later calls `model_config(execution=e)`.
+
+### Running the script and overriding configs
+- Use defaults:
+```
+uv run src/deriva_run.py
+```
+- Choose a different dataset or assets:
+```
+uv run src/script_template.py +datasets=test2 +assets=weights_2
+```
+- Choose a different model variant and/or override fields inline:
+```
+uv run src/script_template.py +model_config=epochs_100
+uv run src/script_template.py +model_config.epochs=50
+```
+- Enable dry run (download inputs, skip writebacks):
+```
+uv run src/script_template.py +dry_run=true
+```
+
+### Running the notebook non‑interactively
+Once debugged, prefer running notebooks in the same managed environment for provenance and reproducibility:
+```
+uv run deriva-ml-run-notebook notebooks/notebook_template.ipynb \
+  --host www.eye-ai.org \
+  --catalog 2 \
+  --kernel <repository-name>
+```
+This executes all cells and uploads the resulting notebook to the catalog.
+
+### Environment management with `uv`
+- Create/sync env: `uv sync`
+- Activate env (shell):
+  - Bash/Zsh: `source .venv/bin/activate`
+  - Fish: `source .venv/bin/activate.fish`
+  - Csh/Tcsh: `source .venv/bin/activate.csh`
+- Deactivate: `deactivate`
+- Optional groups:
+  - Jupyter: `uv sync --group=jupyter`
+  - PyTorch: `uv sync --group=pytorch`
+  - TensorFlow: `uv sync --group=tensorflow`
+
+You can define `default-groups` in `pyproject.toml` to always install selected extras.
+
+### Experiments (presets)
+You can add curated experiment presets (sets of config choices) in `src/configs/experiments.py` using Hydra’s composition. For example:
+```
+from hydra_zen import store
+
+# Example: choose dataset, assets, and a model variant in one name
+experiment_store = store(group="experiments")
+experiment_store(
+    {"datasets": "test2", "assets": "weights_2", "model_config": "epochs_100"},
+    name="high_epochs_alt_data",
+)
+```
+Then run with:
+```
+uv run src/script_template.py +experiments=high_epochs_alt_data
+```
 
 
 ## Experiment Management
@@ -173,6 +322,8 @@ The bump-version code will automatically use the commit log from any pull reques
 
 ## Getting the current version
 
+DerivaML uses setuptools-scm to determine the current version of the model.  
+THis gives you a dynamic version number that is updated automatically when you create a new release, or have commits on the latest release.
 You can determine the current version of the model from the command line by entering:
 ```aiignore
 uv run python -m setuptools_scm
@@ -189,3 +340,29 @@ You can upgrade all of the packages in your application, however, you should pro
 One way around this is to pin to specific versions of these libraries when you add them to you pyproject.toml file using the `uv add` command.
 
 Once the upgrade is complete, you will want to recommit your uv.lock file.
+
+
+## Best Practices
+
+You *SHOULD* Use an established doc string format for your code. This will make it easier for others to understand your code. DerivaML uses the google docstring format. For more information on docstring formats, please see [here.](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html)
+
+You *MUST* not commit a notebook with output cells.  This will make it difficult to track changes to the notebook.
+If you install the nbstripout as described above, this will be taken care of automatically.
+
+You *SHOULD* Use type hints wherever possible.
+
+Even if you are working by yourself, you *SHOULD* work in a Git branch and do a pull request.  Rebase your branch regularly to keep it up to date with the main branch.
+
+You *MUST* always run your code from a hydra-zen configuration file.  You should commit your code before running.
+If you are running an experiment, do a bump-version before running.
+
+No change is too small to properly track in GithHub and DerivaML.
+
+As a general rule, don't commit any data files.  These should be stored in DerivaML.
+
+If you are using notebooks, try to make sure that they are focused on a single task.  You *MUST* make sure that you can run the notebook from start to finish without any intervention and when you are satusfied, you can use deriva-ml-run-notebook to run the notebook in the deriva-ml environment.
+As a rule of thumb, notebooks should be used for analysis and visualization, not for training models.
+
+DerivaML provides functions for managing generic ML workflows.  It was designed to be extended via inheritance to provide domain specific functionality.
+If you are working on a domain specific model, you should consider creating a new module that inherits from the DerivaML class.
+In this situation, you would instantiate your domain specific version of DerivaML in your script or notebook, not DerivaML directly.
