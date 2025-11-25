@@ -1,8 +1,8 @@
 """This module defines configurations for the model assets.
 
 In DerivaML all of the additional files that may be needed beyond the dataset are  stored in a set of
-execution asset files which are specified as part of an ExecutionConfiguration.  DerivaML will automatically download
-all of the specified assets as part of initializing the execution.
+execution asset files which are specified as part of an ExecutionConfiguration.
+DerivaML will automatically download all of the specified assets as part of initializing the execution.
 
 Typically, the execution assets will at least contain the file with the model weights in it.
 """
@@ -20,4 +20,3 @@ assets_2 = [AssetRIDConfig("3R6"), AssetRIDConfig("3R4")]
 asset_store = store(group="assets")
 asset_store(assets_1, items=assets_1, name="weights_1")
 asset_store(assets_2, items=assets_2, name="weights_2")
-#asset_store(AssetListConfig, items=assets_2, name="weights_2")
