@@ -270,9 +270,14 @@ experiment_store(
 ```
 Then run with:
 ```
-uv run src/script_template.py +experiments=high_epochs_alt_data
+uv run src/deriva_run.py +experiments=high_epochs_alt_data
 ```
 
+You can also configure experiments, and run them as a multi-experiment:
+```aiignore
+uv run python deriva_run.py --multirun +experiment=run1, run2
+
+```
 
 ## Experiment Management
 

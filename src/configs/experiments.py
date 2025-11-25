@@ -1,7 +1,7 @@
 """ Define experiments
 
 These will be stored in the experiment store and can be run with the --multirun +experiment=experiment_name.
-    >>> python deriva_run.py --multirun +experiment=run1, run2
+    python deriva_run.py --multirun +experiment=run1, run2
 """
 
 from hydra_zen import make_config, store
