@@ -6,17 +6,18 @@ all of the specified assets as part of initializing the execution.
 
 Typically, the execution assets will at least contain the file with the model weights in it.
 """
-from hydra_zen import store, just
+from hydra_zen import store
+from deriva_ml.execution import AssetRIDConfig
 
-from deriva_ml import RID
 # Define two model assets by providing the RID of the asset.
-assets_1 = ["3RA", "3R8"]
-assets_2 = ["3R6", "3R4"]
+assets_1 = [AssetRIDConfig("3RA"), AssetRIDConfig("3R8")]
+assets_2 = [AssetRIDConfig("3R6"), AssetRIDConfig("3R4")]
 
 # Store the configurations in hydra-zen store.
 # Note that the name of the group in the store needs to match the name of the argument in the main function
 # that will be instantiated to the configuration value.
 
 asset_store = store(group="assets")
-asset_store(just(assets_1), name="weights_1")
-asset_store(just(assets_2), name="weights_2")
+asset_store(assets_1, items=assets_1, name="weights_1")
+asset_store(assets_2, items=assets_2, name="weights_2")
+#asset_store(AssetListConfig, items=assets_2, name="weights_2")

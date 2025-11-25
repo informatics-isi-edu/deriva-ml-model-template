@@ -15,7 +15,7 @@ def run_model(
     deriva_ml: DerivaMLConfig,
     datasets: list[DatasetSpec],
     model_config: Any,
-    assets: list[str] | None= None,
+    assets: list[RID],
     dry_run: bool = False,
 ) -> None:
     """

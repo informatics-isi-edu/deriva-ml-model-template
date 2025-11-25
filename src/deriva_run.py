@@ -26,6 +26,8 @@ store(deriva_model, name="deriva_model")
 
 experiment_store = store(group="experiment", package="_global_")
 
+# This is an overload, so we would apply this like:
+#    >>> python deriva_run.py --multirun +experiment=run1, run2
 experiment_store(
     make_config(
         hydra_defaults=[
@@ -38,9 +40,19 @@ experiment_store(
    ),
     name="run1"
 )
-print(store)
 
-#python my_app.py --multirun +experiment=simple_with_ten, simple_with_fro,nglite
+experiment_store(
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /datasets": "test2"},
+            {"override /assets": "weights_1"},
+            {"override /model_config": "epochs_20"},
+        ],
+        bases=(deriva_model,)
+   ),
+    name="run2"
+)
 
 
 if __name__ == "__main__":
