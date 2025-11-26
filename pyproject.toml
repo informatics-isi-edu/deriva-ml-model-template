@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 
 dependencies = [
     # Change this to be the module with the domain specific class derived from deriva-ml.
-    "deriva-ml >= 1.17.0",
+    "eye-ai >= 1.4.0",
     "hydra-zen",
     "notebook>=7.4.7",
 ]
@@ -56,7 +56,7 @@ url = "https://download.pytorch.org/whl/cu124"
 explicit = true
 
 [tool.uv.sources]
-  #  deriva-ml = { git = "https://github.com/informatics-isi-edu/deriva-ml", branch="main"}
+    eye-ai = { git = "https://github.com/eye-ai-usc/eye-ai-ml", tag="v1.4.0"}
    # torch = [
    #     { index = "pytorch-cpu", marker = "(sys_platform == 'darwin' and platform_machine == 'arm64') or (platform_machine != 'x86_64' and sys_platform == 'Linux')"},
    #     { index = "pytorch-cuda", marker = "sys_platform == 'Linux' and platform_machine == 'x86_64'"}
