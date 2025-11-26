@@ -803,8 +803,8 @@ wheels = [
 
 [[package]]
 name = "deriva-ml"
-version = "1.16.0.post46+g98129dcfc"
-source = { git = "https://github.com/informatics-isi-edu/deriva-ml?branch=main#98129dcfc074295f3e015e3eea4f98511a74426d" }
+version = "1.17.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bdbag" },
     { name = "bump-my-version" },
@@ -824,6 +824,10 @@ dependencies = [
     { name = "setuptools" },
     { name = "setuptools-scm" },
     { name = "sqlalchemy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/84/22/68a2a45d92502837ec8e388ec3f4169eec38cd44e4e53b8afc6ae92095a1/deriva_ml-1.17.0.tar.gz", hash = "sha256:d511cf88d59a83f39b758cac0e88943fb156314440d4b09c3f693bd211b931a8", size = 3828471, upload-time = "2025-11-25T22:56:19.693Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8d/58/901d2cf54935d7cc64e6c0d44a5e92e5ad7ed4b1a26d03f524f05fec590d/deriva_ml-1.17.0-py3-none-any.whl", hash = "sha256:5cefbd1d99072e2488e6c19daee88e1ac369b51188fc8e7ea999769fb507f6b5", size = 130234, upload-time = "2025-11-25T22:56:21.139Z" },
 ]
 
 [[package]]
@@ -857,7 +861,7 @@ torch = [
 
 [package.metadata]
 requires-dist = [
-    { name = "deriva-ml", git = "https://github.com/informatics-isi-edu/deriva-ml?branch=main" },
+    { name = "deriva-ml", specifier = ">=1.17.0" },
     { name = "hydra-zen" },
     { name = "notebook", specifier = ">=7.4.7" },
 ]
