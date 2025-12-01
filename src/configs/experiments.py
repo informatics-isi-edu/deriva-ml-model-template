@@ -22,7 +22,7 @@ experiment_store(
         ],
         bases=(deriva_model_config,)
    ),
-    name="run1"
+    name="run1",
 )
 
 experiment_store(
@@ -35,5 +35,5 @@ experiment_store(
         ],
         bases=(deriva_model_config,)
    ),
-    name="run2"
+    name="run2",
 )

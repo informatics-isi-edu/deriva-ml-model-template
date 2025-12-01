@@ -21,9 +21,10 @@ SimpleModelConfig = builds(
 )
 
 # Register the base config as the default model.
-store(SimpleModelConfig, group="model_config", name="default_model")
+model_store = store(group="model_config")
+model_store(SimpleModelConfig, group="model_config", name="default_model")
 
 # Register additional variants by extending (instantiating) the base config
 # with overridden fields. This avoids multiple calls to `builds`.
-store(SimpleModelConfig, epochs=20, group="model_config", name="epochs_20")
-store(SimpleModelConfig, epochs=100, group="model_config", name="epochs_100")
+model_store(SimpleModelConfig, epochs=20, name="epochs_20")
+model_store(SimpleModelConfig, epochs=100, name="epochs_100")

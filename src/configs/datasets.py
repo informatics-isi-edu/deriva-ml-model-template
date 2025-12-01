@@ -13,6 +13,6 @@ datasets_test3 = []
 # Note that the name of the group has to match the name of the argument in the main function that will be
 # instantiated to the configuration value.
 datasets_store = store(group="datasets")
-datasets_store(datasets_test1, name="test1", metadata = {"description": "Test one datasets"})
-datasets_store(datasets_test2, name="test2", metadata = {"description": "Test two datasets"})
+datasets_store(datasets_test1, name="test1")
+datasets_store(datasets_test2, name="test2")
 datasets_store(datasets_test3, name="test3")
