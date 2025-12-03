@@ -1,6 +1,9 @@
 """
 This file is a template for how to set up a stand-alone script to execute a model.
 """
+from deriva_ml.dataset import DatasetSpecConfig, DatasetSpec
+from deriva_ml import RID
+from deriva_ml.execution import AssetRIDConfig
 from hydra_zen import store, zen, builds
 
 from model_runner import run_model
@@ -11,8 +14,7 @@ deriva_model = builds(
     hydra_defaults=[
         "_self_",
         {"deriva_ml": "local"},
-        {"datasets": "test1"},
-        {"assets": "weights_1"},
+        {"execution_config": "default_execution"},
         {"model_config": "default_model"},
     ],
 )
@@ -22,6 +24,7 @@ store(deriva_model, name="deriva_model")
 import configs.datasets  # noqa: F401, E402
 import configs.deriva  # noqa: F401, E402
 import configs.assets  # noqa: F401, E402
+import configs.executions # noqa: F401, E402
 import configs.simple_model  # noqa: F401, E402
 import configs.experiments  #noqa: F401, E402
 

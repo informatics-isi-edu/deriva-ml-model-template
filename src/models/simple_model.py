@@ -1,13 +1,18 @@
 """
-This module defines a simple model function that can be used as a template for a model script.  This should be replaced
-with the proper model functions.
+This module defines a simple model function that can be used as a template for a model script.
+This should be replaced with the proper model functions.
+
+In addition to the model function paramenters, the function takes an optional execution parameter.
+The calling function will instantiate this function with the execution object that will contain the datasets and assets
+as well as information about the execution environment, such as the working directory.
 
 Additional parameters can be added to the function signature as needed.
+
 """
 from deriva_ml.execution import Execution
 
 
-def simple_model(learning_rate: float, epochs: int, execution: Execution) -> None:
+def simple_model(learning_rate: float, epochs: int, execution: Execution | None = None) -> None:
     """A  simple model function.  This should be replaced with the proper top level model for the script.
 
     This is a very simple example of calling a model architecture with parameters. In an actual implementation,

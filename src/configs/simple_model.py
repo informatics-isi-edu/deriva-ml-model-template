@@ -5,10 +5,13 @@ This module defines model configurations and registers them into Hydra's store
 under the "model_config" group. We build the configuration once, then create
 variants by instantiating the built config with overridden fields (no extra
 builds required).
+
+The default values in the builds will have to be modified to reflect the actual model signature.
 """
 
 from hydra_zen import builds, store
 
+# Immplementation of the model being configured.
 from models.simple_model import simple_model
 
 # Build the base configuration once.
@@ -17,7 +20,7 @@ SimpleModelConfig = builds(
     learning_rate=1e-3,
     epochs=10,
     populate_full_signature=True,
-    zen_partial=True,
+    zen_partial=True,   # We are going to add the execution config later.
 )
 
 # Register the base config as the default model.

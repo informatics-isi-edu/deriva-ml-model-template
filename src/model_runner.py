@@ -10,12 +10,12 @@ from typing import Any
 from deriva_ml import DerivaML, DerivaMLConfig, MLVocab, RID
 from deriva_ml.dataset import DatasetSpec
 from deriva_ml.execution import ExecutionConfiguration
+from hydra_zen.typing import Builds
 
 def run_model(
     deriva_ml: DerivaMLConfig,
-    datasets: list[DatasetSpec],
+    execution_config: Builds[ExecutionConfiguration],
     model_config: Any,
-    assets: list[RID],
     dry_run: bool = False,
 ) -> None:
     """
@@ -31,8 +31,6 @@ def run_model(
     Returns:
 
     """
-    assets = assets or []
-    datasets = datasets or []
 
     # Make a connection to the Deriva catalog.  You will need to change the class being used if you have a
     # derived catalog from DerivaML.  For example, in the case of an EyeAI catalog, you would use EyeAI instead of
@@ -52,9 +50,8 @@ def run_model(
         description="A Model Template Workflow")
 
     # Create an execution instance.
-    config = ExecutionConfiguration(datasets=datasets, assets=assets, workflow=workflow)
+    execution = ml_instance.create_execution(execution_config, workflow=workflow, dry_run=dry_run)
 
-    execution = ml_instance.create_execution(config, dry_run=dry_run)
     with execution as e:
         # The model function has been partially configured, so we need to instantiate it with the execution object.
         # Note that model_config is a callable created by hydra-zen, not a dataclass.
