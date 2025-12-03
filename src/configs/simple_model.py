@@ -6,6 +6,11 @@ under the "model_config" group. We build the configuration once, then create
 variants by instantiating the built config with overridden fields (no extra
 builds required).
 
+The model configuration is set up so that it calls the provided model function with the specified parameters as
+determined by the configuration. In addition, the template arranges for the execution opject under which the model
+is to be run to be passed as an argument.  This object cat be used to access the datasets and assets that will be used
+in the execution as well as set up output directories.
+
 The default values in the builds will have to be modified to reflect the actual model signature.
 """
 

@@ -1,10 +1,11 @@
 """
 THis module is the main entry point for the model script.  Its job is to take the arguments provided by hydra and
-create an execution configuration and run the model.
+create a DerivaML execution environment and then and run the model.
 
 This script is intended to be used as a template for other model scripts.  You should modify it to reflect the actual
 workflow to be created and call the domain specific version of DerivaML.
 """
+
 from typing import Any
 
 from deriva_ml import DerivaML, DerivaMLConfig, MLVocab, RID
@@ -12,9 +13,12 @@ from deriva_ml.dataset import DatasetSpec
 from deriva_ml.execution import ExecutionConfiguration
 from hydra_zen.typing import Builds
 
+
 def run_model(
     deriva_ml: DerivaMLConfig,
-    execution_config: Builds[ExecutionConfiguration],
+    datasets: list[DatasetSpec],
+    assets: list[RID],
+    description: str,
     model_config: Any,
     dry_run: bool = False,
 ) -> None:
@@ -23,9 +27,10 @@ def run_model(
     Args:
         deriva_ml: A configuration for DerivaML with values corresponding to parameters DerivaML()
         datasets: A list of datasets to use in creating an ExecutionConfig
-        model_config: Configuration for the ML model.  This is a callable that wraps the actual model code.
         assets:  A list of assets to be used in creating an ExecutionConfig. Typically will contain the files with the
             weights.
+        model_config: Configuration for the ML model.  This is a callable that wraps the actual model code.
+        description: A description of the execution.
         dry_run: Optional dryrun parameter for Execution.  Other configuration arguments could be added here.
 
     Returns:
@@ -47,14 +52,23 @@ def run_model(
     workflow = ml_instance.create_workflow(
         name="demo-workflow",
         workflow_type="Template Model Script",
-        description="A Model Template Workflow")
+        description="A Model Template Workflow",
+    )
 
     # Create an execution instance.
-    execution = ml_instance.create_execution(execution_config, workflow=workflow, dry_run=dry_run)
+    execution_config = ExecutionConfiguration(
+        datasets=datasets, assets=assets, description=description
+    )
+    execution = ml_instance.create_execution(
+        execution_config, workflow=workflow, dry_run=dry_run
+    )
 
     with execution as e:
         # The model function has been partially configured, so we need to instantiate it with the execution object.
         # Note that model_config is a callable created by hydra-zen, not a dataclass.
         model_config(execution=e)
-    print("Uploading outputs...")
-    execution.upload_execution_outputs()
+    assets = execution.upload_execution_outputs()
+    print(assets)
+    print(f"Uploaded assets: ")
+    for a in assets:
+        print(f"    ", a)

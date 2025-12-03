@@ -12,7 +12,7 @@ app_name = next(iter(app_config))
 deriva_model_config = store[None][app_name]
 experiment_store = store(group="experiments")
 
-# Define your experiments here.
+# Define your experiments here.  We can pick a specific dataset, asset, and model configuration to run.
 experiment_store(
     make_config(
         hydra_defaults=[

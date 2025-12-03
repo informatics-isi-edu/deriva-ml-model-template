@@ -2,7 +2,7 @@
 This module defines a simple model function that can be used as a template for a model script.
 This should be replaced with the proper model functions.
 
-In addition to the model function paramenters, the function takes an optional execution parameter.
+In addition to the model function parameters, the function takes an optional execution parameter.
 The calling function will instantiate this function with the execution object that will contain the datasets and assets
 as well as information about the execution environment, such as the working directory.
 
@@ -10,6 +10,7 @@ Additional parameters can be added to the function signature as needed.
 
 """
 from deriva_ml.execution import Execution
+from deriva_ml import MLAsset, ExecAssetType
 
 
 def simple_model(learning_rate: float, epochs: int, execution: Execution | None = None) -> None:
@@ -33,3 +34,11 @@ def simple_model(learning_rate: float, epochs: int, execution: Execution | None 
     )
     print(weights)
     print(datasets)
+    model_file = execution.asset_file_path(MLAsset.execution_asset, "model.txt", ExecAssetType.model_file)
+    output_file = execution.asset_file_path(MLAsset.execution_asset, "output.txt", ExecAssetType.output_file)
+
+    with output_file.open("w") as f:
+        f.write("This is a sample output file.")
+    with model_file.open("w") as f:
+            f.write("This is a sample model file.")
+
