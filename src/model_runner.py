@@ -5,13 +5,12 @@ create a DerivaML execution environment and then and run the model.
 This script is intended to be used as a template for other model scripts.  You should modify it to reflect the actual
 workflow to be created and call the domain specific version of DerivaML.
 """
-
+import logging
 from typing import Any
 
 from deriva_ml import DerivaML, DerivaMLConfig, MLVocab, RID
 from deriva_ml.dataset import DatasetSpec
 from deriva_ml.execution import ExecutionConfiguration
-from hydra_zen.typing import Builds
 
 
 def run_model(
@@ -36,6 +35,11 @@ def run_model(
     Returns:
 
     """
+
+    # Hydra wants to set up logging...lets get rid of it.
+    root = logging.getLogger()
+    for h in root.handlers[:]:
+        root.removeHandler(h)
 
     # Make a connection to the Deriva catalog.  You will need to change the class being used if you have a
     # derived catalog from DerivaML.  For example, in the case of an EyeAI catalog, you would use EyeAI instead of
@@ -68,7 +72,8 @@ def run_model(
         # Note that model_config is a callable created by hydra-zen, not a dataclass.
         model_config(execution=e)
     assets = execution.upload_execution_outputs()
-    print(assets)
     print(f"Uploaded assets: ")
-    for a in assets:
-        print(f"    ", a)
+    for table, assets in assets.items():
+        print(f"Table: {table} Assets")
+        for asset in assets:
+            print(f"  {asset}")

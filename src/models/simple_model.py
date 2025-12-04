@@ -32,7 +32,15 @@ def simple_model(learning_rate: float, epochs: int, execution: Execution | None 
     print(
         f"Training with learning rate: {learning_rate} and epochs: {epochs} and dataset"
     )
-    print(weights)
+
+    # Assets in the execution object are stored in a dictionary with table names as keys and lists of
+    # AssetFilePath objects as values.
+    for table, assets in weights.items():
+        print(f"Table: {table} Assets")
+        for asset in assets:
+            print(f"  {asset}")
+
+    print("Datasets")
     print(datasets)
     model_file = execution.asset_file_path(MLAsset.execution_asset, "model.txt", ExecAssetType.model_file)
     output_file = execution.asset_file_path(MLAsset.execution_asset, "output.txt", ExecAssetType.output_file)
