@@ -5,8 +5,8 @@ from hydra_zen import store
 from deriva_ml.dataset import  DatasetSpecConfig
 
 # Configure a list of datasets by specifying the RID and version of each dataset that goes into the collection.
-datasets_test1 = [DatasetSpecConfig(rid="4TM", version="1.3.0")]
-datasets_test2 = [DatasetSpecConfig(rid="4T8", version="1.3.0")]
+datasets_test1 = [DatasetSpecConfig(rid="2-7K8W", version="4.6.0")]
+datasets_test2 = [DatasetSpecConfig(rid="2-7KA2", version="2.6.0")]
 datasets_test3 = []
 
 # Create three configurations and store them into hydra-zen store.

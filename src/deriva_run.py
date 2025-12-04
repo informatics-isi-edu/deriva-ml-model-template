@@ -19,7 +19,7 @@ deriva_model = builds(
     populate_full_signature=True,
     hydra_defaults=[
         "_self_",
-        {"deriva_ml": "local"},
+        {"deriva_ml": "eye-ai"},
         {"datasets": "default_dataset"},
         {"assets": "default_asset"},
         {"model_config": "default_model"},
