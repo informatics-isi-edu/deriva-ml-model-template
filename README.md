@@ -247,6 +247,22 @@ You can also run multiple experiments in one invocation:
 ```
 uv run src/deriva_run.py --multirun +experiment=run1,run2
 ```
+## Using this template
+- From GitHub, create a new repository from this template
+-
+Replace the simpl_model.py file in the models directory with your own model code.  
+The initial arguments to your model should be whatever you want to vary in the underlying ML code.  You should 
+keep the last ExecutionConfiguration argument, which is used to configure the model run and will automatically be
+added by the framework when calling your model function.
+
+Replace configs/simple_model.py with an version for your model that defines the model variants you want to run. 
+You do not have to have a default varient, but this may be useful for testing.  
+
+
+The model function should be defined in the model_runner.py file.
+he arguments to the model function should match the arguments in the model config.
+- Customize the project name and description
+- Update the README to describe your model and its use case
 
 ## Recommended Workflow and Coding Guidelines
 We maintain operational and coding guidelines in a separate document:

@@ -10,7 +10,7 @@ from typing import Any
 
 from deriva_ml import DerivaML, DerivaMLConfig, MLVocab, RID
 from deriva_ml.dataset import DatasetSpec
-from deriva_ml.execution import ExecutionConfiguration
+from deriva_ml.execution import ExecutionConfiguration, Workflow
 
 
 def run_model(
@@ -18,6 +18,7 @@ def run_model(
     datasets: list[DatasetSpec],
     assets: list[RID],
     description: str,
+    workflow: Workflow,
     model_config: Any,
     dry_run: bool = False,
 ) -> None:
@@ -30,6 +31,7 @@ def run_model(
             weights.
         model_config: Configuration for the ML model.  This is a callable that wraps the actual model code.
         description: A description of the execution.
+        workflow: A workflow to associate with the execution.
         dry_run: Optional dryrun parameter for Execution.  Other configuration arguments could be added here.
 
     Returns:
@@ -46,19 +48,6 @@ def run_model(
     # DerivaML.
     ml_instance = DerivaML.instantiate(deriva_ml)
 
-    # Create a workflow instance for this specific version of the script.  Return an existing workflow if one is found.
-    # This call should be changed to reflect the actual types of workflow being run.
-    ml_instance.add_term(
-        MLVocab.workflow_type,
-        "Template Model Script",
-        description="Initial setup of Model Notebook",
-    )
-    workflow = ml_instance.create_workflow(
-        name="demo-workflow",
-        workflow_type="Template Model Script",
-        description="A Model Template Workflow",
-    )
-
     # Create an execution instance.
     execution_config = ExecutionConfiguration(
         datasets=datasets, assets=assets, description=description
@@ -71,9 +60,5 @@ def run_model(
         # The model function has been partially configured, so we need to instantiate it with the execution object.
         # Note that model_config is a callable created by hydra-zen, not a dataclass.
         model_config(execution=e)
-    assets = execution.upload_execution_outputs()
-    print(f"Uploaded assets: ")
-    for table, assets in assets.items():
-        print(f"Table: {table} Assets")
-        for asset in assets:
-            print(f"  {asset}")
+    _assets = execution.upload_execution_outputs()
+

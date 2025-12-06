@@ -10,7 +10,7 @@ from hydra_zen import store
 from deriva_ml.execution import AssetRIDConfig
 
 # Define two model assets by providing the RID of the asset.
-assets_1 = [AssetRIDConfig("3RA"), AssetRIDConfig("3R8")]
+assets_1 = [AssetRIDConfig("3RA"), AssetRIDConfig("3R8")]  # RID for hyperparamets json file.....
 assets_2 = [AssetRIDConfig("3R6"), AssetRIDConfig("3R4")]
 
 # Store the configurations in hydra-zen store.

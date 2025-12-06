@@ -5,9 +5,6 @@ You can run this script directly from the command line, specifying the configura
 
 """
 
-from deriva_ml.dataset import DatasetSpecConfig, DatasetSpec
-from deriva_ml import RID
-from deriva_ml.execution import AssetRIDConfig
 from hydra_zen import store, zen, builds
 
 from model_runner import run_model
@@ -22,6 +19,7 @@ deriva_model = builds(
         {"deriva_ml": "local"},
         {"datasets": "default_dataset"},
         {"assets": "default_asset"},
+        {"workflow": "default_workflow"},
         {"model_config": "default_model"},
     ],
 )
@@ -31,7 +29,8 @@ store(deriva_model, name="deriva_model")
 import configs.datasets  # noqa: F401, E402
 import configs.deriva  # noqa: F401, E402
 import configs.assets  # noqa: F401, E402
-import configs.simple_model  # noqa: F401, E402
+import configs.workflow # noqa: F401, E402
+import configs.model  # noqa: F401, E402
 import configs.experiments  # noqa: F401, E402
 
 if __name__ == "__main__":

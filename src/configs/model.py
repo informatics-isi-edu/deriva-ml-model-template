@@ -16,7 +16,7 @@ The default values in the builds will have to be modified to reflect the actual 
 
 from hydra_zen import builds, store
 
-# Immplementation of the model being configured.
+# Implementation of the model being configured.
 from models.simple_model import simple_model
 
 # Build the base configuration once.
