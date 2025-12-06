@@ -10,10 +10,12 @@ Additional parameters can be added to the function signature as needed.
 
 """
 from deriva_ml.execution import Execution
-from deriva_ml import MLAsset, ExecAssetType
+from deriva_ml import MLAsset, ExecAssetType, DerivaML
 
 
-def simple_model(learning_rate: float, epochs: int, execution: Execution | None = None) -> None:
+def simple_model(learning_rate: float, epochs: int,
+                 ml_instance: DerivaML,
+                 execution: Execution | None = None) -> None:
     """A  simple model function.  This should be replaced with the proper top level model for the script.
 
     This is a very simple example of calling a model architecture with parameters. In an actual implementation,
@@ -27,6 +29,7 @@ def simple_model(learning_rate: float, epochs: int, execution: Execution | None 
     Returns:
 
     """
+    print(f"Executing on: {ml_instance.host_name} in catalog {ml_instance.catalog_id}")
     weights = execution.asset_paths
     datasets = execution.datasets
     print(

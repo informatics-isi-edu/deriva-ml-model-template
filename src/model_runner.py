@@ -59,6 +59,6 @@ def run_model(
     with execution as e:
         # The model function has been partially configured, so we need to instantiate it with the execution object.
         # Note that model_config is a callable created by hydra-zen, not a dataclass.
-        model_config(execution=e)
+        model_config(ml_instance=ml_instance, execution=e)
     _assets = execution.upload_execution_outputs()
 
