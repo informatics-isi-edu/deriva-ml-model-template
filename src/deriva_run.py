@@ -16,7 +16,7 @@ deriva_model = builds(
     populate_full_signature=True,
     hydra_defaults=[
         "_self_",
-        {"deriva_ml": "local"},
+        {"deriva_ml": "default_deriva"},
         {"datasets": "default_dataset"},
         {"assets": "default_asset"},
         {"workflow": "default_workflow"},

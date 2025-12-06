@@ -1,6 +1,6 @@
 # DerivaML Model Template
 
-This repository provides a template for using DerivaML to develop a machine learning (ML) model.
+This repository provides a template for using DerivaML and EyeAI to develop a machine learning (ML) model.
 
 DerivaML is a Python library that helps you create and run reproducible ML workflows backed by a Deriva catalog. It captures code provenance, configuration, and outputs, so you can recreate or audit results later. Because provenance depends on versioned source code, this template assumes your project lives in GitHub.
 

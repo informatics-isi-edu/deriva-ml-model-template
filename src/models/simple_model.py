@@ -42,11 +42,9 @@ def simple_model(learning_rate: float, epochs: int, execution: Execution | None 
 
     print("Datasets")
     print(datasets)
-    model_file = execution.asset_file_path(MLAsset.execution_asset, "model.txt", ExecAssetType.model_file)
     output_file = execution.asset_file_path(MLAsset.execution_asset, "output.txt", ExecAssetType.output_file)
 
     with output_file.open("w") as f:
         f.write("This is a sample output file.")
-    with model_file.open("w") as f:
-            f.write("This is a sample model file.")
+
 

@@ -876,7 +876,7 @@ wheels = [
 
 [[package]]
 name = "deriva-ml"
-version = "1.17.5"
+version = "1.17.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bdbag" },
@@ -898,9 +898,9 @@ dependencies = [
     { name = "setuptools-scm" },
     { name = "sqlalchemy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0a/40/424aabcfc9bfb9c2e62369c0a5f3ac19d09f03a4ba70c56210d406af962d/deriva_ml-1.17.5.tar.gz", hash = "sha256:7a7eab25307f4f14e022bae479d0c6c773cf16f96ffd4a63119c5c8843c8b7a2", size = 3860258, upload-time = "2025-12-03T02:38:26.335Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/46/4e/9deda4037cf513d8f8f5d169d6eaf56e68fa523af88d2ffbc60e001e8953/deriva_ml-1.17.7.tar.gz", hash = "sha256:8839fae796409b54291748c84504aa253c2dad840f76f6e9d85aca1a8d759147", size = 3860063, upload-time = "2025-12-06T00:58:40.805Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/66/95/2124d072f92e0ead1db943c92c5cdbf0a8d0f5868b3f118d4138ae62703b/deriva_ml-1.17.5-py3-none-any.whl", hash = "sha256:9424a6dbb449552e5c95f7ccc79916ab0a8f443b885de240585d62fe9360cd91", size = 130418, upload-time = "2025-12-03T02:38:27.518Z" },
+    { url = "https://files.pythonhosted.org/packages/bb/9d/e9e24f37e3edde6da221fd3b326e11a66359b794c2dffd33756a65ff4971/deriva_ml-1.17.7-py3-none-any.whl", hash = "sha256:32b6722453e4791b90299f08d3210710ce14d0d847f18a2978e1fad89d8ad994", size = 130782, upload-time = "2025-12-06T00:58:42.245Z" },
 ]
 
 [[package]]
@@ -935,7 +935,7 @@ torch = [
 
 [package.metadata]
 requires-dist = [
-    { name = "deriva-ml", specifier = ">=1.17.0" },
+    { name = "deriva-ml" },
     { name = "hydra-zen" },
     { name = "notebook", specifier = ">=7.4.7" },
 ]
