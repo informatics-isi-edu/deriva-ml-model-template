@@ -248,9 +248,19 @@ You can also run multiple experiments in one invocation:
 uv run src/deriva_run.py --multirun +experiment=run1,run2
 ```
 ## Using this template
-- From GitHub, create a new repository from this template
+
+From GitHub, create a new repository from this template.  
+
+You need to have a "bridge" function that will connect the DerivaML,  In the template, this is the `simple_model` function.
+```def simple_model(learning_rate: float, epochs: int,
+                 ml_instance: DerivaML,
+                 execution: Execution | None = None) -> None:
+                 ```
+ 
+- In the models directory, create a copy of the  the file `simple_model.py` to match your model name. If you don't
+want to use the models directory, you can put your model code whereever you like and adjust the imports accordingly.
 -
-Replace the simpl_model.py file in the models directory with your own model code.  
+Replace the simple_model.py file in the models directory with your own model code.  
 The initial arguments to your model should be whatever you want to vary in the underlying ML code.  You should 
 keep the last ExecutionConfiguration argument, which is used to configure the model run and will automatically be
 added by the framework when calling your model function.

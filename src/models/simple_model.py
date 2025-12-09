@@ -12,7 +12,6 @@ Additional parameters can be added to the function signature as needed.
 from deriva_ml.execution import Execution
 from deriva_ml import MLAsset, ExecAssetType, DerivaML
 
-
 def simple_model(learning_rate: float, epochs: int,
                  ml_instance: DerivaML,
                  execution: Execution | None = None) -> None:
@@ -24,6 +23,7 @@ def simple_model(learning_rate: float, epochs: int,
     Args:
         learning_rate: Sample model parameter
         epochs:  Sample model parameter
+        ml_instance: DerivaML instance that will be used to access paths.
         execution: DerivaML execution object that will contain datasets and assets.
 
     Returns:

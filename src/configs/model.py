@@ -13,6 +13,7 @@ in the execution as well as set up output directories.
 
 The default values in the builds will have to be modified to reflect the actual model signature.
 """
+from __future__ import annotations
 
 from hydra_zen import builds, store
 
@@ -20,7 +21,7 @@ from hydra_zen import builds, store
 from models.simple_model import simple_model
 
 # Build the base configuration once.
-SimpleModelConfig = builds(
+ModelConfig = builds(
     simple_model,
     learning_rate=1e-3,
     epochs=10,
@@ -30,9 +31,9 @@ SimpleModelConfig = builds(
 
 # Register the base config as the default model.
 model_store = store(group="model_config")
-model_store(SimpleModelConfig, name="default_model")
+model_store(ModelConfig, name="default_model")
 
 # Register additional variants by extending (instantiating) the base config
 # with overridden fields. This avoids multiple calls to `builds`.
-model_store(SimpleModelConfig, name="epochs_20", epochs=20)
-model_store(SimpleModelConfig, name="epochs_100", epochs=100)
+model_store(ModelConfig, name="epochs_20", epochs=20)
+model_store(ModelConfig, name="epochs_100", epochs=100)

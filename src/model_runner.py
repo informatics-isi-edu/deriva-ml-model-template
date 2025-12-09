@@ -8,7 +8,7 @@ workflow to be created and call the domain specific version of DerivaML.
 import logging
 from typing import Any
 
-from deriva_ml import DerivaML, DerivaMLConfig, MLVocab, RID
+from deriva_ml import DerivaML, DerivaMLConfig,  RID
 from deriva_ml.dataset import DatasetSpec
 from deriva_ml.execution import ExecutionConfiguration, Workflow
 
@@ -46,6 +46,7 @@ def run_model(
     # Make a connection to the Deriva catalog.  You will need to change the class being used if you have a
     # derived catalog from DerivaML.  For example, in the case of an EyeAI catalog, you would use EyeAI instead of
     # DerivaML.
+
     ml_instance = DerivaML.instantiate(deriva_ml)
 
     # Create an execution instance.
@@ -56,7 +57,7 @@ def run_model(
         execution_config, workflow=workflow, dry_run=dry_run
     )
 
-    with execution as e:
+    with execution.execute() as e:
         # The model function has been partially configured, so we need to instantiate it with the execution object.
         # Note that model_config is a callable created by hydra-zen, not a dataclass.
         model_config(ml_instance=ml_instance, execution=e)

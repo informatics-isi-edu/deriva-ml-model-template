@@ -19,5 +19,5 @@ assets_2 = [AssetRIDConfig("3R6"), AssetRIDConfig("3R4")]
 # that will be instantiated to the configuration value.
 
 asset_store = store(group="assets")
-asset_store(assets_1, items=assets_1, name="default_asset")
-asset_store(assets_2, items=assets_2, name="weights_2")
+asset_store(assets_1,  name="default_asset")
+asset_store(assets_2,  name="weights_2")
