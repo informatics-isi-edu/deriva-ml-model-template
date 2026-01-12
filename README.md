@@ -274,23 +274,23 @@ he arguments to the model function should match the arguments in the model confi
 - Customize the project name and description
 - Update the README to describe your model and its use case
 
-## Loading CIFAR-10 Dataset
+## CIFAR-10 Example
 
-This template includes a script to load the CIFAR-10 dataset into a Deriva catalog. This is useful for testing ML workflows with a standard dataset.
+This template includes a complete example for training a CNN on the CIFAR-10 dataset, demonstrating the full DerivaML workflow.
 
-### Usage
+### Loading CIFAR-10 Data
+
+First, load CIFAR-10 images into a Deriva catalog:
 
 ```bash
 load-cifar10 --host <hostname> --catalog_id <catalog_id> [options]
 ```
 
-### Required Arguments
-
+**Required Arguments:**
 - `--host`: The Deriva server hostname (e.g., `www.eye-ai.org`)
 - `--catalog_id`: The catalog ID to load data into
 
-### Optional Arguments
-
+**Optional Arguments:**
 - `--num_images`: Number of images to load (default: 100)
 - `--domain_schema`: Domain schema name (default: `cifar10`)
 - `--working_dir`: Working directory for temporary files
@@ -298,21 +298,92 @@ load-cifar10 --host <hostname> --catalog_id <catalog_id> [options]
 - `--train_only`: Only load training images
 - `--test_only`: Only load test images
 
-### Example
-
+**Example:**
 ```bash
 # Load 500 CIFAR-10 images to a catalog
 uv run load-cifar10 --host dev.eye-ai.org --catalog_id 5 --num_images 500
-
-# Load only training images
-uv run load-cifar10 --host dev.eye-ai.org --catalog_id 5 --num_images 200 --train_only
 ```
 
-The script will:
-1. Download CIFAR-10 data from torchvision
-2. Create the necessary schema and tables if they don't exist
-3. Upload images as assets with their labels
-4. Create appropriate dataset entries
+### CIFAR-10 CNN Model
+
+A simple 2-layer CNN is included for training on CIFAR-10 data (`src/models/cifar10_cnn.py`).
+
+**Architecture:**
+- Conv2d(3, 32) -> ReLU -> MaxPool2d (32x32 -> 16x16)
+- Conv2d(32, 64) -> ReLU -> MaxPool2d (16x16 -> 8x8)
+- Linear(64*8*8, 128) -> ReLU -> Dropout
+- Linear(128, 10)
+
+**Expected accuracy:** ~60-70% with default parameters.
+
+### Configurable Parameters
+
+All model parameters are configurable via Hydra:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `conv1_channels` | 32 | Output channels for first conv layer |
+| `conv2_channels` | 64 | Output channels for second conv layer |
+| `hidden_size` | 128 | Hidden layer size |
+| `dropout_rate` | 0.0 | Dropout probability |
+| `learning_rate` | 1e-3 | Optimizer learning rate |
+| `epochs` | 10 | Number of training epochs |
+| `batch_size` | 64 | Training batch size |
+| `weight_decay` | 0.0 | L2 regularization |
+| `label_column` | "Label" | Column name for class labels |
+
+### Running the Model
+
+**Basic usage:**
+```bash
+# Run with default CIFAR-10 config
+uv run src/deriva_run.py +model_config=cifar10_default
+
+# Quick test run (3 epochs)
+uv run src/deriva_run.py +model_config=cifar10_quick
+
+# Extended training (50 epochs, larger model)
+uv run src/deriva_run.py +model_config=cifar10_extended
+```
+
+**Override specific parameters:**
+```bash
+# Change learning rate
+uv run src/deriva_run.py +model_config=cifar10_default +model_config.learning_rate=0.01
+
+# Change epochs and batch size
+uv run src/deriva_run.py +model_config=cifar10_default +model_config.epochs=20 +model_config.batch_size=128
+```
+
+**Available model configurations:**
+- `cifar10_default`: Standard configuration (10 epochs)
+- `cifar10_quick`: Fast testing (3 epochs, large batch)
+- `cifar10_large`: Bigger model (64/128 channels, 256 hidden)
+- `cifar10_regularized`: With dropout and weight decay
+- `cifar10_fast_lr`: Higher learning rate (1e-2)
+- `cifar10_slow_lr`: Lower learning rate (1e-4, 30 epochs)
+- `cifar10_extended`: Best accuracy config (50 epochs, larger model, regularization)
+
+### Data Loading Pipeline
+
+The model uses DerivaML's `restructure_assets()` method to organize downloaded images into the directory structure expected by torchvision's `ImageFolder`:
+
+```
+working_dir/cifar10_data/
+    training/
+        airplane/
+        automobile/
+        bird/
+        ...
+    testing/
+        airplane/
+        ...
+```
+
+This automatic restructuring means your datasets just need:
+- Images in an `Image` asset table
+- A `Label` column with class names
+- Dataset types "Training" and "Testing" to separate splits
 
 ## Recommended Workflow and Coding Guidelines
 We maintain operational and coding guidelines in a separate document:

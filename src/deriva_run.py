@@ -31,6 +31,7 @@ import configs.deriva  # noqa: F401, E402
 import configs.assets  # noqa: F401, E402
 import configs.workflow # noqa: F401, E402
 import configs.model  # noqa: F401, E402
+import configs.cifar10_cnn  # noqa: F401, E402  # CIFAR-10 CNN model configs
 import configs.experiments  # noqa: F401, E402
 
 if __name__ == "__main__":
