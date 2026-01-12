@@ -274,6 +274,46 @@ he arguments to the model function should match the arguments in the model confi
 - Customize the project name and description
 - Update the README to describe your model and its use case
 
+## Loading CIFAR-10 Dataset
+
+This template includes a script to load the CIFAR-10 dataset into a Deriva catalog. This is useful for testing ML workflows with a standard dataset.
+
+### Usage
+
+```bash
+load-cifar10 --host <hostname> --catalog_id <catalog_id> [options]
+```
+
+### Required Arguments
+
+- `--host`: The Deriva server hostname (e.g., `www.eye-ai.org`)
+- `--catalog_id`: The catalog ID to load data into
+
+### Optional Arguments
+
+- `--num_images`: Number of images to load (default: 100)
+- `--domain_schema`: Domain schema name (default: `cifar10`)
+- `--working_dir`: Working directory for temporary files
+- `--batch_size`: Batch size for uploads (default: 50)
+- `--train_only`: Only load training images
+- `--test_only`: Only load test images
+
+### Example
+
+```bash
+# Load 500 CIFAR-10 images to a catalog
+uv run load-cifar10 --host dev.eye-ai.org --catalog_id 5 --num_images 500
+
+# Load only training images
+uv run load-cifar10 --host dev.eye-ai.org --catalog_id 5 --num_images 200 --train_only
+```
+
+The script will:
+1. Download CIFAR-10 data from torchvision
+2. Create the necessary schema and tables if they don't exist
+3. Upload images as assets with their labels
+4. Create appropriate dataset entries
+
 ## Recommended Workflow and Coding Guidelines
 We maintain operational and coding guidelines in a separate document:
 - See: [coding-guidelines.md](./coding-guidelines.md)

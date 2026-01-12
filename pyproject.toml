@@ -13,7 +13,11 @@ dependencies = [
     # Change this to be the module with the domain specific class derived from deriva-ml.
     "deriva-ml",
     "notebook>=7.4.7",
+    "torchvision",
 ]
+
+[project.scripts]
+load-cifar10 = "scripts.load_cifar10:main"
 
 [dependency-groups]
 dev = [
