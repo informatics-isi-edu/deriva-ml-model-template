@@ -7,11 +7,12 @@ authors = [
 ]
 description = "A test template for using DerivaML"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 
 dependencies = [
     # Change this to be the module with the domain specific class derived from deriva-ml.
     "deriva-ml",
+    "kaggle>=1.8.3",
     "notebook>=7.4.7",
     "torchvision",
 ]
@@ -24,7 +25,8 @@ dev = [
     "pytest",
     "pytest-coverage",
     "ruff",
-    "ipython"
+    "ipython",
+    "pip-system-certs",
 ]
 
 docker = [
@@ -63,7 +65,7 @@ url = "https://download.pytorch.org/whl/cu124"
 explicit = true
 
 [tool.uv.sources]
-    deriva-ml = { path = "../deriva-ml"}
+deriva-ml = { path = "../deriva-ml-refactor-dataset", editable = true }
    # torch = [
    #     { index = "pytorch-cpu", marker = "(sys_platform == 'darwin' and platform_machine == 'arm64') or (platform_machine != 'x86_64' and sys_platform == 'Linux')"},
    #     { index = "pytorch-cuda", marker = "sys_platform == 'Linux' and platform_machine == 'x86_64'"}

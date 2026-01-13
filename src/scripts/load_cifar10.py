@@ -9,8 +9,8 @@ a Deriva catalog using the DerivaML Python library directly (no MCP). It creates
 - A dataset hierarchy: Complete (all images), Segmented (Training + Testing)
 
 Usage:
-    python load_cifar10_direct.py --hostname ml.derivacloud.org --catalog-id 99
-    python load_cifar10_direct.py --hostname localhost --create-catalog cifar10_demo
+    python load_cifar10.py --hostname ml.derivacloud.org --catalog-id 99
+    python load_cifar10.py --hostname localhost --create-catalog cifar10_demo
 
 Requirements:
     - Kaggle CLI configured (~/.kaggle/kaggle.json)
@@ -32,14 +32,28 @@ from typing import Any
 from deriva_ml import DerivaML
 from deriva_ml.execution import ExecutionConfiguration
 from deriva_ml.schema import create_ml_catalog
+from deriva_ml.core.ermrest import UploadProgress
 from deriva.core.ermrest_model import Schema
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
+# Configure logging with explicit handler to avoid DerivaML overriding root level
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+# Add handler directly to this logger so it works regardless of root logger config
+_handler = logging.StreamHandler(sys.stderr)
+_handler.setLevel(logging.INFO)
+_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+logger.addHandler(_handler)
+logger.propagate = False  # Don't propagate to root logger
+
+# Also configure the deriva_ml logger to show status messages during execution
+_deriva_ml_logger = logging.getLogger("deriva_ml")
+_deriva_ml_logger.setLevel(logging.INFO)
+_deriva_ml_logger.addHandler(_handler)
+_deriva_ml_logger.propagate = False
+
+# Ensure stdout/stderr are unbuffered for real-time output
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
 
 # CIFAR-10 class definitions
 CIFAR10_CLASSES = [
@@ -168,7 +182,7 @@ def setup_domain_model(ml: DerivaML) -> dict[str, Any]:
     if "Image_Class" not in vocabs:
         logger.info("Creating Image_Class vocabulary...")
         ml.create_vocabulary(
-            vocabulary_name="Image_Class",
+            vocab_name="Image_Class",
             comment="CIFAR-10 image classification categories",
         )
         results["vocabulary"] = {"status": "created", "name": "Image_Class"}
@@ -177,13 +191,13 @@ def setup_domain_model(ml: DerivaML) -> dict[str, Any]:
         results["vocabulary"] = {"status": "exists", "name": "Image_Class"}
 
     # Add class terms
-    existing_terms = {t["Name"] for t in ml.list_vocabulary_terms("Image_Class")}
+    existing_terms = {t.name for t in ml.list_vocabulary_terms("Image_Class")}
 
     logger.info("Adding CIFAR-10 class terms...")
     for class_name, description, synonyms in CIFAR10_CLASSES:
         if class_name not in existing_terms:
             ml.add_term(
-                vocabulary_name="Image_Class",
+                table="Image_Class",
                 term_name=class_name,
                 description=description,
                 synonyms=synonyms,
@@ -210,15 +224,15 @@ def setup_domain_model(ml: DerivaML) -> dict[str, Any]:
 
     # Enable Image as dataset element type
     logger.info("Enabling Image as dataset element type...")
-    element_types = ml.list_dataset_element_types()
+    element_types = {t.name for t in ml.list_dataset_element_types()}
     if "Image" not in element_types:
         ml.add_dataset_element_type("Image")
 
-    # Create Image_Classification featurewhat
+    # Create Image_Classification feature
     logger.info("Creating Image_Classification feature...")
     try:
         ml.create_feature(
-            table_name="Image",
+            target_table="Image",
             feature_name="Image_Classification",
             comment="CIFAR-10 class label for each image",
             terms=["Image_Class"],
@@ -236,15 +250,13 @@ def setup_domain_model(ml: DerivaML) -> dict[str, Any]:
 
 def setup_workflow_type(ml: DerivaML) -> None:
     """Ensure Ingest workflow type exists."""
-    workflow_types = {w.workflow_type for w in ml.list_workflows()}
-
     # Check if Ingest exists in Workflow_Type vocabulary
-    existing_types = {t["Name"] for t in ml.list_vocabulary_terms("Workflow_Type")}
+    existing_types = {t.name for t in ml.list_vocabulary_terms("Workflow_Type")}
 
     if "Ingest" not in existing_types:
         logger.info("Creating Ingest workflow type...")
         ml.add_term(
-            vocabulary_name="Workflow_Type",
+            table="Workflow_Type",
             term_name="Ingest",
             description="Data ingestion workflow for loading external datasets",
         )
@@ -261,13 +273,13 @@ def setup_dataset_types(ml: DerivaML) -> None:
         ("Split", "A dataset that contains nested dataset splits", ["split"]),
     ]
 
-    existing_terms = {t["Name"] for t in ml.list_vocabulary_terms("Dataset_Type")}
+    existing_terms = {t.name for t in ml.list_vocabulary_terms("Dataset_Type")}
 
     for type_name, description, synonyms in required_types:
         if type_name not in existing_terms:
             try:
                 ml.add_term(
-                    vocabulary_name="Dataset_Type",
+                    table="Dataset_Type",
                     term_name=type_name,
                     description=description,
                     synonyms=synonyms,
@@ -317,11 +329,70 @@ def create_dataset_hierarchy(ml: DerivaML) -> dict[str, str]:
     logger.info(f"  Created Testing dataset: {testing_ds.dataset_rid}")
 
     # Add Training and Testing as children of Split
-    split_ds.add_nested_dataset(training_ds)
-    split_ds.add_nested_dataset(testing_ds)
+    split_ds.add_dataset_members([training_ds.dataset_rid, testing_ds.dataset_rid])
     logger.info("  Linked Training and Testing to Split dataset")
 
     return datasets
+
+
+def create_upload_progress_callback(total_files: int) -> tuple[callable, dict]:
+    """Create a progress callback that scales reporting frequency to the number of files.
+
+    For small uploads (< 20 files): report every file
+    For medium uploads (20-100 files): report every 10%
+    For large uploads (> 100 files): report every 5% or every 100 files, whichever is more frequent
+
+    Args:
+        total_files: Total number of files to be uploaded
+
+    Returns:
+        Tuple of (callback function, state dict for tracking)
+    """
+    import re
+
+    state = {
+        "last_reported_percent": -1,
+        "started": False,
+        "callback_count": 0,
+    }
+
+    # Determine reporting interval as percentage
+    if total_files < 20:
+        # Report every file for small uploads (~5% intervals or every file)
+        report_every_percent = max(1, 100 // total_files) if total_files > 0 else 10
+    elif total_files <= 100:
+        # Report every ~10% for medium uploads
+        report_every_percent = 10
+    else:
+        # Report every 5% for large uploads
+        report_every_percent = 5
+
+    def progress_callback(progress: UploadProgress) -> None:
+        """Handle upload progress updates."""
+        state["callback_count"] += 1
+
+        # Report start once
+        if not state["started"]:
+            state["started"] = True
+            logger.info(f"  [Upload] Starting upload (reporting every ~{report_every_percent}%)...")
+
+        # Extract current file number from message if available
+        match = re.search(r"Uploading file (\d+) of (\d+)", progress.message)
+        if match:
+            current = int(match.group(1))
+            total = int(match.group(2))
+            # Use the actual percent_complete from the progress object
+            percent = progress.percent_complete
+
+            # Round to nearest reporting interval for cleaner output
+            report_percent = int(percent // report_every_percent) * report_every_percent
+
+            # Report at interval boundaries
+            if report_percent > state["last_reported_percent"]:
+                state["last_reported_percent"] = report_percent
+                logger.info(f"  [Upload] {percent:.0f}% ({current}/{total} files)")
+
+    return progress_callback, state
 
 
 def load_images(
@@ -331,7 +402,12 @@ def load_images(
     batch_size: int = 500,
     max_images: int | None = None,
 ) -> dict[str, Any]:
-    """Load images into the catalog using execution system."""
+    """Load images into the catalog using execution system.
+
+    In test mode (max_images specified), splits the limit evenly between
+    training and testing images. All uploaded images go to Complete dataset,
+    training images go to Training dataset, test images go to Testing dataset.
+    """
     # Ensure Ingest workflow type exists
     setup_workflow_type(ml)
 
@@ -346,9 +422,20 @@ def load_images(
     # Create execution configuration
     config = ExecutionConfiguration(workflow=workflow)
 
-    # Track images for dataset assignment
-    train_images = []
-    all_images = []
+    # Track images for dataset assignment by their filenames
+    # We'll use a prefix to distinguish training from testing images
+    train_filenames: list[str] = []
+    test_filenames: list[str] = []
+
+    # Calculate limits for training and testing
+    if max_images:
+        # In test mode, split evenly between training and testing
+        train_limit = max_images // 2
+        test_limit = max_images - train_limit  # Handle odd numbers
+        logger.info(f"Test mode: loading {train_limit} training + {test_limit} testing images")
+    else:
+        train_limit = None
+        test_limit = None
 
     # Use execution context manager
     with ml.create_execution(config) as exe:
@@ -359,19 +446,17 @@ def load_images(
         logger.info(f"Loaded {len(labels)} training labels")
 
         # Process training images
-        limit_msg = f" (max: {max_images})" if max_images else ""
-        logger.info(f"Registering training images for upload...{limit_msg}")
-        count = 0
+        logger.info("Registering training images for upload...")
+        train_count = 0
         for img_path, class_name, image_id in iter_images(data_dir, "train", labels):
             if class_name is None:
                 continue
 
-            if max_images and count >= max_images:
-                logger.info(f"  Reached limit of {max_images} images")
+            if train_limit and train_count >= train_limit:
                 break
 
-            # Create unique filename with class prefix
-            new_filename = f"{class_name}_{image_id}.png"
+            # Create unique filename with train_ prefix and class
+            new_filename = f"train_{class_name}_{image_id}.png"
 
             # Register file for upload
             exe.asset_file_path(
@@ -382,53 +467,121 @@ def load_images(
                 rename_file=new_filename,
             )
 
-            train_images.append(new_filename)
-            all_images.append(new_filename)
-            count += 1
+            train_filenames.append(new_filename)
+            train_count += 1
 
-            if count % 1000 == 0:
-                logger.info(f"  Registered {count} images...")
+            if train_count % 1000 == 0:
+                logger.info(f"  Registered {train_count} training images...")
 
-        logger.info(f"  Total training images registered: {count}")
+        logger.info(f"  Total training images registered: {train_count}")
 
-    # Upload outputs (outside context manager)
-    logger.info("Uploading images to catalog...")
-    upload_result = exe.upload_execution_outputs(clean_folder=True)
-    logger.info(f"  Upload complete")
+        # Process test images (they don't have labels in CIFAR-10 Kaggle format)
+        logger.info("Registering test images for upload...")
+        test_count = 0
+        for img_path, _, image_id in iter_images(data_dir, "test", labels):
+            if test_limit and test_count >= test_limit:
+                break
+
+            # Create unique filename with test_ prefix
+            new_filename = f"test_{image_id}.png"
+
+            # Register file for upload
+            exe.asset_file_path(
+                asset_name="Image",
+                file_name=str(img_path),
+                asset_types=["Image"],
+                copy_file=True,
+                rename_file=new_filename,
+            )
+
+            test_filenames.append(new_filename)
+            test_count += 1
+
+            if test_count % 1000 == 0:
+                logger.info(f"  Registered {test_count} test images...")
+
+        logger.info(f"  Total test images registered: {test_count}")
+
+    total_count = train_count + test_count
+
+    # Upload outputs (after context manager exits, as per new API)
+    logger.info(f"Uploading {total_count} images to catalog (this may take a while)...")
+
+    # Create progress callback scaled to the number of files
+    progress_callback, callback_state = create_upload_progress_callback(total_count)
+    upload_result = exe.upload_execution_outputs(clean_folder=True, progress_callback=progress_callback)
+
+    # Log final progress and callback statistics
+    logger.info("  [Upload] 100% complete")
+    logger.debug(f"  [Upload] Callback invoked {callback_state['callback_count']} times")
+
+    uploaded_count = sum(len(files) for files in upload_result.values())
+    logger.info(f"  Upload complete: {uploaded_count} files uploaded")
+    for asset_type, files in upload_result.items():
+        logger.info(f"    {asset_type}: {len(files)} files")
 
     # Get uploaded image RIDs and assign to datasets
     logger.info("Assigning images to datasets...")
     assets = ml.list_assets("Image")
     logger.info(f"  Found {len(assets)} uploaded images")
 
-    if assets:
-        all_rids = [a["RID"] for a in assets]
+    # Build filename -> RID mapping
+    filename_to_rid = {a["Filename"]: a["RID"] for a in assets}
 
+    # Separate RIDs by dataset membership
+    train_rids = [filename_to_rid[f] for f in train_filenames if f in filename_to_rid]
+    test_rids = [filename_to_rid[f] for f in test_filenames if f in filename_to_rid]
+    all_rids = train_rids + test_rids
+
+    if all_rids:
         # Add all images to Complete dataset
         complete_ds = ml.lookup_dataset(datasets["complete"])
         logger.info("  Adding images to Complete dataset...")
+        added = 0
         for i in range(0, len(all_rids), batch_size):
             batch = all_rids[i : i + batch_size]
             complete_ds.add_dataset_members(batch)
-        logger.info(f"    Added {len(all_rids)} images")
+            added += len(batch)
+            logger.info(f"    Added {added}/{len(all_rids)} images")
 
+    if train_rids:
         # Add training images to Training dataset
         training_ds = ml.lookup_dataset(datasets["training"])
         logger.info("  Adding images to Training dataset...")
-        for i in range(0, len(all_rids), batch_size):
-            batch = all_rids[i : i + batch_size]
+        added = 0
+        for i in range(0, len(train_rids), batch_size):
+            batch = train_rids[i : i + batch_size]
             training_ds.add_dataset_members(batch)
-        logger.info(f"    Added {len(all_rids)} images")
+            added += len(batch)
+            logger.info(f"    Added {added}/{len(train_rids)} images")
+
+    if test_rids:
+        # Add test images to Testing dataset
+        testing_ds = ml.lookup_dataset(datasets["testing"])
+        logger.info("  Adding images to Testing dataset...")
+        added = 0
+        for i in range(0, len(test_rids), batch_size):
+            batch = test_rids[i : i + batch_size]
+            testing_ds.add_dataset_members(batch)
+            added += len(batch)
+            logger.info(f"    Added {added}/{len(test_rids)} images")
 
     return {
-        "total_images": len(all_images),
-        "training_images": len(train_images),
+        "total_images": len(all_rids),
+        "training_images": len(train_rids),
+        "testing_images": len(test_rids),
         "uploaded_assets": len(assets),
     }
 
 
-def main(args: argparse.Namespace) -> int:
+def main(args: argparse.Namespace | None = None) -> int:
     """Main entry point."""
+    if args is None:
+        args = parse_args()
+        # Verify Kaggle credentials
+        if not args.dry_run and not verify_kaggle_credentials():
+            return 1
+
     # Either create a new catalog or connect to existing one
     if args.create_catalog:
         logger.info(f"Creating new catalog on {args.hostname} with project name: {args.create_catalog}")
@@ -541,6 +694,8 @@ def main(args: argparse.Namespace) -> int:
     if load_result:
         print("")
         print(f"  Images loaded: {load_result['total_images']}")
+        print(f"    - Training: {load_result['training_images']}")
+        print(f"    - Testing:  {load_result['testing_images']}")
     if not args.show_urls:
         print("")
         print("  Tip: Use --show-urls to display Chaise URLs for each dataset")
@@ -557,19 +712,19 @@ def parse_args() -> argparse.Namespace:
         epilog="""
 Examples:
     # Create a new catalog and load CIFAR-10
-    python load_cifar10_direct.py --hostname localhost --create-catalog cifar10_demo
+    python load_cifar10.py --hostname localhost --create-catalog cifar10_demo
 
     # Load into an existing catalog
-    python load_cifar10_direct.py --hostname ml.derivacloud.org --catalog-id 99
+    python load_cifar10.py --hostname ml.derivacloud.org --catalog-id 99
 
     # Dry run (create schema/datasets only)
-    python load_cifar10_direct.py --hostname localhost --create-catalog test --dry-run
+    python load_cifar10.py --hostname localhost --create-catalog test --dry-run
 
     # Test mode (upload only 10 images)
-    python load_cifar10_direct.py --hostname localhost --create-catalog test --test
+    python load_cifar10.py --hostname localhost --create-catalog test --test
 
     # Test mode with custom limit (upload 100 images)
-    python load_cifar10_direct.py --hostname localhost --create-catalog test --test 100
+    python load_cifar10.py --hostname localhost --create-catalog test --test 100
         """,
     )
     parser.add_argument(
