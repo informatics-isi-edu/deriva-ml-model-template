@@ -13,18 +13,6 @@ deriva_model_config = store[None][app_name]
 experiment_store = store(group="experiments")
 
 # Define your experiments here.  We can pick a specific dataset, asset, and model configuration to run.
-experiment_store(
-    make_config(
-        hydra_defaults=[
-            "_self_",
-            {"override /datasets": "test1"},
-            {"override /assets": "weights_2"},
-            {"override /model_config": "epochs_20"},
-        ],
-        bases=(deriva_model_config,)
-   ),
-    name="run1",
-)
 
 experiment_store(
     make_config(
