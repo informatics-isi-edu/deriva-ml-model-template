@@ -1,23 +1,45 @@
-"""This module defines configurations for the model assets.
-
-In DerivaML all of the additional files that may be needed beyond the dataset are  stored in a set of
-execution asset files which are specified as part of an ExecutionConfiguration.
-DerivaML will automatically download all of the specified assets as part of initializing the execution.
-
-Typically, the execution assets will at least contain the file with the model weights in it.
 """
+Asset Configuration Module
+==========================
+
+Defines configurations for execution assets (model weights, checkpoints, etc.).
+
+In DerivaML, assets are additional files needed beyond the dataset. They are
+specified as Resource IDs (RIDs) and automatically downloaded when the
+execution is initialized.
+
+Typical assets include:
+- Pre-trained model weights
+- Model checkpoints
+- Configuration files
+- Reference data files
+
+Configuration Format
+--------------------
+Assets are specified as a simple list of RID strings::
+
+    my_assets = ["3RA", "3R8"]
+    asset_store(my_assets, name="my_asset_config")
+
+The RIDs reference files stored in the Deriva catalog's asset table.
+"""
+
 from hydra_zen import store
-from deriva_ml.execution import AssetRIDConfig
 
-# Define two model assets by providing the RID of the asset.
-# Define two model assets by providing the RID of the asset.
-assets_1 = [AssetRIDConfig("3RA"), AssetRIDConfig("3R8")]
-assets_2 = [AssetRIDConfig("3R6"), AssetRIDConfig("3R4")]
+# ---------------------------------------------------------------------------
+# Asset Configurations
+# ---------------------------------------------------------------------------
+# Define asset sets as lists of RID strings. Each RID references a file
+# in the Deriva catalog that will be downloaded for the execution.
 
-# Store the configurations in hydra-zen store.
-# Note that the name of the group in the store needs to match the name of the argument in the main function
-# that will be instantiated to the configuration value.
+assets_1 = ["3RA", "3R8"]
+assets_2 = ["3R6", "3R4"]
+
+# ---------------------------------------------------------------------------
+# Register with Hydra-Zen Store
+# ---------------------------------------------------------------------------
+# The group name "assets" must match the parameter name in run_model()
 
 asset_store = store(group="assets")
-asset_store(assets_1,  name="default_asset")
-asset_store(assets_2,  name="weights_2")
+asset_store(assets_1, name="default_asset")
+asset_store(assets_2, name="weights_2")
