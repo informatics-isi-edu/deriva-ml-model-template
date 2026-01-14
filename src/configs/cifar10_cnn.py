@@ -50,7 +50,7 @@ Cifar10CNNConfig = builds(
 model_store = store(group="model_config")
 
 # Default configuration - good starting point
-model_store(Cifar10CNNConfig, name="cifar10_default")
+model_store(Cifar10CNNConfig, name="default_model")
 
 # Quick training - fewer epochs for testing
 model_store(

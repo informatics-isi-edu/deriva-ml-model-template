@@ -32,8 +32,7 @@ from hydra_zen import store
 # Define asset sets as lists of RID strings. Each RID references a file
 # in the Deriva catalog that will be downloaded for the execution.
 
-assets_1 = ["3RA", "3R8"]
-assets_2 = ["3R6", "3R4"]
+assets = []
 
 # ---------------------------------------------------------------------------
 # Register with Hydra-Zen Store
@@ -41,5 +40,4 @@ assets_2 = ["3R6", "3R4"]
 # The group name "assets" must match the parameter name in run_model()
 
 asset_store = store(group="assets")
-asset_store(assets_1, name="default_asset")
-asset_store(assets_2, name="weights_2")
+asset_store(assets, name="default_asset")

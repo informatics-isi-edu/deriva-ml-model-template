@@ -7,7 +7,7 @@ from deriva_ml import DerivaMLConfig
 deriva_store = store(group="deriva_ml")
 deriva_store(DerivaMLConfig, name="default_deriva",
              hostname="localhost",
-             catalog_id=2,
+             catalog_id=4,
              use_minid=False)
 deriva_store(DerivaMLConfig, name="eye-ai",
              hostname="www.eye-ai.org",

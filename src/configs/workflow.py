@@ -42,18 +42,6 @@ Train a 2-layer convolutional neural network on CIFAR-10 image data.
     populate_full_signature=True,
 )
 
-# Generic template workflow - for custom models
-TemplateWorkflow = builds(
-    Workflow,
-    name="Model Template Workflow",
-    workflow_type="ML Training",
-    description="""
-A template workflow for DerivaML model training scripts.
-
-Replace this with your own workflow configuration tailored to your model.
-""".strip(),
-    populate_full_signature=True,
-)
 
 # ---------------------------------------------------------------------------
 # Register with Hydra-Zen Store
@@ -62,4 +50,3 @@ Replace this with your own workflow configuration tailored to your model.
 workflow_store = store(group="workflow")
 workflow_store(Cifar10CNNWorkflow, name="default_workflow")
 workflow_store(Cifar10CNNWorkflow, name="cifar10_cnn")
-workflow_store(TemplateWorkflow, name="template")

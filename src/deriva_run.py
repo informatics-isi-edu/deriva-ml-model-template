@@ -172,18 +172,31 @@ def run_model(
     # The context manager handles setup (downloading datasets, creating output
     # directories) and teardown (recording completion status, timing).
     with execution.execute() as exec_context:
-        # Invoke the model configuration callable. The model_config is a
-        # hydra-zen wrapped function that has been partially configured with
-        # all model-specific parameters (e.g., learning rate, batch size).
-        # We provide the runtime context here.
-        model_config(ml_instance=ml_instance, execution=exec_context)
+        if dry_run:
+            # In dry run mode, skip model execution but still test the setup
+            logging.info("Dry run mode: skipping model execution")
+        else:
+            # Invoke the model configuration callable. The model_config is a
+            # hydra-zen wrapped function that has been partially configured with
+            # all model-specific parameters (e.g., learning rate, batch size).
+            # We provide the runtime context here.
+            model_config(ml_instance=ml_instance, execution=exec_context)
 
     # ---------------------------------------------------------------------------
     # Upload results to the catalog
     # ---------------------------------------------------------------------------
     # After the model completes, upload any output files (metrics, predictions,
     # model checkpoints) to the Deriva catalog for permanent storage.
-    _assets = execution.upload_execution_outputs()
+    if not dry_run:
+        assets = execution.upload_execution_outputs()
+
+        # Print summary of uploaded assets
+        total_files = sum(len(files) for files in assets.values())
+        if total_files > 0:
+            print(f"\nUploaded {total_files} asset(s) to catalog:")
+            for asset_type, files in assets.items():
+                for f in files:
+                    print(f"  - {asset_type}: {f}")
 
 
 # =============================================================================
