@@ -249,16 +249,16 @@ def setup_domain_model(ml: DerivaML) -> dict[str, Any]:
 
 
 def setup_workflow_type(ml: DerivaML) -> None:
-    """Ensure Ingest workflow type exists."""
-    # Check if Ingest exists in Workflow_Type vocabulary
+    """Ensure CIFAR_Data_Load workflow type exists."""
+    # Check if CIFAR_Data_Load exists in Workflow_Type vocabulary
     existing_types = {t.name for t in ml.list_vocabulary_terms("Workflow_Type")}
 
-    if "Ingest" not in existing_types:
-        logger.info("Creating Ingest workflow type...")
+    if "CIFAR_Data_Load" not in existing_types:
+        logger.info("Creating CIFAR_Data_Load workflow type...")
         ml.add_term(
             table="Workflow_Type",
-            term_name="Ingest",
-            description="Data ingestion workflow for loading external datasets",
+            term_name="CIFAR_Data_Load",
+            description="Workflow for loading CIFAR-10 dataset into catalog",
         )
 
 
@@ -290,46 +290,79 @@ def setup_dataset_types(ml: DerivaML) -> None:
                     logger.warning(f"Could not add dataset type {type_name}: {e}")
 
 
-def create_dataset_hierarchy(ml: DerivaML) -> dict[str, str]:
-    """Create the dataset hierarchy."""
+def create_dataset_hierarchy(ml: DerivaML, exe: Any = None) -> dict[str, str]:
+    """Create the dataset hierarchy within an execution context.
+
+    Args:
+        ml: DerivaML instance
+        exe: Optional execution context. If provided, datasets are created
+             within this execution for proper provenance tracking.
+
+    Returns:
+        Dictionary mapping dataset names to their RIDs
+    """
     datasets = {}
 
     logger.info("Creating dataset hierarchy...")
 
     # Create Complete dataset
-    complete_ds = ml.create_dataset(
-        description="Complete CIFAR-10 dataset with all labeled images",
-        dataset_types=["Complete"],
-    )
+    if exe:
+        complete_ds = exe.create_dataset(
+            description="Complete CIFAR-10 dataset with all labeled images",
+            dataset_types=["Complete"],
+        )
+    else:
+        complete_ds = ml.create_dataset(
+            description="Complete CIFAR-10 dataset with all labeled images",
+            dataset_types=["Complete"],
+        )
     datasets["complete"] = complete_ds.dataset_rid
     logger.info(f"  Created Complete dataset: {complete_ds.dataset_rid}")
 
     # Create Split dataset
-    split_ds = ml.create_dataset(
-        description="CIFAR-10 dataset split into training and testing subsets",
-        dataset_types=["Split"],
-    )
+    if exe:
+        split_ds = exe.create_dataset(
+            description="CIFAR-10 dataset split into training and testing subsets",
+            dataset_types=["Split"],
+        )
+    else:
+        split_ds = ml.create_dataset(
+            description="CIFAR-10 dataset split into training and testing subsets",
+            dataset_types=["Split"],
+        )
     datasets["split"] = split_ds.dataset_rid
     logger.info(f"  Created Split dataset: {split_ds.dataset_rid}")
 
     # Create Training dataset
-    training_ds = ml.create_dataset(
-        description="CIFAR-10 training set with 50,000 labeled images",
-        dataset_types=["Training"],
-    )
+    if exe:
+        training_ds = exe.create_dataset(
+            description="CIFAR-10 training set with 50,000 labeled images",
+            dataset_types=["Training"],
+        )
+    else:
+        training_ds = ml.create_dataset(
+            description="CIFAR-10 training set with 50,000 labeled images",
+            dataset_types=["Training"],
+        )
     datasets["training"] = training_ds.dataset_rid
     logger.info(f"  Created Training dataset: {training_ds.dataset_rid}")
 
     # Create Testing dataset
-    testing_ds = ml.create_dataset(
-        description="CIFAR-10 testing set",
-        dataset_types=["Testing"],
-    )
+    if exe:
+        testing_ds = exe.create_dataset(
+            description="CIFAR-10 testing set",
+            dataset_types=["Testing"],
+        )
+    else:
+        testing_ds = ml.create_dataset(
+            description="CIFAR-10 testing set",
+            dataset_types=["Testing"],
+        )
     datasets["testing"] = testing_ds.dataset_rid
     logger.info(f"  Created Testing dataset: {testing_ds.dataset_rid}")
 
     # Add Training and Testing as children of Split
-    split_ds.add_dataset_members([training_ds.dataset_rid, testing_ds.dataset_rid])
+    split_ds.add_dataset_members([training_ds.dataset_rid, testing_ds.dataset_rid], validate=False)
     logger.info("  Linked Training and Testing to Split dataset")
 
     return datasets
@@ -398,24 +431,29 @@ def create_upload_progress_callback(total_files: int) -> tuple[callable, dict]:
 def load_images(
     ml: DerivaML,
     data_dir: Path,
-    datasets: dict[str, str],
     batch_size: int = 500,
     max_images: int | None = None,
-) -> dict[str, Any]:
+) -> tuple[dict[str, str], dict[str, Any]]:
     """Load images into the catalog using execution system.
+
+    Creates datasets and loads images within a single execution for proper
+    provenance tracking.
 
     In test mode (max_images specified), splits the limit evenly between
     training and testing images. All uploaded images go to Complete dataset,
     training images go to Training dataset, test images go to Testing dataset.
+
+    Returns:
+        Tuple of (datasets dict, load_result dict)
     """
-    # Ensure Ingest workflow type exists
+    # Ensure CIFAR_Data_Load workflow type exists
     setup_workflow_type(ml)
 
     # Create workflow
     logger.info("Creating execution for data loading...")
     workflow = ml.create_workflow(
         name="CIFAR-10 Data Load",
-        workflow_type="Ingest",
+        workflow_type="CIFAR_Data_Load",
         description="Load CIFAR-10 dataset images into DerivaML catalog",
     )
 
@@ -426,13 +464,15 @@ def load_images(
     # We'll use a prefix to distinguish training from testing images
     train_filenames: list[str] = []
     test_filenames: list[str] = []
+    # Track filename -> class mapping for feature assignment
+    filename_to_class: dict[str, str] = {}
 
     # Calculate limits for training and testing
     if max_images:
-        # In test mode, split evenly between training and testing
+        # Split limit evenly between training and testing
         train_limit = max_images // 2
         test_limit = max_images - train_limit  # Handle odd numbers
-        logger.info(f"Test mode: loading {train_limit} training + {test_limit} testing images")
+        logger.info(f"Loading {train_limit} training + {test_limit} testing images")
     else:
         train_limit = None
         test_limit = None
@@ -440,6 +480,20 @@ def load_images(
     # Use execution context manager
     with ml.create_execution(config) as exe:
         logger.info(f"  Execution RID: {exe.execution_rid}")
+
+        # Create dataset hierarchy within the execution for proper provenance
+        datasets = create_dataset_hierarchy(ml, exe)
+
+        # Clear working directory to avoid uploading stale files from previous runs
+        working_dir = exe.working_dir
+        if working_dir.exists():
+            import shutil
+            for item in working_dir.iterdir():
+                if item.is_dir():
+                    shutil.rmtree(item)
+                else:
+                    item.unlink()
+            logger.info(f"  Cleared working directory: {working_dir}")
 
         # Load training labels
         labels = load_train_labels(data_dir)
@@ -468,6 +522,7 @@ def load_images(
             )
 
             train_filenames.append(new_filename)
+            filename_to_class[new_filename] = class_name
             train_count += 1
 
             if train_count % 1000 == 0:
@@ -540,7 +595,7 @@ def load_images(
         added = 0
         for i in range(0, len(all_rids), batch_size):
             batch = all_rids[i : i + batch_size]
-            complete_ds.add_dataset_members(batch)
+            complete_ds.add_dataset_members({"Image": batch}, validate=False)
             added += len(batch)
             logger.info(f"    Added {added}/{len(all_rids)} images")
 
@@ -551,7 +606,7 @@ def load_images(
         added = 0
         for i in range(0, len(train_rids), batch_size):
             batch = train_rids[i : i + batch_size]
-            training_ds.add_dataset_members(batch)
+            training_ds.add_dataset_members({"Image": batch}, validate=False)
             added += len(batch)
             logger.info(f"    Added {added}/{len(train_rids)} images")
 
@@ -562,11 +617,49 @@ def load_images(
         added = 0
         for i in range(0, len(test_rids), batch_size):
             batch = test_rids[i : i + batch_size]
-            testing_ds.add_dataset_members(batch)
+            testing_ds.add_dataset_members({"Image": batch}, validate=False)
             added += len(batch)
             logger.info(f"    Added {added}/{len(test_rids)} images")
 
-    return {
+    # Add Image_Classification features for training images
+    # (Training images have class labels, test images don't in CIFAR-10 Kaggle format)
+    if train_rids and filename_to_class:
+        logger.info("Adding Image_Classification features...")
+
+        # Get the feature record class for Image_Classification
+        ImageClassification = ml.feature_record_class("Image", "Image_Classification")
+
+        # Create a workflow for labeling (use CIFAR_Data_Load type we already created)
+        label_workflow = ml.create_workflow(
+            name="CIFAR-10 Labeling",
+            workflow_type="CIFAR_Data_Load",
+            description="Add class labels to CIFAR-10 training images",
+        )
+        label_config = ExecutionConfiguration(workflow=label_workflow)
+
+        with ml.create_execution(label_config) as label_exe:
+            logger.info(f"  Labeling execution RID: {label_exe.execution_rid}")
+
+            # Create feature records in batches
+            feature_records = []
+            for filename, rid in filename_to_rid.items():
+                if filename in filename_to_class:
+                    class_name = filename_to_class[filename]
+                    feature_records.append(
+                        ImageClassification(
+                            Image=rid,
+                            Image_Class=class_name,
+                        )
+                    )
+
+            logger.info(f"  Adding {len(feature_records)} classification labels...")
+            label_exe.add_features(feature_records)
+
+        # Upload the feature values
+        label_exe.upload_execution_outputs(clean_folder=True)
+        logger.info(f"  Added {len(feature_records)} Image_Classification features")
+
+    return datasets, {
         "total_images": len(all_rids),
         "training_images": len(train_rids),
         "testing_images": len(test_rids),
@@ -635,10 +728,10 @@ def main(args: argparse.Namespace | None = None) -> int:
         head_title="CIFAR-10 ML Catalog",
     )
 
-    # Setup dataset types and create dataset hierarchy
+    # Setup dataset types
     setup_dataset_types(ml)
-    datasets = create_dataset_hierarchy(ml)
 
+    datasets = None
     load_result = None
     if not args.dry_run:
         # Download CIFAR-10 from Kaggle
@@ -647,13 +740,15 @@ def main(args: argparse.Namespace | None = None) -> int:
             data_dir = download_cifar10(temp_path)
             logger.info(f"Downloaded CIFAR-10 to: {data_dir}")
 
-            # Load images
-            load_result = load_images(
-                ml, data_dir, datasets, args.batch_size, max_images=args.test
+            # Load images (also creates datasets within execution for provenance)
+            datasets, load_result = load_images(
+                ml, data_dir, args.batch_size, max_images=args.num_images
             )
             logger.info(f"Loading complete: {load_result}")
     else:
-        logger.info("Dry run mode - skipping image download and upload")
+        # In dry run mode, create datasets without execution context
+        logger.info("Dry run mode - creating datasets without image upload")
+        datasets = create_dataset_hierarchy(ml)
 
     # Get Chaise URLs for datasets if requested
     dataset_urls = {}
@@ -720,11 +815,8 @@ Examples:
     # Dry run (create schema/datasets only)
     python load_cifar10.py --hostname localhost --create-catalog test --dry-run
 
-    # Test mode (upload only 10 images)
-    python load_cifar10.py --hostname localhost --create-catalog test --test
-
-    # Test mode with custom limit (upload 100 images)
-    python load_cifar10.py --hostname localhost --create-catalog test --test 100
+    # Load only 1000 images (500 training + 500 testing)
+    python load_cifar10.py --hostname localhost --create-catalog test --num-images 1000
         """,
     )
     parser.add_argument(
@@ -760,13 +852,11 @@ Examples:
         help="Set up schema and datasets without downloading/uploading images",
     )
     parser.add_argument(
-        "--test",
-        nargs="?",
+        "--num-images",
         type=int,
-        const=10,
         default=None,
         metavar="N",
-        help="Test mode: upload only N images (default: 10 if flag used without value)",
+        help="Limit the number of images to upload (default: all images)",
     )
     parser.add_argument(
         "--show-urls",
