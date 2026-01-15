@@ -7,7 +7,6 @@ registers them into Hydra's store under the "model_config" group.
 All model parameters are configurable via Hydra:
 - Architecture: conv1_channels, conv2_channels, hidden_size, dropout_rate
 - Training: learning_rate, epochs, batch_size, weight_decay
-- Data: label_column
 
 Example usage:
     # Run with default config
@@ -39,8 +38,6 @@ Cifar10CNNConfig = builds(
     epochs=10,
     batch_size=64,
     weight_decay=0.0,
-    # Data parameters
-    label_column="Label",
     # Hydra-zen settings
     populate_full_signature=True,
     zen_partial=True,  # Execution context added later

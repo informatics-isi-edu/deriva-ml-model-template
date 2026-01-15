@@ -1,43 +1,43 @@
-""" Define experiments
+"""Define experiments.
 
-These will be stored in the experiment store and can be run with the --multirun +experiment=experiment_name.
-    python deriva_run.py --multirun +experiment=run1, run2
+Experiments are pre-configured combinations of model, dataset, and asset settings.
+They use Hydra's defaults list to override specific config groups.
+
+Usage:
+    # Run a single experiment
+    uv run src/deriva_run.py +experiment=cifar10_quick
+
+    # Run multiple experiments
+    uv run src/deriva_run.py --multirun +experiment=cifar10_quick,cifar10_extended
+
+    # Override experiment settings
+    uv run src/deriva_run.py +experiment=cifar10_quick datasets=cifar10_small_training
+
+Reference:
+    https://mit-ll-responsible-ai.github.io/hydra-zen/how_to/configuring_experiments.html
 """
 
 from hydra_zen import make_config, store
 
-# Experiment extends the base configuration, so we need to get it from the store.
-app_config = store[None]
-app_name = next(iter(app_config))
-deriva_model_config = store[None][app_name]
-experiment_store = store(group="experiments")
+# Get the base configuration from the store.
+# Experiments must inherit from this base config.
+# The key is a tuple (package, name) where package is None for root configs.
+Config = store[None][(None, "deriva_model")]
 
-# Define your experiments here.  We can pick a specific dataset, asset, and model configuration to run.
-
-experiment_store(
-    make_config(
-        hydra_defaults=[
-            "_self_",
-            {"override /datasets": "test2"},
-            {"override /assets": "weights_1"},
-            {"override /model_config": "epochs_20"},
-        ],
-        bases=(deriva_model_config,)
-   ),
-    name="run2",
-)
+# Use _global_ package to allow overrides at the root level
+experiment_store = store(group="experiment", package="_global_")
 
 # CIFAR-10 CNN experiments
 # These experiments use the CIFAR-10 CNN model with different configurations.
-# Make sure you have CIFAR-10 datasets configured in configs/datasets.py
 
 experiment_store(
     make_config(
         hydra_defaults=[
             "_self_",
             {"override /model_config": "cifar10_quick"},
+            {"override /datasets": "cifar10_small_split"},
         ],
-        bases=(deriva_model_config,)
+        bases=(Config,),
     ),
     name="cifar10_quick",
 )
@@ -46,9 +46,10 @@ experiment_store(
     make_config(
         hydra_defaults=[
             "_self_",
-            {"override /model_config": "cifar10_default"},
+            {"override /model_config": "default_model"},
+            {"override /datasets": "cifar10_small_training"},
         ],
-        bases=(deriva_model_config,)
+        bases=(Config,),
     ),
     name="cifar10_default",
 )
@@ -58,8 +59,34 @@ experiment_store(
         hydra_defaults=[
             "_self_",
             {"override /model_config": "cifar10_extended"},
+            {"override /datasets": "cifar10_small_split"},
         ],
-        bases=(deriva_model_config,)
+        bases=(Config,),
     ),
     name="cifar10_extended",
+)
+
+# Full dataset experiments
+experiment_store(
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "cifar10_quick"},
+            {"override /datasets": "cifar10_small_split"},
+        ],
+        bases=(Config,),
+    ),
+    name="cifar10_quick_full",
+)
+
+experiment_store(
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "cifar10_extended"},
+            {"override /datasets": "cifar10_split"},
+        ],
+        bases=(Config,),
+    ),
+    name="cifar10_extended_full",
 )

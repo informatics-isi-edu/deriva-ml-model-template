@@ -53,6 +53,9 @@ def load_all_configs() -> list[str]:
     Modules that fail to import will raise an exception. This is intentional
     to surface configuration errors early rather than silently ignoring them.
 
+    The experiments module is loaded last because it needs to reference
+    the base configuration that must be registered first.
+
     Examples
     --------
     >>> from configs import load_all_configs
@@ -64,9 +67,18 @@ def load_all_configs() -> list[str]:
     package_dir = Path(__file__).parent
 
     # Iterate over all modules in this package
+    # Load experiments last since it depends on the base config being registered
+    modules_to_load = []
     for module_info in pkgutil.iter_modules([str(package_dir)]):
-        module_name = module_info.name
+        modules_to_load.append(module_info.name)
 
+    # Sort modules but ensure 'experiments' is loaded last
+    modules_to_load.sort()
+    if "experiments" in modules_to_load:
+        modules_to_load.remove("experiments")
+        modules_to_load.append("experiments")
+
+    for module_name in modules_to_load:
         # Import the module, which triggers its store() registrations
         importlib.import_module(f"configs.{module_name}")
         loaded_modules.append(module_name)

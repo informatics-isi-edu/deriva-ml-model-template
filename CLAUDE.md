@@ -16,9 +16,9 @@ uv sync --group=pytorch                   # Add PyTorch support
 
 # Running the model
 uv run src/deriva_run.py                           # Run with defaults
-uv run src/deriva_run.py +model_config=cifar10_default
-uv run src/deriva_run.py +dry_run=true             # Dry run (no catalog writes)
-uv run src/deriva_run.py --multirun +experiment=run1,run2  # Multiple experiments
+uv run src/deriva_run.py model_config=cifar10_quick datasets=cifar10_small_training
+uv run src/deriva_run.py dry_run=true              # Dry run (no catalog writes)
+uv run src/deriva_run.py --multirun experiment=run1,run2  # Multiple experiments
 
 # Linting and formatting
 uv run ruff check src/
@@ -92,12 +92,12 @@ store(ModelConfig, param1=val2, group="model_config", name="variant")
 ## Overriding Configs at Runtime
 
 ```bash
-# Choose different configs
-uv run src/deriva_run.py +datasets=test2 +assets=weights_2
+# Choose different configs (no + prefix for groups with defaults)
+uv run src/deriva_run.py datasets=cifar10_small_training model_config=cifar10_quick
 
-# Override specific fields
-uv run src/deriva_run.py +model_config.epochs=50 +model_config.learning_rate=0.01
+# Override specific fields (use + for adding new fields)
+uv run src/deriva_run.py model_config.epochs=50 model_config.learning_rate=0.01
 
 # Use experiment presets
-uv run src/deriva_run.py +experiments=cifar10_extended
+uv run src/deriva_run.py experiment=cifar10_extended
 ```

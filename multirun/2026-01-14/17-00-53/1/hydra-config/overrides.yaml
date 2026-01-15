@@ -1,0 +1,2 @@
+- model_config=cifar10_extended
+- datasets=cifar10_small_training

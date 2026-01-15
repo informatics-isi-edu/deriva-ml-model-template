@@ -20,6 +20,9 @@ What This Script Creates:
         - ``Split``: Parent dataset containing Training and Testing as children
         - ``Training``: 50,000 labeled training images
         - ``Testing``: 10,000 unlabeled test images
+        - ``Small_Split``: Parent dataset for small train/test split (1,000 images)
+        - ``Small_Training``: 500 labeled training images (subset)
+        - ``Small_Testing``: 500 test images (subset)
 
     Provenance Tracking:
         - All datasets are created within an Execution context
@@ -119,6 +122,7 @@ from __future__ import annotations
 import argparse
 import csv
 import logging
+import random
 import re
 import shutil
 import subprocess
@@ -385,7 +389,7 @@ def setup_domain_model(ml: DerivaML) -> dict[str, Any]:
         Creates:
         - `Image_Class` vocabulary with 10 CIFAR-10 class terms
         - `Image` asset table for storing image files
-        - `Image_Classification` feature linking images to classes
+        - `Image_Classification` y select linking images to classes
     """
     results = {}
 
@@ -523,11 +527,14 @@ def setup_dataset_types(ml: DerivaML) -> None:
 def create_dataset_hierarchy(ml: DerivaML, exe: Any = None) -> dict[str, str]:
     """Create the CIFAR-10 dataset hierarchy.
 
-    Creates four datasets organized in a hierarchy:
+    Creates seven datasets organized in a hierarchy:
     - Complete: Contains all images
     - Split: Parent dataset for train/test split
       - Training: Child of Split, contains training images
       - Testing: Child of Split, contains test images
+    - Small_Split: Parent dataset for small train/test split (1,000 images)
+      - Small_Training: Child of Small_Split, 500 randomly selected training images
+      - Small_Testing: Child of Small_Split, 500 randomly selected test images
 
     Args:
         ml: Connected DerivaML instance.
@@ -537,11 +544,13 @@ def create_dataset_hierarchy(ml: DerivaML, exe: Any = None) -> dict[str, str]:
 
     Returns:
         Mapping of dataset names to their RIDs:
-        {"complete": "...", "split": "...", "training": "...", "testing": "..."}
+        {"complete": "...", "split": "...", "training": "...", "testing": "...",
+         "small_split": "...", "small_training": "...", "small_testing": "..."}
 
     Note:
-        The Split dataset uses nested datasets to organize Training and Testing
-        as children, which is the recommended pattern for train/test splits.
+        The Split and Small_Split datasets use nested datasets to organize
+        their Training and Testing children, which is the recommended pattern
+        for train/test splits.
     """
     datasets = {}
 
@@ -584,6 +593,36 @@ def create_dataset_hierarchy(ml: DerivaML, exe: Any = None) -> dict[str, str]:
         [training_ds.dataset_rid, testing_ds.dataset_rid], validate=False
     )
     logger.info("  Linked Training and Testing to Split dataset")
+
+    # Create Small_Split dataset (1,000 images total for quick testing)
+    small_split_ds = create_ds(
+        "Small CIFAR-10 dataset split with 1,000 randomly selected images for testing",
+        ["Split"],
+    )
+    datasets["small_split"] = small_split_ds.dataset_rid
+    logger.info(f"  Created Small_Split dataset: {small_split_ds.dataset_rid}")
+
+    # Create Small_Training dataset (500 images)
+    small_training_ds = create_ds(
+        "Small CIFAR-10 training set with 500 randomly selected labeled images for quick testing and development",
+        ["Training"],
+    )
+    datasets["small_training"] = small_training_ds.dataset_rid
+    logger.info(f"  Created Small_Training dataset: {small_training_ds.dataset_rid}")
+
+    # Create Small_Testing dataset (500 images)
+    small_testing_ds = create_ds(
+        "Small CIFAR-10 testing set with 500 randomly selected images for quick testing and development",
+        ["Testing"],
+    )
+    datasets["small_testing"] = small_testing_ds.dataset_rid
+    logger.info(f"  Created Small_Testing dataset: {small_testing_ds.dataset_rid}")
+
+    # Add Small_Training and Small_Testing as children of Small_Split
+    small_split_ds.add_dataset_members(
+        [small_training_ds.dataset_rid, small_testing_ds.dataset_rid], validate=False
+    )
+    logger.info("  Linked Small_Training and Small_Testing to Small_Split dataset")
 
     return datasets
 
@@ -875,6 +914,34 @@ def load_images(
             added += len(batch)
             logger.info(f"    Added {added}/{len(test_rids)} images")
 
+    # Add randomly selected images to Small_Training and Small_Testing datasets
+    small_train_size = 500
+    small_test_size = 500
+
+    if train_rids and len(train_rids) >= small_train_size:
+        small_train_rids = random.sample(train_rids, small_train_size)
+        small_training_ds = ml.lookup_dataset(datasets["small_training"])
+        logger.info(f"  Adding {small_train_size} randomly selected images to Small_Training dataset...")
+        small_training_ds.add_dataset_members({"Image": small_train_rids}, validate=False)
+        logger.info(f"    Added {len(small_train_rids)} images")
+    elif train_rids:
+        # If we have fewer than 500 training images, use all of them
+        small_training_ds = ml.lookup_dataset(datasets["small_training"])
+        logger.info(f"  Adding {len(train_rids)} images to Small_Training dataset (all available)...")
+        small_training_ds.add_dataset_members({"Image": train_rids}, validate=False)
+
+    if test_rids and len(test_rids) >= small_test_size:
+        small_test_rids = random.sample(test_rids, small_test_size)
+        small_testing_ds = ml.lookup_dataset(datasets["small_testing"])
+        logger.info(f"  Adding {small_test_size} randomly selected images to Small_Testing dataset...")
+        small_testing_ds.add_dataset_members({"Image": small_test_rids}, validate=False)
+        logger.info(f"    Added {len(small_test_rids)} images")
+    elif test_rids:
+        # If we have fewer than 500 test images, use all of them
+        small_testing_ds = ml.lookup_dataset(datasets["small_testing"])
+        logger.info(f"  Adding {len(test_rids)} images to Small_Testing dataset (all available)...")
+        small_testing_ds.add_dataset_members({"Image": test_rids}, validate=False)
+
     # Add Image_Classification features for training images
     if train_rids and filename_to_class:
         logger.info("Adding Image_Classification features...")
@@ -1061,19 +1128,28 @@ def main(args: argparse.Namespace | None = None) -> int:
     print("")
     print("  Datasets created:")
     if args.show_urls and dataset_urls:
-        print(f"    - Complete:   {datasets['complete']}")
+        print(f"    - Complete:        {datasets['complete']}")
         print(f"      URL: {dataset_urls.get('complete', 'N/A')}")
-        print(f"    - Split:      {datasets['split']}")
+        print(f"    - Split:           {datasets['split']}")
         print(f"      URL: {dataset_urls.get('split', 'N/A')}")
-        print(f"    - Training:   {datasets['training']}")
+        print(f"    - Training:        {datasets['training']}")
         print(f"      URL: {dataset_urls.get('training', 'N/A')}")
-        print(f"    - Testing:    {datasets['testing']}")
+        print(f"    - Testing:         {datasets['testing']}")
         print(f"      URL: {dataset_urls.get('testing', 'N/A')}")
+        print(f"    - Small_Split:     {datasets['small_split']}")
+        print(f"      URL: {dataset_urls.get('small_split', 'N/A')}")
+        print(f"    - Small_Training:  {datasets['small_training']}")
+        print(f"      URL: {dataset_urls.get('small_training', 'N/A')}")
+        print(f"    - Small_Testing:   {datasets['small_testing']}")
+        print(f"      URL: {dataset_urls.get('small_testing', 'N/A')}")
     else:
-        print(f"    - Complete:   {datasets['complete']}")
-        print(f"    - Split:      {datasets['split']}")
-        print(f"    - Training:   {datasets['training']}")
-        print(f"    - Testing:    {datasets['testing']}")
+        print(f"    - Complete:        {datasets['complete']}")
+        print(f"    - Split:           {datasets['split']}")
+        print(f"    - Training:        {datasets['training']}")
+        print(f"    - Testing:         {datasets['testing']}")
+        print(f"    - Small_Split:     {datasets['small_split']}")
+        print(f"    - Small_Training:  {datasets['small_training']}")
+        print(f"    - Small_Testing:   {datasets['small_testing']}")
     if load_result:
         print("")
         print(f"  Images loaded: {load_result['total_images']}")

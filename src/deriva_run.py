@@ -219,6 +219,8 @@ deriva_model = builds(
         {"assets": "default_asset"},           # Asset RIDs
         {"workflow": "default_workflow"},      # Workflow definition
         {"model_config": "default_model"},     # Model configuration
+        # Use override syntax on command line: +model_config=cifar10_quick
+        # or without +: model_config=cifar10_quick
     ],
 )
 
