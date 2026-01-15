@@ -80,6 +80,13 @@ store(ModelConfig, param1=val2, group="model_config", name="variant")
 
 `src/deriva_run.py` - Main CLI using Hydra. Dynamically loads all config modules via `src/configs/__init__.py`.
 
+## Tool Preferences
+
+When interacting with DerivaML catalogs, **always prefer MCP tools over writing Python scripts**:
+- Use `mcp__deriva-ml__*` tools for catalog operations (connect, list datasets, download, query, etc.)
+- Only write Python scripts when MCP tools are insufficient or when creating production code
+- MCP tools provide cleaner, more direct interaction with the catalog
+
 ## Key Workflow Rules
 
 - **MUST** commit changes before running models (DerivaML tracks code provenance)
