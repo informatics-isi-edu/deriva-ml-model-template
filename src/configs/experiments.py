@@ -90,3 +90,17 @@ experiment_store(
     ),
     name="cifar10_extended_full",
 )
+
+# Test-only experiment - evaluate pre-trained model on test data
+experiment_store(
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "cifar10_test_only"},
+            {"override /datasets": "cifar10_small_testing"},
+            {"override /assets": "cifar10_small_experiment_weights"},
+        ],
+        bases=(Config,),
+    ),
+    name="cifar10_test_only",
+)

@@ -104,3 +104,12 @@ model_store(
     learning_rate=1e-3,
     epochs=50,
 )
+
+# Test-only mode - load weights and run evaluation without training
+# Use with assets=cifar10_small_experiment_weights and a testing dataset
+model_store(
+    Cifar10CNNConfig,
+    name="cifar10_test_only",
+    test_only=True,
+    weights_filename="cifar10_cnn_weights.pt",
+)

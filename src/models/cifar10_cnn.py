@@ -308,11 +308,14 @@ def cifar10_cnn(
     epochs: int = 10,
     batch_size: int = 64,
     weight_decay: float = 0.0,
+    # Test-only mode
+    test_only: bool = False,
+    weights_filename: str = "cifar10_cnn_weights.pt",
     # DerivaML integration
     ml_instance: DerivaML = None,
     execution: Execution | None = None,
 ) -> None:
-    """Train a simple 2-layer CNN on CIFAR-10 data.
+    """Train or evaluate a simple 2-layer CNN on CIFAR-10 data.
 
     This function integrates with DerivaML to:
     - Load data from execution datasets using restructure_assets()
@@ -324,6 +327,11 @@ def cifar10_cnn(
     feature values. Images are reorganized into a directory structure by dataset type
     (training/testing) and class label, then loaded using torchvision's ImageFolder.
 
+    Test-only mode:
+        When test_only=True, the model loads pre-trained weights from an execution
+        asset and runs evaluation on the test set without training. Use this with
+        the assets configuration to specify which weights to load.
+
     Args:
         conv1_channels: Output channels for first conv layer.
         conv2_channels: Output channels for second conv layer.
@@ -333,13 +341,17 @@ def cifar10_cnn(
         epochs: Number of training epochs.
         batch_size: Training batch size.
         weight_decay: L2 regularization weight decay.
+        test_only: If True, skip training and only run evaluation on test data.
+        weights_filename: Filename of weights asset to load in test_only mode.
         ml_instance: DerivaML instance for catalog access.
         execution: DerivaML execution context with datasets and assets.
     """
-    print("CIFAR-10 CNN Training")
+    mode = "Test-only" if test_only else "Training"
+    print(f"CIFAR-10 CNN {mode}")
     print(f"  Host: {ml_instance.host_name}, Catalog: {ml_instance.catalog_id}")
     print(f"  Architecture: conv1={conv1_channels}, conv2={conv2_channels}, hidden={hidden_size}")
-    print(f"  Training: lr={learning_rate}, epochs={epochs}, batch_size={batch_size}")
+    if not test_only:
+        print(f"  Training: lr={learning_rate}, epochs={epochs}, batch_size={batch_size}")
 
     # Determine device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -364,6 +376,98 @@ def cifar10_cnn(
     filename_to_rid = build_filename_to_rid_map(ml_instance)
     print(f"  Loaded {len(filename_to_rid)} filename-to-RID mappings")
 
+    # Test-only mode: load weights and run evaluation
+    if test_only:
+        if test_loader is None:
+            print("ERROR: No test data found in execution datasets.")
+            print("  Test-only mode requires a dataset with type 'Testing'.")
+            return
+
+        print(f"  Test batches: {len(test_loader)}")
+
+        # Find weights file in execution assets
+        weights_path = None
+        for asset_path in execution.asset_paths:
+            if asset_path.name == weights_filename:
+                weights_path = asset_path
+                break
+
+        if weights_path is None:
+            print(f"ERROR: Weights file '{weights_filename}' not found in execution assets.")
+            print("  Make sure to include the weights asset in your assets configuration.")
+            print(f"  Available assets: {[p.name for p in execution.asset_paths]}")
+            return
+
+        print(f"\nLoading weights from: {weights_path}")
+        checkpoint = torch.load(weights_path, map_location=device, weights_only=False)
+
+        # Load model config from checkpoint if available
+        if 'config' in checkpoint:
+            config = checkpoint['config']
+            print(f"  Checkpoint config: {config}")
+            # Recreate model with saved config
+            model = SimpleCNN(
+                conv1_channels=config.get('conv1_channels', conv1_channels),
+                conv2_channels=config.get('conv2_channels', conv2_channels),
+                hidden_size=config.get('hidden_size', hidden_size),
+                dropout_rate=config.get('dropout_rate', dropout_rate),
+            ).to(device)
+
+        model.load_state_dict(checkpoint['model_state_dict'])
+        print("  Weights loaded successfully")
+
+        # Run evaluation
+        print("\nEvaluating on test set...")
+        model.eval()
+        criterion = nn.CrossEntropyLoss()
+        test_correct = 0
+        test_total = 0
+        test_loss = 0.0
+
+        with torch.no_grad():
+            for inputs, labels in test_loader:
+                inputs, labels = inputs.to(device), labels.to(device)
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+                test_loss += loss.item()
+                _, predicted = outputs.max(1)
+                test_total += labels.size(0)
+                test_correct += predicted.eq(labels).sum().item()
+
+        test_acc = 100.0 * test_correct / test_total
+        test_loss = test_loss / len(test_loader)
+        print(f"  Test loss: {test_loss:.4f}, Test accuracy: {test_acc:.2f}%")
+
+        # Record predictions to catalog
+        if class_names and filename_to_rid:
+            print("\nRecording test predictions to catalog...")
+            record_test_predictions(
+                model=model,
+                test_loader=test_loader,
+                class_names=class_names,
+                filename_to_rid=filename_to_rid,
+                execution=execution,
+                ml_instance=ml_instance,
+                device=device,
+            )
+
+        # Save evaluation results
+        results_file = execution.asset_file_path(
+            MLAsset.execution_asset, "evaluation_results.txt", ExecAssetType.output_file
+        )
+        with results_file.open("w") as f:
+            f.write("CIFAR-10 CNN Evaluation Results\n")
+            f.write("=" * 50 + "\n\n")
+            f.write(f"Weights file: {weights_filename}\n")
+            f.write(f"Test samples: {test_total}\n")
+            f.write(f"Test loss: {test_loss:.4f}\n")
+            f.write(f"Test accuracy: {test_acc:.2f}%\n")
+        print(f"  Saved results to: {results_file}")
+
+        print("\nEvaluation complete!")
+        return
+
+    # Training mode: check for training data
     if train_loader is None:
         print("WARNING: No training data found in execution datasets.")
         print("  Make sure your execution configuration includes CIFAR-10 datasets.")

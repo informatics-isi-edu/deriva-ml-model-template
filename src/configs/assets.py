@@ -44,6 +44,12 @@ cifar10_quick_weights = ["3NP0"]
 # Execution 3NQ4 (cifar10_quick) and 3NSE (cifar10_extended)
 my_experiment_assets = ["3NRA", "3NTJ"]
 
+# CIFAR-10 CNN model weights and training log from small dataset experiment
+# Weights: HQE (cifar10_cnn_weights.pt), Training log: HQG (training_log.txt)
+cifar10_small_experiment_weights = ["HQE"]
+cifar10_small_experiment_log = ["HQG"]
+cifar10_small_experiment_assets = ["HQE", "HQG"]
+
 # ---------------------------------------------------------------------------
 # Register with Hydra-Zen Store
 # ---------------------------------------------------------------------------
@@ -54,3 +60,6 @@ asset_store(assets, name="default_asset")
 asset_store(cifar10_cnn_weights, name="cifar10_cnn_weights")
 asset_store(cifar10_quick_weights, name="cifar10_quick_weights")
 asset_store(my_experiment_assets, name="my_experiment_assets")
+asset_store(cifar10_small_experiment_weights, name="cifar10_small_experiment_weights")
+asset_store(cifar10_small_experiment_log, name="cifar10_small_experiment_log")
+asset_store(cifar10_small_experiment_assets, name="cifar10_small_experiment_assets")
