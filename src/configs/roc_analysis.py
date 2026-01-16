@@ -46,8 +46,10 @@ store(ROCAnalysisConfigBuilds, name="roc_analysis")
 # Pre-configured analysis for multirun comparison experiments (catalog 45)
 # cifar10_quick (3JRC): 3 epochs, 32→64 channels
 # cifar10_extended (3KT0): 50 epochs, 64→128 channels
-store(
-    ROCAnalysisConfigBuilds,
-    name="multirun_comparison",
+MultirunComparisonConfig = builds(
+    ROCAnalysisConfig,
+    populate_full_signature=True,
+    hydra_defaults=roc_defaults,
     execution_rids=["3JRC", "3KT0"],
 )
+store(MultirunComparisonConfig, name="multirun_comparison")
