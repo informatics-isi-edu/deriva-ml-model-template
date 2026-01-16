@@ -251,8 +251,23 @@ def load_cifar10_from_execution(
     test_loader = None
     class_names: list[str] = []
 
-    train_dir = data_dir / "training"
-    if train_dir.exists() and any(train_dir.iterdir()):
+    # Find training and testing directories (may be nested under dataset type like "split")
+    def find_data_dir(base_dir: Path, target_name: str) -> Path | None:
+        """Find a directory with the given name, searching recursively."""
+        # First check direct path
+        direct_path = base_dir / target_name
+        if direct_path.exists() and any(direct_path.iterdir()):
+            return direct_path
+        # Search recursively for nested datasets
+        for subdir in base_dir.iterdir():
+            if subdir.is_dir():
+                nested_path = subdir / target_name
+                if nested_path.exists() and any(nested_path.iterdir()):
+                    return nested_path
+        return None
+
+    train_dir = find_data_dir(data_dir, "training")
+    if train_dir:
         train_dataset = ImageFolder(train_dir, transform=transform)
         train_loader = DataLoader(
             train_dataset,
@@ -264,8 +279,8 @@ def load_cifar10_from_execution(
         print(f"  Training classes: {train_dataset.classes}")
         print(f"  Training samples: {len(train_dataset)}")
 
-    test_dir = data_dir / "testing"
-    if test_dir.exists() and any(test_dir.iterdir()):
+    test_dir = find_data_dir(data_dir, "testing")
+    if test_dir:
         test_dataset = ImageFolder(test_dir, transform=transform)
         test_loader = DataLoader(
             test_dataset,
