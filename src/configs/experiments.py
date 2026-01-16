@@ -103,7 +103,7 @@ experiment_store(
             "_self_",
             {"override /model_config": "cifar10_test_only"},
             {"override /datasets": "cifar10_small_testing"},
-            {"override /assets": "cifar10_small_experiment_weights"},
+            {"override /assets": "multirun_quick_weights"},
         ],
         description="CIFAR-10 evaluation only: load pre-trained weights and evaluate on test set",
         bases=(Config,),

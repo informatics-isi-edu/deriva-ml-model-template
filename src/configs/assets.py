@@ -34,21 +34,19 @@ from hydra_zen import store
 
 assets = []
 
-# CIFAR-10 CNN model weights trained on small dataset (1,000 images, 3 epochs)
-cifar10_cnn_weights = ["3NKR"]
+# Model weights from multirun comparison (catalog 45)
+# Parent execution: 3JQ8
+# - cifar10_quick (3JRC): 3 epochs, 32→64 channels
+# - cifar10_extended (3KT0): 50 epochs, 64→128 channels
+multirun_quick_weights = ["3JSE"]
+multirun_extended_weights = ["3KV8"]
+multirun_comparison_weights = ["3JSE", "3KV8"]
 
-# CIFAR-10 CNN model weights from execution 3NMW (quick model, small training dataset)
-cifar10_quick_weights = ["3NP0"]
-
-# Model weights from quick and extended experiments on small dataset
-# Execution 3NQ4 (cifar10_quick) and 3NSE (cifar10_extended)
-my_experiment_assets = ["3NRA", "3NTJ"]
-
-# CIFAR-10 CNN model weights and training log from small dataset experiment
-# Weights: HQE (cifar10_cnn_weights.pt), Training log: HQG (training_log.txt)
-cifar10_small_experiment_weights = ["HQE"]
-cifar10_small_experiment_log = ["HQG"]
-cifar10_small_experiment_assets = ["HQE", "HQG"]
+# CIFAR-10 CNN model weights and training log from small dataset experiment (catalog 45)
+# Uses weights from multirun cifar10_quick experiment
+cifar10_small_experiment_weights = ["3JSE"]
+cifar10_small_experiment_log = ["3JSG"]
+cifar10_small_experiment_assets = ["3JSE", "3JSG"]
 
 # ---------------------------------------------------------------------------
 # Register with Hydra-Zen Store
@@ -57,9 +55,9 @@ cifar10_small_experiment_assets = ["HQE", "HQG"]
 
 asset_store = store(group="assets")
 asset_store(assets, name="default_asset")
-asset_store(cifar10_cnn_weights, name="cifar10_cnn_weights")
-asset_store(cifar10_quick_weights, name="cifar10_quick_weights")
-asset_store(my_experiment_assets, name="my_experiment_assets")
+asset_store(multirun_quick_weights, name="multirun_quick_weights")
+asset_store(multirun_extended_weights, name="multirun_extended_weights")
+asset_store(multirun_comparison_weights, name="multirun_comparison_weights")
 asset_store(cifar10_small_experiment_weights, name="cifar10_small_experiment_weights")
 asset_store(cifar10_small_experiment_log, name="cifar10_small_experiment_log")
 asset_store(cifar10_small_experiment_assets, name="cifar10_small_experiment_assets")
