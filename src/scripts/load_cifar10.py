@@ -135,6 +135,7 @@ from typing import Any, Callable
 from deriva.core.ermrest_model import Schema
 from deriva_ml import DerivaML
 from deriva_ml.core.ermrest import UploadProgress
+from deriva_ml.dataset import VersionPart
 from deriva_ml.execution import ExecutionConfiguration
 from deriva_ml.schema import create_ml_catalog
 
@@ -982,7 +983,11 @@ def load_images(
         for ds_key in ["training", "small_training", "split", "small_split", "complete"]:
             if ds_key in datasets:
                 ds = ml.lookup_dataset(datasets[ds_key])
-                new_version = ds.increment_version()
+                new_version = ds.increment_dataset_version(
+                    component=VersionPart.patch,
+                    description="Added Image_Classification features",
+                    execution_rid=label_exe.execution_rid,
+                )
                 logger.info(f"  {ds_key}: incremented to version {new_version}")
 
     return datasets, {
