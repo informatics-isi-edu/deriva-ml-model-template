@@ -95,6 +95,7 @@ When interacting with DerivaML catalogs, **always prefer MCP tools over writing 
 - Commit `uv.lock` to repository
 - Never commit notebooks with output cells (use `uv run nbstripout --install`)
 - Use Google docstring format and type hints
+- **Always check function/class signatures before modifying calls** - use `inspect.signature()` or check the source to verify required parameters before editing code that instantiates classes or calls functions
 
 ## Overriding Configs at Runtime
 
