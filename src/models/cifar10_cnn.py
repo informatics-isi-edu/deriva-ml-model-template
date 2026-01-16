@@ -432,6 +432,13 @@ def cifar10_cnn(
 
         print(f"  Test batches: {len(test_loader)}")
 
+        # For test-only mode, use standard CIFAR-10 class names since test data may not have labels
+        cifar10_classes = ['airplane', 'automobile', 'bird', 'cat', 'deer',
+                          'dog', 'frog', 'horse', 'ship', 'truck']
+        if class_names == ['unknown'] or len(class_names) != 10:
+            print(f"  Using standard CIFAR-10 class names (test data has: {class_names})")
+            class_names = cifar10_classes
+
         # Find weights file in execution assets
         # asset_paths is a dict: {table_name: [AssetFilePath, ...]}
         weights_path = None
