@@ -15,6 +15,10 @@ dependencies = [
     "kaggle>=1.8.3",
     "notebook>=7.4.7",
     "torchvision",
+    # For ROC analysis notebook
+    "pandas",
+    "matplotlib",
+    "scikit-learn",
 ]
 
 [project.scripts]
