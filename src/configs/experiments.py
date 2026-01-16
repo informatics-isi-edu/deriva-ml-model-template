@@ -20,9 +20,9 @@ Reference:
 from hydra_zen import make_config, store
 
 # Get the base configuration from the store.
-# Experiments must inherit from this base config.
-# The key is a tuple (package, name) where package is None for root configs.
-Config = store[None][(None, "deriva_model")]
+# Experiments inherit from deriva_base, which is registered in configs/base.py.
+# This is loaded before experiments.py (alphabetically: base < experiments).
+Config = store[None][(None, "deriva_base")]
 
 # Use _global_ package to allow overrides at the root level
 experiment_store = store(group="experiment", package="_global_")

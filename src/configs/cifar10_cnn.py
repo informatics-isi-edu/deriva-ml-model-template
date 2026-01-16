@@ -1,8 +1,14 @@
-"""
-CIFAR-10 CNN model configuration registrations for Hydra/Hydra-Zen.
+"""Model Configuration (CIFAR-10 CNN).
 
-This module defines configurations for the CIFAR-10 2-layer CNN model and
-registers them into Hydra's store under the "model_config" group.
+This module defines model configurations for the CIFAR-10 2-layer CNN.
+
+Configuration Group: model_config
+---------------------------------
+Model configurations define the hyperparameters and settings for your ML model.
+Each configuration is a set of parameters that can be selected at runtime.
+
+REQUIRED: A configuration named "default_model" must be defined.
+This is used as the default model configuration when no override is specified.
 
 All model parameters are configurable via Hydra:
 - Architecture: conv1_channels, conv2_channels, hidden_size, dropout_rate
@@ -10,13 +16,13 @@ All model parameters are configurable via Hydra:
 
 Example usage:
     # Run with default config
-    uv run src/deriva_run.py +model_config=cifar10_default
+    uv run src/deriva_run.py
 
-    # Run with higher learning rate
-    uv run src/deriva_run.py +model_config=cifar10_fast_lr
+    # Run with a specific model config
+    uv run src/deriva_run.py model_config=cifar10_extended
 
     # Override specific parameters
-    uv run src/deriva_run.py +model_config=cifar10_default +model_config.epochs=50
+    uv run src/deriva_run.py model_config.epochs=50 model_config.learning_rate=0.01
 """
 from __future__ import annotations
 
@@ -43,10 +49,14 @@ Cifar10CNNConfig = builds(
     zen_partial=True,  # Execution context added later
 )
 
-# Register configurations to the model_config group
+# ---------------------------------------------------------------------------
+# Register with Hydra-Zen Store
+# ---------------------------------------------------------------------------
+# The group name "model_config" must match the parameter name in BaseConfig.
+
 model_store = store(group="model_config")
 
-# Default configuration - good starting point
+# REQUIRED: default_model - used when no model config is specified
 model_store(Cifar10CNNConfig, name="default_model")
 
 # Quick training - fewer epochs for testing

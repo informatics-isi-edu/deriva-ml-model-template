@@ -19,6 +19,7 @@ dependencies = [
     "pandas",
     "matplotlib",
     "scikit-learn",
+    "ipykernel>=7.1.0",
 ]
 
 [project.scripts]

@@ -141,15 +141,142 @@ Rather than hard-coding values, use Hydra to specify values that can be changed 
 - hydra‑zen documentation: https://mit-ll-responsible-ai.github.io/hydra-zen/
 
 ## Configuration with Hydra & hydra‑zen
-This template registers configuration choices with Hydra’s in-memory config store using hydra‑zen. 
+This template registers configuration choices with Hydra's in-memory config store using hydra‑zen.
 Your script consumes these configs via a typed function interface, making it easy to switch datasets, assets, and model variants at runtime.
+
+### Configuration Groups
+
+DerivaML uses five standard configuration groups. **Each group must have a default configuration** that is used when no override is specified:
+
+| Group | File | Default Name | Description |
+|-------|------|--------------|-------------|
+| `deriva_ml` | `configs/deriva.py` | `default_deriva` | Catalog connection (hostname, catalog_id) |
+| `datasets` | `configs/datasets.py` | `default_dataset` | Dataset RIDs and versions |
+| `assets` | `configs/assets.py` | `default_asset` | Asset RIDs (model weights, etc.) |
+| `workflow` | `configs/workflow.py` | `default_workflow` | Workflow metadata (name, description) |
+| `model_config` | `configs/<model>.py` | `default_model` | Model hyperparameters |
+
+### Writing Configuration Files
+
+Each configuration file follows the same pattern:
+
+1. **Import the store and relevant types**
+2. **Create a store for your group** with `store(group="<group_name>")`
+3. **Register configurations** including a required default
+
+Example configuration file structure:
+```python
+"""Configuration for <group_name>.
+
+Configuration Group: <group_name>
+---------------------------------
+Description of what this group configures.
+
+REQUIRED: A configuration named "default_<name>" must be defined.
+"""
+from hydra_zen import store
+
+# Create store for this group
+my_store = store(group="<group_name>")
+
+# REQUIRED: default configuration
+my_store(<config>, name="default_<name>")
+
+# Additional configurations
+my_store(<config_variant>, name="variant_name")
+```
+
+### Configuration File Examples
+
+**Dataset configuration (`configs/datasets.py`):**
+```python
+from hydra_zen import store
+from deriva_ml.dataset import DatasetSpecConfig
+
+datasets_store = store(group="datasets")
+
+# Define dataset collections
+training_data = [DatasetSpecConfig(rid="ABC1", version="1.0.0")]
+test_data = [DatasetSpecConfig(rid="ABC2")]
+
+# REQUIRED: default_dataset
+datasets_store(training_data, name="default_dataset")
+datasets_store(training_data, name="training")
+datasets_store(test_data, name="testing")
+```
+
+**Model configuration (`configs/my_model.py`):**
+```python
+from hydra_zen import builds, store
+from models.my_model import my_model_function
+
+# Build base configuration
+MyModelConfig = builds(
+    my_model_function,
+    learning_rate=1e-3,
+    epochs=10,
+    populate_full_signature=True,
+    zen_partial=True,
+)
+
+model_store = store(group="model_config")
+
+# REQUIRED: default_model
+model_store(MyModelConfig, name="default_model")
+
+# Variants override specific parameters
+model_store(MyModelConfig, epochs=50, name="extended")
+model_store(MyModelConfig, learning_rate=1e-2, name="fast_lr")
+```
+
+### Notebook Configuration
+
+For notebooks that don't use `run_model`, inherit from `BaseConfig`:
+
+```python
+from dataclasses import dataclass
+from deriva_ml.execution import BaseConfig
+from hydra_zen import builds, store, launch, zen
+
+@dataclass
+class MyNotebookConfig(BaseConfig):
+    """Add notebook-specific parameters."""
+    my_param: str = "value"
+
+# Create notebook config (only need deriva_ml connection)
+notebook_defaults = [
+    "_self_",
+    {"deriva_ml": "default_deriva"},
+]
+
+NotebookConfigBuilds = builds(
+    MyNotebookConfig,
+    populate_full_signature=True,
+    hydra_defaults=notebook_defaults,
+)
+
+store(NotebookConfigBuilds, name="my_notebook")
+store.add_to_hydra_store(overwrite_ok=True)
+
+config = launch(
+    NotebookConfigBuilds,
+    zen(NotebookConfigBuilds),
+    version_base="1.3",
+    config_name="my_notebook",
+    job_name="MyNotebook",
+    overrides=[],
+).return_value
+```
+
+### Default Selections
 
 - Entrypoint: `src/deriva_run.py`
 - Registered app config name: `deriva_model`
 - Default selections (Hydra choices):
-  - `deriva_ml: local`
-  - `datasets: test1`
-  - `assets: weights_1`
+  - `deriva_ml: default_deriva`
+  - `datasets: default_dataset`
+  - `assets: default_asset`
+  - `workflow: default_workflow`
   - `model_config: default_model`
 
 Conceptually, the script registers a top-level config stored under `deriva_model` and uses Hydra to wire defaults and overrides:

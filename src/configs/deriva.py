@@ -1,14 +1,46 @@
-"""This module defines configurations for the deriva_ml package."""
+"""DerivaML Connection Configuration.
 
-from hydra_zen import  store
+This module defines connection configurations for the Deriva catalog.
+
+Configuration Group: deriva_ml
+------------------------------
+This group specifies which Deriva catalog to connect to. Each configuration
+provides connection parameters (hostname, catalog_id, credentials).
+
+REQUIRED: A configuration named "default_deriva" must be defined.
+This is used as the default connection when no override is specified.
+
+Example usage:
+    # Use default connection
+    uv run src/deriva_run.py
+
+    # Use a specific connection
+    uv run src/deriva_run.py deriva_ml=eye-ai
+"""
+
+from hydra_zen import store
 from deriva_ml import DerivaMLConfig
 
-# Create two alternative DerivaML configurations and store them into hydra-zen store.
+# ---------------------------------------------------------------------------
+# DerivaML Connection Configurations
+# ---------------------------------------------------------------------------
+# The group name "deriva_ml" must match the parameter name in BaseConfig.
+
 deriva_store = store(group="deriva_ml")
-deriva_store(DerivaMLConfig, name="default_deriva",
-             hostname="localhost",
-             catalog_id=45,
-             use_minid=False)
-deriva_store(DerivaMLConfig, name="eye-ai",
-             hostname="www.eye-ai.org",
-             catalog_id="eye-ai")
+
+# REQUIRED: default_deriva - used when no connection is specified
+deriva_store(
+    DerivaMLConfig,
+    name="default_deriva",
+    hostname="localhost",
+    catalog_id=45,
+    use_minid=False,
+)
+
+# Additional connection configurations
+deriva_store(
+    DerivaMLConfig,
+    name="eye-ai",
+    hostname="www.eye-ai.org",
+    catalog_id="eye-ai",
+)

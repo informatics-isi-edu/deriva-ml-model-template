@@ -1,12 +1,22 @@
-"""
-Workflow Configuration Module
-=============================
+"""Workflow Configuration.
 
-Defines workflow configurations for DerivaML executions.
+This module defines workflow configurations for DerivaML executions.
 
-A Workflow represents a computational pipeline and its metadata. When instantiated,
-the Workflow class automatically detects Git repository information (URL, checksum,
-version) from the execution context.
+Configuration Group: workflow
+-----------------------------
+A Workflow represents a computational pipeline and its metadata. It describes
+what the code does (name, description, type) and automatically captures Git
+repository information (URL, checksum, version) for provenance tracking.
+
+REQUIRED: A configuration named "default_workflow" must be defined.
+This is used as the default workflow when no override is specified.
+
+Example usage:
+    # Use default workflow
+    uv run src/deriva_run.py
+
+    # Use a specific workflow
+    uv run src/deriva_run.py workflow=cifar10_cnn
 """
 
 from hydra_zen import store, builds
@@ -48,5 +58,9 @@ Train a 2-layer convolutional neural network on CIFAR-10 image data.
 # ---------------------------------------------------------------------------
 
 workflow_store = store(group="workflow")
+
+# REQUIRED: default_workflow - used when no workflow is specified
 workflow_store(Cifar10CNNWorkflow, name="default_workflow")
+
+# Additional workflow configurations
 workflow_store(Cifar10CNNWorkflow, name="cifar10_cnn")

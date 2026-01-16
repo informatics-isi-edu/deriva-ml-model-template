@@ -898,6 +898,7 @@ name = "deriva-ml-model-template"
 source = { editable = "." }
 dependencies = [
     { name = "deriva-ml" },
+    { name = "ipykernel" },
     { name = "kaggle" },
     { name = "matplotlib" },
     { name = "notebook" },
@@ -933,6 +934,7 @@ torch = [
 [package.metadata]
 requires-dist = [
     { name = "deriva-ml", editable = "../deriva-ml" },
+    { name = "ipykernel", specifier = ">=7.1.0" },
     { name = "kaggle", specifier = ">=1.8.3" },
     { name = "matplotlib" },
     { name = "notebook", specifier = ">=7.4.7" },
