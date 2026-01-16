@@ -433,16 +433,22 @@ def cifar10_cnn(
         print(f"  Test batches: {len(test_loader)}")
 
         # Find weights file in execution assets
+        # asset_paths is a dict: {table_name: [AssetFilePath, ...]}
         weights_path = None
-        for asset_path in execution.asset_paths:
-            if asset_path.name == weights_filename:
-                weights_path = asset_path
+        all_assets = []
+        for table_name, paths in execution.asset_paths.items():
+            for asset_path in paths:
+                all_assets.append(asset_path)
+                if asset_path.name == weights_filename:
+                    weights_path = asset_path
+                    break
+            if weights_path:
                 break
 
         if weights_path is None:
             print(f"ERROR: Weights file '{weights_filename}' not found in execution assets.")
             print("  Make sure to include the weights asset in your assets configuration.")
-            print(f"  Available assets: {[p.name for p in execution.asset_paths]}")
+            print(f"  Available assets: {[p.name for p in all_assets]}")
             return
 
         print(f"\nLoading weights from: {weights_path}")
