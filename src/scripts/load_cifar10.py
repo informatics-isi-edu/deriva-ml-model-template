@@ -484,10 +484,10 @@ def setup_domain_model(ml: DerivaML) -> dict[str, Any]:
 
 
 def setup_workflow_type(ml: DerivaML) -> None:
-    """Ensure the CIFAR_Data_Load workflow type exists.
+    """Ensure required workflow types exist.
 
-    Creates a workflow type in the Workflow_Type vocabulary for tracking
-    CIFAR-10 data loading executions.
+    Creates workflow types in the Workflow_Type vocabulary for tracking
+    CIFAR-10 data loading and model training executions.
 
     Args:
         ml: Connected DerivaML instance.
@@ -500,6 +500,14 @@ def setup_workflow_type(ml: DerivaML) -> None:
             table="Workflow_Type",
             term_name="CIFAR_Data_Load",
             description="Workflow for loading CIFAR-10 dataset into catalog",
+        )
+
+    if "Image Classification" not in existing_types:
+        logger.info("Creating Image Classification workflow type...")
+        ml.add_term(
+            table="Workflow_Type",
+            term_name="Image Classification",
+            description="Workflows for training and evaluating image classification models",
         )
 
 
