@@ -35,10 +35,12 @@ truth labels.
 """
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import transforms
@@ -77,7 +79,11 @@ def record_test_predictions(
 
     Runs inference on the test set and records each prediction as an
     Image_Classification feature value, linking the predicted class
-    to the image RID.
+    to the image RID. Also includes the confidence (probability) of the
+    predicted class.
+
+    Additionally saves a CSV file with full probability distributions for
+    all classes, enabling detailed ROC curve analysis.
 
     Args:
         model: Trained PyTorch model.
@@ -99,6 +105,9 @@ def record_test_predictions(
     # Collect all predictions
     feature_records = []
 
+    # Collect data for CSV output (full probability distributions)
+    csv_rows = []
+
     # Get the underlying dataset to access file paths
     test_dataset = test_loader.dataset
 
@@ -107,7 +116,12 @@ def record_test_predictions(
         for inputs, labels in test_loader:
             inputs = inputs.to(device)
             outputs = model(inputs)
-            _, predicted = outputs.max(1)
+
+            # Compute softmax probabilities
+            probabilities = F.softmax(outputs, dim=1)
+
+            # Get predicted class and confidence
+            confidences, predicted = probabilities.max(1)
 
             # Process each sample in the batch
             for i in range(inputs.size(0)):
@@ -115,25 +129,58 @@ def record_test_predictions(
                 img_path, _ = test_dataset.samples[sample_idx]
                 filename = Path(img_path).name
 
+                # Get probability distribution for this sample
+                probs = probabilities[i].cpu().numpy()
+
                 # Look up the RID
                 rid = filename_to_rid.get(filename)
                 if rid:
                     predicted_class = class_names[predicted[i].item()]
+                    confidence = confidences[i].item()
+
+                    # Record to catalog with confidence
                     feature_records.append(
                         ImageClassification(
                             Image=rid,
                             Image_Class=predicted_class,
+                            Confidence=confidence,
                         )
                     )
+
+                    # Build CSV row with full probability distribution
+                    csv_row = {
+                        "Image_RID": rid,
+                        "Filename": filename,
+                        "Predicted_Class": predicted_class,
+                        "Confidence": confidence,
+                    }
+                    # Add probability for each class
+                    for j, class_name in enumerate(class_names):
+                        csv_row[f"prob_{class_name}"] = probs[j]
+                    csv_rows.append(csv_row)
 
                 sample_idx += 1
 
     # Bulk add all predictions to the execution
     if feature_records:
         execution.add_features(feature_records)
-        print(f"  Recorded {len(feature_records)} classification predictions")
+        print(f"  Recorded {len(feature_records)} classification predictions with confidence scores")
     else:
         print("  WARNING: No predictions could be recorded (no RID matches)")
+
+    # Save full probability distributions to CSV
+    if csv_rows:
+        csv_file = execution.asset_file_path(
+            MLAsset.execution_asset, "prediction_probabilities.csv", ExecAssetType.output_file
+        )
+        fieldnames = ["Image_RID", "Filename", "Predicted_Class", "Confidence"] + [
+            f"prob_{c}" for c in class_names
+        ]
+        with csv_file.open("w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(csv_rows)
+        print(f"  Saved probability distributions to: {csv_file}")
 
     return len(feature_records)
 

@@ -134,7 +134,8 @@ from typing import Any, Callable
 
 from deriva.core.ermrest_model import Schema
 from deriva_ml import DerivaML
-from deriva_ml.core.ermrest import UploadProgress
+from deriva_ml.core.ermrest import ColumnDefinition, UploadProgress
+from deriva_ml.core.enums import BuiltinTypes
 from deriva_ml.dataset import VersionPart
 from deriva_ml.execution import ExecutionConfiguration
 from deriva_ml.schema import create_ml_catalog
@@ -452,14 +453,24 @@ def setup_domain_model(ml: DerivaML) -> dict[str, Any]:
     if "Image" not in element_types:
         ml.add_dataset_element_type("Image")
 
-    # Create Image_Classification feature
+    # Create Image_Classification feature with Confidence score
+    # - Image_Class: vocabulary term for the predicted/actual class
+    # - Confidence: float value (0-1) representing prediction confidence/probability
     logger.info("Creating Image_Classification feature...")
+    confidence_column = ColumnDefinition(
+        name="Confidence",
+        type=BuiltinTypes.float4,
+        nullok=True,
+        comment="Prediction confidence/probability (0-1)",
+    )
     try:
         ml.create_feature(
             target_table="Image",
             feature_name="Image_Classification",
-            comment="CIFAR-10 class label for each image",
+            comment="CIFAR-10 class label and optional confidence score for each image",
             terms=["Image_Class"],
+            metadata=[confidence_column],
+            optional=["Confidence"],
         )
         results["feature"] = {"status": "created", "feature_name": "Image_Classification"}
     except Exception as e:
