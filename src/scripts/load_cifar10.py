@@ -724,10 +724,14 @@ def load_images(
 
     This is the main data loading function that:
     1. Creates an execution for provenance tracking
-    2. Creates the dataset hierarchy within that execution
-    3. Registers and uploads images to the Image asset table
-    4. Assigns images to appropriate datasets (Complete, Training, Testing)
-    5. Adds classification labels as features (training images only)
+    2. Registers and uploads images to the Image asset table
+    3. Adds classification labels as features (training images only)
+    4. Creates the dataset hierarchy within the labeling execution
+    5. Assigns images to appropriate datasets (Complete, Training, Testing)
+
+    The datasets are created AFTER features are loaded so that when datasets
+    are first created, the images already have their feature values attached.
+    This ensures dataset bags include feature data from the start.
 
     Args:
         ml: Connected DerivaML instance.
@@ -750,10 +754,12 @@ def load_images(
 
     Note:
         The function creates two separate executions:
-        1. Data Load Execution: Creates datasets and uploads images
-        2. Labeling Execution: Adds Image_Classification features
+        1. Data Load Execution: Uploads images to the catalog
+        2. Labeling Execution: Adds Image_Classification features and creates datasets
 
         This separation allows tracking which execution produced which artifacts.
+        Datasets are created in the labeling execution so they include images
+        with features already attached.
 
         Training images are labeled with their class from trainLabels.csv.
         Test images have no labels (Kaggle CIFAR-10 format).
@@ -789,9 +795,6 @@ def load_images(
     # Use execution context manager for data loading
     with ml.create_execution(config) as exe:
         logger.info(f"  Execution RID: {exe.execution_rid}")
-
-        # Create dataset hierarchy within execution for provenance
-        datasets = create_dataset_hierarchy(ml, exe)
 
         # Clear working directory to avoid uploading stale files
         working_dir = exe.working_dir
@@ -880,8 +883,8 @@ def load_images(
     for asset_type, files in upload_result.items():
         logger.info(f"    {asset_type}: {len(files)} files")
 
-    # Get uploaded image RIDs and assign to datasets
-    logger.info("Assigning images to datasets...")
+    # Get uploaded image RIDs
+    logger.info("Getting uploaded image RIDs...")
     assets = ml.list_assets("Image")
     logger.info(f"  Found {len(assets)} uploaded images")
 
@@ -892,6 +895,76 @@ def load_images(
     train_rids = [filename_to_rid[f] for f in train_filenames if f in filename_to_rid]
     test_rids = [filename_to_rid[f] for f in test_filenames if f in filename_to_rid]
     all_rids = train_rids + test_rids
+
+    # Add Image_Classification features for training images BEFORE creating datasets
+    # This ensures datasets include images with features already attached
+    datasets = {}
+    label_exe = None
+
+    if train_rids and filename_to_class:
+        logger.info("Adding Image_Classification features...")
+
+        ImageClassification = ml.feature_record_class("Image", "Image_Classification")
+
+        # Create separate execution for labeling and dataset creation
+        label_workflow = ml.create_workflow(
+            name="CIFAR-10 Labeling",
+            workflow_type="CIFAR_Data_Load",
+            description="Add class labels to CIFAR-10 training images and create datasets",
+        )
+        label_config = ExecutionConfiguration(workflow=label_workflow)
+
+        with ml.create_execution(label_config) as label_exe:
+            logger.info(f"  Labeling execution RID: {label_exe.execution_rid}")
+
+            feature_records = []
+            for filename, rid in filename_to_rid.items():
+                if filename in filename_to_class:
+                    class_name = filename_to_class[filename]
+                    feature_records.append(
+                        ImageClassification(
+                            Image=rid,
+                            Image_Class=class_name,
+                        )
+                    )
+
+            logger.info(f"  Adding {len(feature_records)} classification labels...")
+            label_exe.add_features(feature_records)
+
+        label_exe.upload_execution_outputs(clean_folder=True)
+        logger.info(f"  Added {len(feature_records)} Image_Classification features")
+
+    # Now create datasets AFTER features are loaded
+    # This ensures dataset bags include feature data from the start
+    logger.info("Creating dataset hierarchy (after features are loaded)...")
+
+    # Create a new execution for dataset creation if we don't have one from labeling
+    if label_exe is None:
+        ds_workflow = ml.create_workflow(
+            name="CIFAR-10 Dataset Creation",
+            workflow_type="CIFAR_Data_Load",
+            description="Create CIFAR-10 dataset hierarchy",
+        )
+        ds_config = ExecutionConfiguration(workflow=ds_workflow)
+        with ml.create_execution(ds_config) as ds_exe:
+            logger.info(f"  Dataset creation execution RID: {ds_exe.execution_rid}")
+            datasets = create_dataset_hierarchy(ml, ds_exe)
+        ds_exe.upload_execution_outputs(clean_folder=True)
+    else:
+        # Create another execution for dataset creation
+        ds_workflow = ml.create_workflow(
+            name="CIFAR-10 Dataset Creation",
+            workflow_type="CIFAR_Data_Load",
+            description="Create CIFAR-10 dataset hierarchy",
+        )
+        ds_config = ExecutionConfiguration(workflow=ds_workflow)
+        with ml.create_execution(ds_config) as ds_exe:
+            logger.info(f"  Dataset creation execution RID: {ds_exe.execution_rid}")
+            datasets = create_dataset_hierarchy(ml, ds_exe)
+        ds_exe.upload_execution_outputs(clean_folder=True)
+
+    # Assign images to datasets
+    logger.info("Assigning images to datasets...")
 
     # Add all images to Complete dataset
     if all_rids:
@@ -953,53 +1026,6 @@ def load_images(
         small_testing_ds = ml.lookup_dataset(datasets["small_testing"])
         logger.info(f"  Adding {len(test_rids)} images to Small_Testing dataset (all available)...")
         small_testing_ds.add_dataset_members({"Image": test_rids}, validate=False)
-
-    # Add Image_Classification features for training images
-    if train_rids and filename_to_class:
-        logger.info("Adding Image_Classification features...")
-
-        ImageClassification = ml.feature_record_class("Image", "Image_Classification")
-
-        # Create separate execution for labeling
-        label_workflow = ml.create_workflow(
-            name="CIFAR-10 Labeling",
-            workflow_type="CIFAR_Data_Load",
-            description="Add class labels to CIFAR-10 training images",
-        )
-        label_config = ExecutionConfiguration(workflow=label_workflow)
-
-        with ml.create_execution(label_config) as label_exe:
-            logger.info(f"  Labeling execution RID: {label_exe.execution_rid}")
-
-            feature_records = []
-            for filename, rid in filename_to_rid.items():
-                if filename in filename_to_class:
-                    class_name = filename_to_class[filename]
-                    feature_records.append(
-                        ImageClassification(
-                            Image=rid,
-                            Image_Class=class_name,
-                        )
-                    )
-
-            logger.info(f"  Adding {len(feature_records)} classification labels...")
-            label_exe.add_features(feature_records)
-
-        label_exe.upload_execution_outputs(clean_folder=True)
-        logger.info(f"  Added {len(feature_records)} Image_Classification features")
-
-        # Increment dataset versions after features are added
-        # This ensures new bags will include the feature values
-        logger.info("Incrementing dataset versions after feature loading...")
-        for ds_key in ["training", "small_training", "split", "small_split", "complete"]:
-            if ds_key in datasets:
-                ds = ml.lookup_dataset(datasets[ds_key])
-                new_version = ds.increment_dataset_version(
-                    component=VersionPart.patch,
-                    description="Added Image_Classification features",
-                    execution_rid=label_exe.execution_rid,
-                )
-                logger.info(f"  {ds_key}: incremented to version {new_version}")
 
     return datasets, {
         "total_images": len(all_rids),
@@ -1126,8 +1152,8 @@ def main(args: argparse.Namespace | None = None) -> int:
             )
             logger.info(f"Loading complete: {load_result}")
     else:
-        # In dry run mode, create datasets without execution context
-        logger.info("Dry run mode - creating datasets without image upload")
+        # In dry run mode, create datasets without images or features
+        logger.info("Dry run mode - creating empty datasets without image upload")
         datasets = create_dataset_hierarchy(ml)
 
     # Get Chaise URLs for datasets if requested
