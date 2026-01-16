@@ -976,6 +976,15 @@ def load_images(
         label_exe.upload_execution_outputs(clean_folder=True)
         logger.info(f"  Added {len(feature_records)} Image_Classification features")
 
+        # Increment dataset versions after features are added
+        # This ensures new bags will include the feature values
+        logger.info("Incrementing dataset versions after feature loading...")
+        for ds_key in ["training", "small_training", "split", "small_split", "complete"]:
+            if ds_key in datasets:
+                ds = ml.lookup_dataset(datasets[ds_key])
+                new_version = ds.increment_version()
+                logger.info(f"  {ds_key}: incremented to version {new_version}")
+
     return datasets, {
         "total_images": len(all_rids),
         "training_images": len(train_rids),
