@@ -1,18 +1,16 @@
+"""
+DerivaML Model Protocol - Re-exported from deriva_ml
+=====================================================
 
-from __future__ import annotations
+This module re-exports the DerivaMLModel protocol from deriva_ml.execution.
 
-from typing import Protocol, Any, runtime_checkable
-from deriva_ml.execution import Execution
-from deriva_ml import DerivaML
+The protocol is now maintained in deriva-ml itself. This re-export is kept
+for backwards compatibility.
 
-@runtime_checkable
-class DerivaMLModel(Protocol):
-    def __call__(self,
-                 *args: Any,
-                 ml_instance: DerivaML,
-                 execution: Execution,
-                 **kwargs: Any) -> None:
-        """
-        Prototype for function that interfaces between DerivaML and underlying ML framework
-        """
-        ...
+See deriva_ml.execution.model_protocol for full documentation.
+"""
+
+# Re-export from deriva-ml
+from deriva_ml.execution import DerivaMLModel
+
+__all__ = ["DerivaMLModel"]
