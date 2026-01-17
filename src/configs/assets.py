@@ -49,10 +49,10 @@ multirun_comparison_weights = ["3JSE", "3KV8"]
 
 # Prediction probability files from experiments (catalog 45)
 # These CSV files contain per-class probability distributions for ROC analysis
-# New experiments using cifar10_small_split dataset (has ground truth labels)
-roc_quick_probabilities = ["3PFT"]  # From cifar10_quick (3PEG)
-roc_extended_probabilities = ["3QHJ"]  # From cifar10_extended (3QG8)
-roc_comparison_probabilities = ["3PFT", "3QHJ"]
+# Experiments using cifar10_labeled_split dataset (all images have ground truth labels)
+roc_quick_probabilities = ["42JE"]  # From cifar10_quick with labeled_split
+roc_extended_probabilities = ["44KE"]  # From cifar10_extended with labeled_split
+roc_comparison_probabilities = ["42JE", "44KE"]
 
 # Legacy: multirun experiments (different test set, no ground truth overlap)
 multirun_quick_probabilities = ["3JSJ"]  # From cifar10_quick (3JRC)

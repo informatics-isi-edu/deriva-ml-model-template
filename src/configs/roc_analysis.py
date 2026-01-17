@@ -1,24 +1,101 @@
 """Configuration for ROC analysis notebook.
 
-This module defines the configuration for the ROC curve analysis notebook.
-The notebook uses the execution context with assets to download probability files.
+This module defines the hydra-zen configuration for the ROC curve analysis notebook.
+The configuration inherits from BaseConfig and adds ROC-specific parameters.
 
 Usage:
-    # Run with default probability files
-    deriva-ml-run-notebook notebooks/roc_analysis.ipynb --host localhost --catalog 45
+    In notebook (using hydra-zen configuration):
 
-    # Run with specific assets (probability files)
-    deriva-ml-run-notebook notebooks/roc_analysis.ipynb \
-        --host localhost --catalog 45 \
-        -p assets '["3JSJ", "3KVC"]'
+        from configs import load_all_configs
+        from configs.roc_analysis import ROCAnalysisConfigBuilds
+        from deriva_ml.execution import get_notebook_configuration
 
-The assets parameter should contain RIDs for prediction_probabilities.csv files
-from completed CIFAR-10 CNN executions.
+        load_all_configs()
+        config = get_notebook_configuration(
+            ROCAnalysisConfigBuilds,
+            config_name="roc_analysis",
+            overrides=["assets=roc_comparison_probabilities"],
+        )
+
+    From command line (using deriva-ml-run-notebook):
+
+        deriva-ml-run-notebook notebooks/roc_analysis.ipynb \\
+            --host localhost --catalog 45 \\
+            assets=roc_comparison_probabilities
+
+Configuration Groups:
+    - deriva_ml: DerivaML connection settings (default_deriva, eye_ai, etc.)
+    - assets: Asset RID lists for probability files (roc_quick_probabilities, etc.)
 """
 
-# This config module is kept for reference but the notebook now uses
-# papermill parameters directly rather than hydra-zen configuration.
-# See assets.py for pre-configured asset lists:
-#   - multirun_quick_probabilities: ["3JSJ"]
-#   - multirun_extended_probabilities: ["3KVC"]
-#   - multirun_comparison_probabilities: ["3JSJ", "3KVC"]
+from dataclasses import dataclass, field
+
+from hydra_zen import builds, store
+
+from deriva_ml.execution import BaseConfig, base_defaults
+
+
+# ---------------------------------------------------------------------------
+# ROC Analysis Configuration
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ROCAnalysisConfig(BaseConfig):
+    """Configuration for ROC analysis notebook.
+
+    Inherits standard DerivaML configuration fields from BaseConfig and adds
+    ROC-specific parameters. The assets field is used to specify which
+    prediction probability files to analyze.
+
+    Attributes:
+        deriva_ml: DerivaML connection configuration.
+        assets: List of asset RIDs for prediction_probabilities.csv files.
+        description: Human-readable description of this analysis run.
+
+    Example:
+        >>> config = get_notebook_configuration(
+        ...     ROCAnalysisConfigBuilds,
+        ...     config_name="roc_analysis",
+        ...     overrides=["assets=roc_comparison_probabilities"],
+        ... )
+        >>> print(config.assets)  # ['42JE', '44KE']
+    """
+
+    # Note: All fields inherited from BaseConfig:
+    # - deriva_ml: DerivaML connection config
+    # - datasets: Dataset specs (not used for ROC analysis)
+    # - assets: Asset RIDs to load (this is the main input for ROC analysis)
+    # - dry_run: Skip catalog writes
+    # - description: Run description
+    pass
+
+
+# ---------------------------------------------------------------------------
+# Hydra-zen Configuration Builds
+# ---------------------------------------------------------------------------
+
+# Define defaults for ROC analysis notebook
+# We only need deriva_ml and assets for this notebook
+roc_analysis_defaults = [
+    "_self_",
+    {"deriva_ml": "default_deriva"},
+    {"assets": "roc_comparison_probabilities"},  # Default to comparison of both experiments
+]
+
+# Build the configuration class with hydra-zen
+ROCAnalysisConfigBuilds = builds(
+    ROCAnalysisConfig,
+    populate_full_signature=True,
+    hydra_defaults=roc_analysis_defaults,
+)
+
+# ---------------------------------------------------------------------------
+# Register with Hydra-Zen Store
+# ---------------------------------------------------------------------------
+
+roc_store = store(group="roc_analysis")
+roc_store(ROCAnalysisConfigBuilds, name="roc_analysis")
+
+# Also register as a top-level config for direct use
+store(ROCAnalysisConfigBuilds, name="roc_analysis")

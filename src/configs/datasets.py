@@ -49,6 +49,12 @@ datasets_small_training = [DatasetSpecConfig(rid="28E6", version="0.4.0")]  # Sm
 datasets_small_testing = [DatasetSpecConfig(rid="28EE", version="0.4.0")]  # Small testing set with 500 images
 datasets_small_split = [DatasetSpecConfig(rid="28DY", version="0.4.0")]  # Small split dataset with 1,000 images
 
+# Labeled split dataset - created from training images only (all have ground truth)
+# This enables ROC analysis since both train and test partitions have labels
+datasets_labeled_split = [DatasetSpecConfig(rid="3RMP", version="0.4.0")]  # 5000 images: 4000 train + 1000 test
+datasets_labeled_training = [DatasetSpecConfig(rid="3RMY", version="0.4.0")]  # 4000 labeled training images
+datasets_labeled_testing = [DatasetSpecConfig(rid="3RN6", version="0.4.0")]  # 1000 labeled test images (with ground truth!)
+
 # =============================================================================
 # Store configurations in hydra-zen
 # =============================================================================
@@ -65,6 +71,11 @@ datasets_store(datasets_complete, name="cifar10_complete")
 datasets_store(datasets_small_training, name="cifar10_small_training")
 datasets_store(datasets_small_testing, name="cifar10_small_testing")
 datasets_store(datasets_small_split, name="cifar10_small_split")
+
+# Labeled split dataset (all images have ground truth - suitable for ROC analysis)
+datasets_store(datasets_labeled_split, name="cifar10_labeled_split")
+datasets_store(datasets_labeled_training, name="cifar10_labeled_training")
+datasets_store(datasets_labeled_testing, name="cifar10_labeled_testing")
 
 # REQUIRED: default_dataset - used when no dataset is specified
 datasets_store(datasets_split, name="default_dataset")

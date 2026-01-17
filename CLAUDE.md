@@ -80,6 +80,63 @@ store(ModelConfig, param1=val2, group="model_config", name="variant")
 
 `src/deriva_run.py` - Main CLI using Hydra. Dynamically loads all config modules via `src/configs/__init__.py`.
 
+### Notebook Configuration Pattern
+
+Notebooks use hydra-zen configuration as the primary source of parameters. Each notebook should:
+
+1. **Define a config module** in `src/configs/` (e.g., `roc_analysis.py`):
+   ```python
+   from dataclasses import dataclass
+   from hydra_zen import builds, store
+   from deriva_ml.execution import BaseConfig
+
+   @dataclass
+   class MyNotebookConfig(BaseConfig):
+       """Configuration for my notebook."""
+       pass  # Add notebook-specific fields if needed
+
+   # Define defaults
+   notebook_defaults = [
+       "_self_",
+       {"deriva_ml": "default_deriva"},
+       {"assets": "my_default_assets"},
+   ]
+
+   # Build and register
+   MyNotebookConfigBuilds = builds(
+       MyNotebookConfig,
+       populate_full_signature=True,
+       hydra_defaults=notebook_defaults,
+   )
+   store(MyNotebookConfigBuilds, name="my_notebook")
+   ```
+
+2. **Load configuration in the notebook**:
+   ```python
+   from configs import load_all_configs
+   from configs.my_notebook import MyNotebookConfigBuilds
+   from deriva_ml.execution import get_notebook_configuration
+
+   load_all_configs()
+   config = get_notebook_configuration(
+       MyNotebookConfigBuilds,
+       config_name="my_notebook",
+       overrides=["assets=different_assets"],  # Optional overrides
+   )
+
+   # Extract values from config
+   host = config.deriva_ml.hostname
+   catalog = config.deriva_ml.catalog_id
+   assets = config.assets
+   ```
+
+3. **Run notebook with overrides** (command line):
+   ```bash
+   uv run deriva-ml-run-notebook notebooks/my_notebook.ipynb \
+     --host localhost --catalog 45 \
+     assets=different_assets
+   ```
+
 ## Tool Preferences
 
 When interacting with DerivaML catalogs, **always prefer MCP tools over writing Python scripts**:
