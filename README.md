@@ -32,11 +32,11 @@ Use this template to create a new repository: [Creating a repository from a temp
 
 After creating your repository from this template, enable GitHub Pages for automatic documentation deployment:
 
-1. Go to your repository **Settings → Actions → General**
-2. Under "Workflow permissions", select **"Read and write permissions"**
-3. Save the changes
+1. Go to your repository **Settings → Pages**
+2. Under "Build and deployment", set **Source** to **"GitHub Actions"**
+3. Save
 
-The documentation workflow will automatically enable and deploy to GitHub Pages on your first push to main.
+The documentation workflow will automatically deploy on each push to main.
 
 ### 3. Initialize Environment
 
