@@ -39,52 +39,25 @@ Customization
 -------------
 To adapt this template for a specific domain (e.g., EyeAI):
 1. Import your domain class instead of DerivaML
-2. Use create_model_config(YourClass) to create the config
+2. Modify configs/base.py to use create_model_config(YourClass)
 3. Modify the config imports to include your domain configs
 """
 
 from hydra_zen import store, zen
 
-from deriva_ml import DerivaML
-from deriva_ml.execution import run_model, create_model_config
+from deriva_ml.execution import run_model
 
 
 # =============================================================================
 # Hydra-Zen Configuration Setup
 # =============================================================================
-# This section configures the hydra-zen command-line interface. The
-# create_model_config() function creates a hydra-zen builds() for run_model
-# with the specified DerivaML class.
-
-# Create the main configuration schema for this application.
-# For domain-specific classes (e.g., EyeAI), replace DerivaML with your class:
-#   deriva_model = create_model_config(EyeAI, description="EyeAI analysis")
-deriva_model = create_model_config(
-    DerivaML,
-    description="Simple model run",
-    hydra_defaults=[
-        "_self_",
-        {"deriva_ml": "default_deriva"},
-        {"datasets": "default_dataset"},
-        {"assets": "default_asset"},
-        {"workflow": "default_workflow"},
-        {"model_config": "default_model"},
-    ],
-)
-
-# Register the main config in the hydra-zen store
-store(deriva_model, name="deriva_model")
-
-# ---------------------------------------------------------------------------
-# Load configuration modules
-# ---------------------------------------------------------------------------
-# Dynamically import all config modules from the configs package. Each module
-# registers its configurations with the hydra-zen store when imported.
+# Load configuration modules from the configs package. This includes:
+# - configs/base.py: Creates and registers DerivaModelConfig
+# - configs/experiments.py: Defines experiment presets
+# - Other config modules (datasets, assets, workflows, etc.)
 #
-# To add new configuration options:
-# 1. Create a new module in configs/ (e.g., configs/my_model.py)
-# 2. Use store() to register your configs with the appropriate group name
-# 3. The module will be automatically discovered and loaded
+# The main config (deriva_model) is created in configs/base.py so that
+# experiments can properly inherit from it.
 
 from configs import load_all_configs  # noqa: E402
 load_all_configs()

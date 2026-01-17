@@ -1,7 +1,8 @@
 """Define experiments.
 
 Experiments are pre-configured combinations of model, dataset, and asset settings.
-They use Hydra's defaults list to override specific config groups.
+They use Hydra's defaults list to override specific config groups and inherit from
+the main DerivaModelConfig.
 
 Usage:
     # Run a single experiment
@@ -19,13 +20,15 @@ Reference:
 
 from hydra_zen import make_config, store
 
-from configs.base import DerivaBaseConfig
+from configs.base import DerivaModelConfig
 
 # Use _global_ package to allow overrides at the root level
 experiment_store = store(group="experiment", package="_global_")
 
 # CIFAR-10 CNN experiments
 # These experiments use the CIFAR-10 CNN model with different configurations.
+# Each experiment inherits from DerivaModelConfig (a builds() of run_model)
+# and overrides specific config groups.
 
 experiment_store(
     make_config(
@@ -35,7 +38,7 @@ experiment_store(
             {"override /datasets": "cifar10_small_split"},
         ],
         description="Quick CIFAR-10 training: 3 epochs, 32→64 channels, batch size 128 for fast validation",
-        bases=(DerivaBaseConfig,),
+        bases=(DerivaModelConfig,),
     ),
     name="cifar10_quick",
 )
@@ -48,7 +51,7 @@ experiment_store(
             {"override /datasets": "cifar10_small_training"},
         ],
         description="Default CIFAR-10 training: 10 epochs, 32→64 channels, standard hyperparameters",
-        bases=(DerivaBaseConfig,),
+        bases=(DerivaModelConfig,),
     ),
     name="cifar10_default",
 )
@@ -61,7 +64,7 @@ experiment_store(
             {"override /datasets": "cifar10_small_split"},
         ],
         description="Extended CIFAR-10 training: 50 epochs, 64→128 channels, dropout 0.25, weight decay 1e-4",
-        bases=(DerivaBaseConfig,),
+        bases=(DerivaModelConfig,),
     ),
     name="cifar10_extended",
 )
@@ -75,7 +78,7 @@ experiment_store(
             {"override /datasets": "cifar10_small_split"},
         ],
         description="Quick CIFAR-10 on full dataset: 3 epochs, 32→64 channels for baseline validation",
-        bases=(DerivaBaseConfig,),
+        bases=(DerivaModelConfig,),
     ),
     name="cifar10_quick_full",
 )
@@ -88,7 +91,7 @@ experiment_store(
             {"override /datasets": "cifar10_split"},
         ],
         description="Extended CIFAR-10 on full dataset: 50 epochs, 64→128 channels, full regularization",
-        bases=(DerivaBaseConfig,),
+        bases=(DerivaModelConfig,),
     ),
     name="cifar10_extended_full",
 )
@@ -103,7 +106,7 @@ experiment_store(
             {"override /assets": "multirun_quick_weights"},
         ],
         description="CIFAR-10 evaluation only: load pre-trained weights and evaluate on test set",
-        bases=(DerivaBaseConfig,),
+        bases=(DerivaModelConfig,),
     ),
     name="cifar10_test_only",
 )
