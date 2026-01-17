@@ -39,35 +39,31 @@ from hydra_zen import store
 
 assets = []
 
-# Model weights from multirun comparison (catalog 45)
-# Parent execution: 3JQ8
-# - cifar10_quick (3JRC): 3 epochs, 32→64 channels
-# - cifar10_extended (3KT0): 50 epochs, 64→128 channels
-multirun_quick_weights = ["3JSE"]
-multirun_extended_weights = ["3KV8"]
-multirun_comparison_weights = ["3JSE", "3KV8"]
+# =============================================================================
+# Catalog 62: CIFAR-10 Multi-Experiment Assets (localhost, schema: cifar-10)
+# =============================================================================
+# Parent execution: 3WMA (multirun sweep)
+# Child executions:
+#   - cifar10_quick (3WNE): 3 epochs, 32→64 channels, batch 128
+#   - cifar10_extended (3XQ2): 50 epochs, 64→128 channels, dropout 0.25, weight decay 1e-4
 
-# Prediction probability files from experiments (catalog 45)
-# These CSV files contain per-class probability distributions for ROC analysis
-# Experiments using cifar10_labeled_split dataset (all images have ground truth labels)
-# Each asset list includes:
-#   - prediction_probabilities.csv (Execution_Asset)
-#   - hydra config YAML (Execution_Metadata) for model configuration details
-# Updated 2026-01-17: Using assets from executions with config_choices support
-roc_quick_probabilities = ["49FW", "49ER"]  # From cifar10_quick (exec 49EJ) with labeled_split
-roc_extended_probabilities = ["4BGW", "4BFW"]  # From cifar10_extended (exec 4BFJ) with labeled_split
-roc_comparison_probabilities = ["49FW", "49ER", "4BGW", "4BFW"]
+# Model weights from multirun comparison
+multirun_quick_weights = ["3WPG"]  # cifar10_cnn_weights.pt from cifar10_quick
+multirun_extended_weights = ["3XRA"]  # cifar10_cnn_weights.pt from cifar10_extended
+multirun_comparison_weights = ["3WPG", "3XRA"]  # Both model weights
 
-# Legacy: multirun experiments (different test set, no ground truth overlap)
-multirun_quick_probabilities = ["3JSJ"]  # From cifar10_quick (3JRC)
-multirun_extended_probabilities = ["3KVC"]  # From cifar10_extended (3KT0)
-multirun_comparison_probabilities = ["3JSJ", "3KVC"]
+# Training logs
+multirun_quick_log = ["3WPJ"]  # training_log.txt from cifar10_quick
+multirun_extended_log = ["3XRC"]  # training_log.txt from cifar10_extended
 
-# CIFAR-10 CNN model weights and training log from small dataset experiment (catalog 45)
-# Uses weights from multirun cifar10_quick experiment
-cifar10_small_experiment_weights = ["3JSE"]
-cifar10_small_experiment_log = ["3JSG"]
-cifar10_small_experiment_assets = ["3JSE", "3JSG"]
+# Prediction probability files (for ROC analysis)
+multirun_quick_probabilities = ["3WPM"]  # prediction_probabilities.csv from cifar10_quick
+multirun_extended_probabilities = ["3XRE"]  # prediction_probabilities.csv from cifar10_extended
+multirun_comparison_probabilities = ["3WPM", "3XRE"]  # Both probability files
+
+# Complete asset sets (weights + config)
+multirun_quick_assets = ["3WPG", "3WMM"]  # weights + hydra config
+multirun_extended_assets = ["3XRA", "3XQ8"]  # weights + hydra config
 
 # ---------------------------------------------------------------------------
 # Register with Hydra-Zen Store
@@ -78,15 +74,21 @@ asset_store = store(group="assets")
 
 # REQUIRED: default_asset - used when no assets are specified (typically empty)
 asset_store(assets, name="default_asset")
+
+# Model weights
 asset_store(multirun_quick_weights, name="multirun_quick_weights")
 asset_store(multirun_extended_weights, name="multirun_extended_weights")
 asset_store(multirun_comparison_weights, name="multirun_comparison_weights")
-asset_store(roc_quick_probabilities, name="roc_quick_probabilities")
-asset_store(roc_extended_probabilities, name="roc_extended_probabilities")
-asset_store(roc_comparison_probabilities, name="roc_comparison_probabilities")
+
+# Training logs
+asset_store(multirun_quick_log, name="multirun_quick_log")
+asset_store(multirun_extended_log, name="multirun_extended_log")
+
+# Prediction probabilities (for ROC analysis)
 asset_store(multirun_quick_probabilities, name="multirun_quick_probabilities")
 asset_store(multirun_extended_probabilities, name="multirun_extended_probabilities")
 asset_store(multirun_comparison_probabilities, name="multirun_comparison_probabilities")
-asset_store(cifar10_small_experiment_weights, name="cifar10_small_experiment_weights")
-asset_store(cifar10_small_experiment_log, name="cifar10_small_experiment_log")
-asset_store(cifar10_small_experiment_assets, name="cifar10_small_experiment_assets")
+
+# Complete asset sets
+asset_store(multirun_quick_assets, name="multirun_quick_assets")
+asset_store(multirun_extended_assets, name="multirun_extended_assets")
