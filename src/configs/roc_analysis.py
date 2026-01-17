@@ -1,101 +1,52 @@
 """Configuration for ROC analysis notebook.
 
 This module defines the hydra-zen configuration for the ROC curve analysis notebook.
-The configuration inherits from BaseConfig and adds ROC-specific parameters.
 
 Usage:
-    In notebook (using hydra-zen configuration):
+    In notebook:
 
-        from configs import load_all_configs
-        from configs.roc_analysis import ROCAnalysisConfigBuilds
-        from deriva_ml.execution import get_notebook_configuration
+        from deriva_ml.execution import run_notebook
 
-        load_all_configs()
-        config = get_notebook_configuration(
-            ROCAnalysisConfigBuilds,
-            config_name="roc_analysis",
-            overrides=["assets=roc_comparison_probabilities"],
-        )
+        ml, execution, config = run_notebook("roc_analysis")
+        # Ready to use!
+        # - config.assets: probability file RIDs
+        # - config.show_per_class: whether to show individual class curves
 
-    From command line (using deriva-ml-run-notebook):
+    From command line:
 
         deriva-ml-run-notebook notebooks/roc_analysis.ipynb \\
             --host localhost --catalog 45 \\
-            assets=roc_comparison_probabilities
+            assets=roc_quick_probabilities
 
 Configuration Groups:
     - deriva_ml: DerivaML connection settings (default_deriva, eye_ai, etc.)
     - assets: Asset RID lists for probability files (roc_quick_probabilities, etc.)
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from hydra_zen import builds, store
-
-from deriva_ml.execution import BaseConfig, base_defaults
-
-
-# ---------------------------------------------------------------------------
-# ROC Analysis Configuration
-# ---------------------------------------------------------------------------
+from deriva_ml.execution import BaseConfig, notebook_config
 
 
 @dataclass
 class ROCAnalysisConfig(BaseConfig):
     """Configuration for ROC analysis notebook.
 
-    Inherits standard DerivaML configuration fields from BaseConfig and adds
-    ROC-specific parameters. The assets field is used to specify which
-    prediction probability files to analyze.
-
     Attributes:
-        deriva_ml: DerivaML connection configuration.
-        assets: List of asset RIDs for prediction_probabilities.csv files.
-        description: Human-readable description of this analysis run.
-
-    Example:
-        >>> config = get_notebook_configuration(
-        ...     ROCAnalysisConfigBuilds,
-        ...     config_name="roc_analysis",
-        ...     overrides=["assets=roc_comparison_probabilities"],
-        ... )
-        >>> print(config.assets)  # ['42JE', '44KE']
+        show_per_class: If True, plot individual ROC curves for each class.
+            If False, only show micro/macro averaged curves.
+        confidence_threshold: Minimum confidence threshold for predictions
+            to be included in the analysis (0.0 to 1.0).
     """
 
-    # Note: All fields inherited from BaseConfig:
-    # - deriva_ml: DerivaML connection config
-    # - datasets: Dataset specs (not used for ROC analysis)
-    # - assets: Asset RIDs to load (this is the main input for ROC analysis)
-    # - dry_run: Skip catalog writes
-    # - description: Run description
-    pass
+    show_per_class: bool = True
+    confidence_threshold: float = 0.0
 
 
-# ---------------------------------------------------------------------------
-# Hydra-zen Configuration Builds
-# ---------------------------------------------------------------------------
-
-# Define defaults for ROC analysis notebook
-# We only need deriva_ml and assets for this notebook
-roc_analysis_defaults = [
-    "_self_",
-    {"deriva_ml": "default_deriva"},
-    {"assets": "roc_comparison_probabilities"},  # Default to comparison of both experiments
-]
-
-# Build the configuration class with hydra-zen
-ROCAnalysisConfigBuilds = builds(
-    ROCAnalysisConfig,
-    populate_full_signature=True,
-    hydra_defaults=roc_analysis_defaults,
+# Register the ROC analysis notebook configuration with custom parameters.
+notebook_config(
+    "roc_analysis",
+    config_class=ROCAnalysisConfig,
+    defaults={"assets": "roc_comparison_probabilities"},
+    description="ROC curve analysis",
 )
-
-# ---------------------------------------------------------------------------
-# Register with Hydra-Zen Store
-# ---------------------------------------------------------------------------
-
-roc_store = store(group="roc_analysis")
-roc_store(ROCAnalysisConfigBuilds, name="roc_analysis")
-
-# Also register as a top-level config for direct use
-store(ROCAnalysisConfigBuilds, name="roc_analysis")

@@ -82,57 +82,59 @@ store(ModelConfig, param1=val2, group="model_config", name="variant")
 
 ### Notebook Configuration Pattern
 
-Notebooks use hydra-zen configuration as the primary source of parameters. Each notebook should:
+Notebooks use the simplified `run_notebook()` API for initialization:
 
-1. **Define a config module** in `src/configs/` (e.g., `roc_analysis.py`):
+1. **Define a config module** in `src/configs/` (e.g., `my_analysis.py`):
+
+   Simple notebook (only standard fields):
    ```python
-   from dataclasses import dataclass
-   from hydra_zen import builds, store
-   from deriva_ml.execution import BaseConfig
+   from deriva_ml.execution import notebook_config
 
-   @dataclass
-   class MyNotebookConfig(BaseConfig):
-       """Configuration for my notebook."""
-       pass  # Add notebook-specific fields if needed
-
-   # Define defaults
-   notebook_defaults = [
-       "_self_",
-       {"deriva_ml": "default_deriva"},
-       {"assets": "my_default_assets"},
-   ]
-
-   # Build and register
-   MyNotebookConfigBuilds = builds(
-       MyNotebookConfig,
-       populate_full_signature=True,
-       hydra_defaults=notebook_defaults,
+   notebook_config(
+       "my_analysis",
+       defaults={"assets": "my_assets", "datasets": "my_dataset"},
    )
-   store(MyNotebookConfigBuilds, name="my_notebook")
    ```
 
-2. **Load configuration in the notebook**:
+   Notebook with custom parameters:
    ```python
-   from configs import load_all_configs
-   from configs.my_notebook import MyNotebookConfigBuilds
-   from deriva_ml.execution import get_notebook_configuration
+   from dataclasses import dataclass
+   from deriva_ml.execution import BaseConfig, notebook_config
 
-   load_all_configs()
-   config = get_notebook_configuration(
-       MyNotebookConfigBuilds,
-       config_name="my_notebook",
-       overrides=["assets=different_assets"],  # Optional overrides
+   @dataclass
+   class MyAnalysisConfig(BaseConfig):
+       threshold: float = 0.5
+       num_iterations: int = 100
+
+   notebook_config(
+       "my_analysis",
+       config_class=MyAnalysisConfig,
+       defaults={"assets": "my_assets"},
    )
+   ```
 
-   # Extract values from config
-   host = config.deriva_ml.hostname
-   catalog = config.deriva_ml.catalog_id
-   assets = config.assets
+2. **Initialize the notebook** (single call does everything):
+   ```python
+   from deriva_ml.execution import run_notebook
+
+   ml, execution, config = run_notebook("my_analysis")
+
+   # Ready to use:
+   # - ml: Connected DerivaML instance
+   # - execution: Execution context with downloaded inputs
+   # - config: Resolved configuration (config.assets, config.threshold, etc.)
+
+   # At the end of notebook:
+   execution.upload_execution_outputs()
    ```
 
 3. **Run notebook with overrides** (command line):
    ```bash
-   uv run deriva-ml-run-notebook notebooks/my_notebook.ipynb \
+   # Show available configuration options
+   uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb --info
+
+   # Run with overrides
+   uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb \
      --host localhost --catalog 45 \
      assets=different_assets
    ```

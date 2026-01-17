@@ -20,6 +20,12 @@ These guidelines are prescriptive, and you are encouraged to adopt them as a sta
 ## Coding standards
 - You *SHOULD* use an established doc string format for your code. DerivaML uses the Google docstring format. See: [Google Docstrings](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html)
 - You *SHOULD* use type hints wherever possible.
+- You *SHOULD* run linting and formatting before committing:
+  ```bash
+  uv run ruff check src/ --fix
+  uv run ruff format src/
+  ```
+- You *SHOULD* always check function/class signatures before modifying calls. Use `inspect.signature()` or check the source to verify required parameters before editing code that instantiates classes or calls functions.
 
 ## Versioning and releases
 - You *SHOULD* use `bump-version` to create version tags prior to running your model. DerivaML uses semantic versioning:

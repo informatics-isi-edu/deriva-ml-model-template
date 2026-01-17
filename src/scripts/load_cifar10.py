@@ -1200,7 +1200,7 @@ def main(args: argparse.Namespace | None = None) -> int:
 
             load-cifar10 --hostname localhost --create-catalog demo --num-images 100
 
-        Programmatic usage::
+        Programmatic usage::cre
 
             >>> args = argparse.Namespace(
             ...     hostname='localhost',
