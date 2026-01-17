@@ -52,10 +52,10 @@ multirun_comparison_weights = ["3JSE", "3KV8"]
 # Experiments using cifar10_labeled_split dataset (all images have ground truth labels)
 # Each asset list includes:
 #   - prediction_probabilities.csv (Execution_Asset)
-#   - configuration.json (Execution_Metadata) for experiment provenance
-roc_quick_probabilities = ["42JE", "42HE"]  # From cifar10_quick (exec 42H4) with labeled_split
-roc_extended_probabilities = ["44KE", "44JC"]  # From cifar10_extended (exec 44J4) with labeled_split
-roc_comparison_probabilities = ["42JE", "42HE", "44KE", "44JC"]
+#   - hydra config YAML (Execution_Metadata) for model configuration details
+roc_quick_probabilities = ["42JE", "42HG"]  # From cifar10_quick (exec 42H4) with labeled_split
+roc_extended_probabilities = ["44KE", "44J8"]  # From cifar10_extended (exec 44J4) with labeled_split
+roc_comparison_probabilities = ["42JE", "42HG", "44KE", "44J8"]
 
 # Legacy: multirun experiments (different test set, no ground truth overlap)
 multirun_quick_probabilities = ["3JSJ"]  # From cifar10_quick (3JRC)
