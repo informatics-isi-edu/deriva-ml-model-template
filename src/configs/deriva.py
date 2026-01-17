@@ -33,14 +33,6 @@ deriva_store(
     DerivaMLConfig,
     name="default_deriva",
     hostname="localhost",
-    catalog_id=45,
+    catalog_id=62,
     use_minid=False,
-)
-
-# Additional connection configurations
-deriva_store(
-    DerivaMLConfig,
-    name="eye-ai",
-    hostname="www.eye-ai.org",
-    catalog_id="eye-ai",
 )
