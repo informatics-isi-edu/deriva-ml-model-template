@@ -47,8 +47,14 @@ multirun_quick_weights = ["3JSE"]
 multirun_extended_weights = ["3KV8"]
 multirun_comparison_weights = ["3JSE", "3KV8"]
 
-# Prediction probability files from multirun experiments (catalog 45)
+# Prediction probability files from experiments (catalog 45)
 # These CSV files contain per-class probability distributions for ROC analysis
+# New experiments using cifar10_small_split dataset (has ground truth labels)
+roc_quick_probabilities = ["3PFT"]  # From cifar10_quick (3PEG)
+roc_extended_probabilities = ["3QHJ"]  # From cifar10_extended (3QG8)
+roc_comparison_probabilities = ["3PFT", "3QHJ"]
+
+# Legacy: multirun experiments (different test set, no ground truth overlap)
 multirun_quick_probabilities = ["3JSJ"]  # From cifar10_quick (3JRC)
 multirun_extended_probabilities = ["3KVC"]  # From cifar10_extended (3KT0)
 multirun_comparison_probabilities = ["3JSJ", "3KVC"]
@@ -71,6 +77,9 @@ asset_store(assets, name="default_asset")
 asset_store(multirun_quick_weights, name="multirun_quick_weights")
 asset_store(multirun_extended_weights, name="multirun_extended_weights")
 asset_store(multirun_comparison_weights, name="multirun_comparison_weights")
+asset_store(roc_quick_probabilities, name="roc_quick_probabilities")
+asset_store(roc_extended_probabilities, name="roc_extended_probabilities")
+asset_store(roc_comparison_probabilities, name="roc_comparison_probabilities")
 asset_store(multirun_quick_probabilities, name="multirun_quick_probabilities")
 asset_store(multirun_extended_probabilities, name="multirun_extended_probabilities")
 asset_store(multirun_comparison_probabilities, name="multirun_comparison_probabilities")
