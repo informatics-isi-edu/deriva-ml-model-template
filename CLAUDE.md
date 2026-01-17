@@ -14,11 +14,25 @@ uv sync                                    # Initialize environment
 uv sync --group=jupyter                   # Add Jupyter support
 uv sync --group=pytorch                   # Add PyTorch support
 
-# Running the model
-uv run src/deriva_run.py                           # Run with defaults
-uv run src/deriva_run.py model_config=cifar10_quick datasets=cifar10_small_training
-uv run src/deriva_run.py dry_run=true              # Dry run (no catalog writes)
-uv run src/deriva_run.py --multirun experiment=run1,run2  # Multiple experiments
+# Running models (uses Hydra config defaults for host/catalog)
+uv run deriva-ml-run                                  # Run with defaults
+uv run deriva-ml-run model_config=cifar10_quick      # Override model config
+uv run deriva-ml-run +experiment=cifar10_quick       # Use experiment preset
+uv run deriva-ml-run dry_run=true                    # Dry run (no catalog writes)
+uv run deriva-ml-run --multirun +experiment=cifar10_quick,cifar10_extended  # Multiple experiments
+uv run deriva-ml-run --info                          # Show available configs
+
+# Override host/catalog from command line
+uv run deriva-ml-run --host localhost --catalog 45 +experiment=cifar10_quick
+
+# Notebook execution (uses Hydra config defaults for host/catalog)
+uv run deriva-ml-run-notebook notebooks/notebook_template.ipynb
+uv run deriva-ml-run-notebook notebooks/notebook_template.ipynb assets=my_assets
+uv run deriva-ml-run-notebook notebooks/notebook_template.ipynb --info
+
+# Override host/catalog from command line
+uv run deriva-ml-run-notebook notebooks/notebook_template.ipynb \
+  --host www.eye-ai.org --catalog 2
 
 # Linting and formatting
 uv run ruff check src/
@@ -26,10 +40,6 @@ uv run ruff format src/
 
 # Testing
 uv run pytest
-
-# Notebook execution (reproducible, uploads to catalog)
-uv run deriva-ml-run-notebook notebooks/notebook_template.ipynb \
-  --host www.eye-ai.org --catalog 2 --kernel <repo-name>
 
 # Version management
 uv run bump-version major|minor|patch
@@ -78,7 +88,7 @@ store(ModelConfig, param1=val2, group="model_config", name="variant")
 
 ### Entry Point
 
-`src/deriva_run.py` - Main CLI using Hydra. Dynamically loads all config modules via `src/configs/__init__.py`.
+`deriva-ml-run` - CLI provided by deriva-ml. Loads config modules from `src/configs/` automatically.
 
 ### Notebook Configuration Pattern
 
@@ -160,11 +170,11 @@ When interacting with DerivaML catalogs, **always prefer MCP tools over writing 
 
 ```bash
 # Choose different configs (no + prefix for groups with defaults)
-uv run src/deriva_run.py datasets=cifar10_small_training model_config=cifar10_quick
+uv run deriva-ml-run datasets=cifar10_small_training model_config=cifar10_quick
 
 # Override specific fields (use + for adding new fields)
-uv run src/deriva_run.py model_config.epochs=50 model_config.learning_rate=0.01
+uv run deriva-ml-run model_config.epochs=50 model_config.learning_rate=0.01
 
 # Use experiment presets
-uv run src/deriva_run.py experiment=cifar10_extended
+uv run deriva-ml-run +experiment=cifar10_extended
 ```
