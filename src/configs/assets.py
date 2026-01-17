@@ -53,9 +53,10 @@ multirun_comparison_weights = ["3JSE", "3KV8"]
 # Each asset list includes:
 #   - prediction_probabilities.csv (Execution_Asset)
 #   - hydra config YAML (Execution_Metadata) for model configuration details
-roc_quick_probabilities = ["42JE", "42HG"]  # From cifar10_quick (exec 42H4) with labeled_split
-roc_extended_probabilities = ["44KE", "44J8"]  # From cifar10_extended (exec 44J4) with labeled_split
-roc_comparison_probabilities = ["42JE", "42HG", "44KE", "44J8"]
+# Updated 2026-01-17: Using assets from executions with config_choices support
+roc_quick_probabilities = ["49FW", "49ER"]  # From cifar10_quick (exec 49EJ) with labeled_split
+roc_extended_probabilities = ["4BGW", "4BFW"]  # From cifar10_extended (exec 4BFJ) with labeled_split
+roc_comparison_probabilities = ["49FW", "49ER", "4BGW", "4BFW"]
 
 # Legacy: multirun experiments (different test set, no ground truth overlap)
 multirun_quick_probabilities = ["3JSJ"]  # From cifar10_quick (3JRC)
