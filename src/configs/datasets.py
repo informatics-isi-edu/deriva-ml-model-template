@@ -39,26 +39,26 @@ from deriva_ml.dataset import DatasetSpecConfig
 # =============================================================================
 
 # Full datasets
-datasets_complete = [DatasetSpecConfig(rid="28CT", version="0.22.0")]  # Complete dataset with 10,000 images
+datasets_complete = [DatasetSpecConfig(rid="28CT", version="0.21.0")]  # Complete dataset with 10,000 images
 datasets_split = [DatasetSpecConfig(rid="28D4", version="0.22.0")]  # Split dataset (nested training + testing)
 datasets_training = [DatasetSpecConfig(rid="28DC", version="0.22.0")]  # Training set with 5,000 images
 datasets_testing = [DatasetSpecConfig(rid="28DP", version="0.22.0")]  # Testing set with 5,000 images (unlabeled)
 
 # Small datasets for quick testing
-datasets_small_split = [DatasetSpecConfig(rid="28EA", version="0.22.0")]  # Small split dataset with 1,000 images
-datasets_small_training = [DatasetSpecConfig(rid="28EJ", version="0.22.0")]  # Small training set with 500 images
-datasets_small_testing = [DatasetSpecConfig(rid="28EW", version="0.22.0")]  # Small testing set with 500 images
+datasets_small_split = [DatasetSpecConfig(rid="28EA", version="0.4.0")]  # Small split dataset with 1,000 images
+datasets_small_training = [DatasetSpecConfig(rid="28EJ", version="0.4.0")]  # Small training set with 500 images
+datasets_small_testing = [DatasetSpecConfig(rid="28EW", version="0.4.0")]  # Small testing set with 500 images
 
 # Labeled split dataset - created from training images only (all have ground truth)
 # This enables ROC analysis since both train and test partitions have labels
-datasets_labeled_split = [DatasetSpecConfig(rid="28FG", version="0.22.0")]  # 5000 images: 4000 train + 1000 test
-datasets_labeled_training = [DatasetSpecConfig(rid="28FT", version="0.22.0")]  # 4000 labeled training images
-datasets_labeled_testing = [DatasetSpecConfig(rid="28G4", version="0.22.0")]  # 1000 labeled test images (with ground truth!)
+datasets_labeled_split = [DatasetSpecConfig(rid="28FG", version="0.11.0")]  # 5000 images: 4000 train + 1000 test
+datasets_labeled_training = [DatasetSpecConfig(rid="28FT", version="0.11.0")]  # 4000 labeled training images
+datasets_labeled_testing = [DatasetSpecConfig(rid="28G4", version="0.11.0")]  # 1000 labeled test images (with ground truth!)
 
 # Small labeled datasets
-datasets_small_labeled_split = [DatasetSpecConfig(rid="28GR", version="0.22.0")]  # 500 images: 400 train + 100 test
-datasets_small_labeled_training = [DatasetSpecConfig(rid="28H2", version="0.22.0")]  # 400 labeled training images
-datasets_small_labeled_testing = [DatasetSpecConfig(rid="28HC", version="0.22.0")]  # 100 labeled test images
+datasets_small_labeled_split = [DatasetSpecConfig(rid="28GR", version="0.4.0")]  # 500 images: 400 train + 100 test
+datasets_small_labeled_training = [DatasetSpecConfig(rid="28H2", version="0.4.0")]  # 400 labeled training images
+datasets_small_labeled_testing = [DatasetSpecConfig(rid="28HC", version="0.4.0")]  # 100 labeled test images
 
 # =============================================================================
 # Store configurations in hydra-zen
