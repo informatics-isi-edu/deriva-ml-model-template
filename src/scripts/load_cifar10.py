@@ -510,6 +510,14 @@ def setup_workflow_type(ml: DerivaML) -> None:
             description="Workflows for training and evaluating image classification models",
         )
 
+    if "ROC Analysis Notebook" not in existing_types:
+        logger.info("Creating ROC Analysis Notebook workflow type...")
+        ml.add_term(
+            table="Workflow_Type",
+            term_name="ROC Analysis Notebook",
+            description="Jupyter notebook that computes ROC curves and AUC scores for classification experiments",
+        )
+
 
 def setup_dataset_types(ml: DerivaML) -> None:
     """Ensure required dataset types exist in Dataset_Type vocabulary.
