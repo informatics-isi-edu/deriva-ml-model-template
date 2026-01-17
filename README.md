@@ -28,7 +28,17 @@ Quick links:
 
 Use this template to create a new repository: [Creating a repository from a template](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template)
 
-### 2. Initialize Environment
+### 2. Enable GitHub Pages
+
+After creating your repository from this template, enable GitHub Pages for automatic documentation deployment:
+
+1. Go to your repository **Settings → Actions → General**
+2. Under "Workflow permissions", select **"Read and write permissions"**
+3. Save the changes
+
+The documentation workflow will automatically enable and deploy to GitHub Pages on your first push to main.
+
+### 3. Initialize Environment
 
 ```bash
 # Create environment and install dependencies
@@ -40,13 +50,13 @@ uv run nbstripout --install
 uv run deriva-ml-install-kernel
 ```
 
-### 3. Authenticate
+### 4. Authenticate
 
 ```bash
 uv run deriva-globus-auth-utils login --host www.eye-ai.org
 ```
 
-### 4. Run
+### 5. Run
 
 ```bash
 # Run the example model
