@@ -57,7 +57,16 @@ Cifar10CNNConfig = builds(
 model_store = store(group="model_config")
 
 # REQUIRED: default_model - used when no model config is specified
-model_store(Cifar10CNNConfig, name="default_model")
+model_store(
+    Cifar10CNNConfig,
+    name="default_model",
+    zen_meta={
+        "description": (
+            "Default CIFAR-10 CNN: 32→64 channels, 128 hidden units, 10 epochs, "
+            "batch size 64, lr=1e-3. Balanced config for standard training runs."
+        )
+    },
+)
 
 # Quick training - fewer epochs for testing
 model_store(
@@ -65,6 +74,12 @@ model_store(
     name="cifar10_quick",
     epochs=3,
     batch_size=128,
+    zen_meta={
+        "description": (
+            "Quick training config: 3 epochs, batch 128. Use for rapid iteration, "
+            "debugging, and verifying the training pipeline works correctly."
+        )
+    },
 )
 
 # Larger model - more capacity
@@ -75,6 +90,12 @@ model_store(
     conv2_channels=128,
     hidden_size=256,
     epochs=20,
+    zen_meta={
+        "description": (
+            "Large capacity model: 64→128 channels, 256 hidden units, 20 epochs. "
+            "More parameters for potentially better accuracy on complex patterns."
+        )
+    },
 )
 
 # With dropout for regularization
@@ -84,6 +105,12 @@ model_store(
     dropout_rate=0.25,
     weight_decay=1e-4,
     epochs=20,
+    zen_meta={
+        "description": (
+            "Regularized config: 25% dropout, weight decay 1e-4, 20 epochs. "
+            "Use to reduce overfitting when training on smaller datasets."
+        )
+    },
 )
 
 # Fast learning rate - may converge faster but less stable
@@ -92,6 +119,12 @@ model_store(
     name="cifar10_fast_lr",
     learning_rate=1e-2,
     epochs=15,
+    zen_meta={
+        "description": (
+            "Fast learning rate (1e-2): May converge faster but can be unstable. "
+            "15 epochs. Try this when default lr converges too slowly."
+        )
+    },
 )
 
 # Slow learning rate - more stable, may need more epochs
@@ -100,6 +133,12 @@ model_store(
     name="cifar10_slow_lr",
     learning_rate=1e-4,
     epochs=30,
+    zen_meta={
+        "description": (
+            "Slow learning rate (1e-4): More stable convergence, 30 epochs. "
+            "Use when training is unstable or for fine-tuning pretrained weights."
+        )
+    },
 )
 
 # Extended training - for best accuracy
@@ -113,6 +152,13 @@ model_store(
     weight_decay=1e-4,
     learning_rate=1e-3,
     epochs=50,
+    zen_meta={
+        "description": (
+            "Extended training for best accuracy: Large model (64→128 ch, 256 hidden), "
+            "regularization (dropout 0.25, weight decay 1e-4), 50 epochs. "
+            "Use for final production training when accuracy is the priority."
+        )
+    },
 )
 
 # Test-only mode - load weights and run evaluation without training
@@ -122,5 +168,11 @@ model_store(
     name="cifar10_test_only",
     test_only=True,
     weights_filename="cifar10_cnn_weights.pt",
+    zen_meta={
+        "description": (
+            "Test-only mode: Skips training, loads pretrained weights from assets, "
+            "runs inference on dataset. Requires assets with cifar10_cnn_weights.pt. "
+            "Use for evaluation and generating predictions on new data."
+        )
+    },
 )
-
