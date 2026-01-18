@@ -154,6 +154,71 @@ Your datasets need:
 - A `Label` column with class names
 - Dataset types "Training" and "Testing" to separate splits
 
+## Dataset Configurations
+
+The template includes pre-configured datasets for different use cases. Understanding the difference between labeled and unlabeled datasets is critical for proper evaluation.
+
+### Labeled vs Unlabeled Datasets
+
+**Unlabeled Split Datasets** (`cifar10_split`, `cifar10_small_split`):
+
+- Created from the full CIFAR-10 data (50,000 training + 10,000 test images)
+- The test partition contains images that do NOT have ground truth labels in the catalog
+- Suitable for training runs where you don't need to evaluate against ground truth
+- Cannot be used for ROC analysis or accuracy metrics on test data
+
+**Labeled Split Datasets** (`cifar10_labeled_split`, `cifar10_small_labeled_split`):
+
+- Created from training images only (which all have ground truth labels)
+- Both train AND test partitions have ground truth labels available
+- **Required** for any experiment needing evaluation metrics or ROC analysis
+- The "test" set is a held-out portion of the labeled training data
+
+### Available Dataset Configurations
+
+| Configuration | RID | Images | Description |
+|--------------|-----|--------|-------------|
+| **Full Datasets** |
+| `cifar10_complete` | 28CT | 10,000 | Complete dataset (all images) |
+| `cifar10_split` | 28D4 | 10,000 | Split: 5,000 train + 5,000 test (unlabeled) |
+| `cifar10_training` | 28DC | 5,000 | Training set only |
+| `cifar10_testing` | 28DP | 5,000 | Testing set only (unlabeled) |
+| **Small Datasets** |
+| `cifar10_small_split` | 28EA | 1,000 | Split: 500 train + 500 test (unlabeled) |
+| `cifar10_small_training` | 28EJ | 500 | Small training set |
+| `cifar10_small_testing` | 28EW | 500 | Small testing set (unlabeled) |
+| **Labeled Split Datasets** (for evaluation) |
+| `cifar10_labeled_split` | 28FG | 5,000 | Split: 4,000 train + 1,000 test (both labeled) |
+| `cifar10_labeled_training` | 28FT | 4,000 | Labeled training set |
+| `cifar10_labeled_testing` | 28G4 | 1,000 | Labeled testing set |
+| `cifar10_small_labeled_split` | 28GR | 500 | Split: 400 train + 100 test (both labeled) |
+| `cifar10_small_labeled_training` | 28H2 | 400 | Small labeled training set |
+| `cifar10_small_labeled_testing` | 28HC | 100 | Small labeled testing set |
+
+### Choosing the Right Dataset
+
+Use this decision tree:
+
+1. **Will you compute accuracy, ROC curves, or other metrics on test predictions?**
+   - YES → Use `cifar10_labeled_split` or `cifar10_small_labeled_split`
+   - NO → Any dataset is fine
+
+2. **Do you need fast iteration during development?**
+   - YES → Use small datasets (`cifar10_small_*`)
+   - NO → Use full datasets
+
+3. **Examples:**
+   ```bash
+   # Quick training with evaluation (recommended for experiments)
+   uv run deriva-ml-run +experiment=cifar10_quick  # Uses cifar10_small_labeled_split
+
+   # Training only, no evaluation needed
+   uv run deriva-ml-run datasets=cifar10_training model_config=cifar10_default
+
+   # Full evaluation run
+   uv run deriva-ml-run +experiment=cifar10_extended  # Uses cifar10_labeled_split
+   ```
+
 ## Model Outputs
 
 The model produces:

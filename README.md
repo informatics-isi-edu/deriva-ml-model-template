@@ -110,8 +110,24 @@ The template includes a complete CIFAR-10 CNN example. See the [CIFAR-10 documen
 uv run load-cifar10 --host dev.eye-ai.org --catalog_id 5 --num_images 500
 
 # Train the model
-uv run src/deriva_run.py model_config=cifar10_default
+uv run deriva-ml-run model_config=cifar10_default
+
+# Run an experiment with evaluation
+uv run deriva-ml-run +experiment=cifar10_quick
 ```
+
+### Dataset Types
+
+The CIFAR-10 example includes multiple dataset configurations:
+
+| Type | Use Case |
+|------|----------|
+| `cifar10_small_labeled_split` | Quick experiments with evaluation (recommended) |
+| `cifar10_labeled_split` | Full experiments with evaluation |
+| `cifar10_small_split` | Quick training without evaluation |
+| `cifar10_split` | Full training without evaluation |
+
+**Important:** For ROC analysis or accuracy metrics, use the **labeled** datasets. The unlabeled datasets have test images without ground truth labels.
 
 ## Using MCP Tools with AI Assistants
 
