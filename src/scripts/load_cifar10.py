@@ -413,9 +413,9 @@ def setup_table_annotations(ml: DerivaML) -> None:
         thumbnail_column = PseudoColumn(
             source="URL",
             markdown_name="Thumbnail",
-            display={
-                "markdown_pattern": "[![{{{Filename}}}]({{{URL}}})]({{{URL}}})"
-            }
+            display=ColumnDisplayOptions(
+                markdown_pattern="[![{{{Filename}}}]({{{URL}}})]({{{URL}}})"
+            )
         )
 
         vc = VisibleColumns()
@@ -469,7 +469,12 @@ def setup_table_annotations(ml: DerivaML) -> None:
         logger.info("  Configured Image_Class vocabulary annotations")
 
     # Configure Image_Classification feature table
-    image_classification_table = ml.model.name_to_table("Image_Classification")
+    # Look up the feature to get its table (avoids hardcoding internal naming convention)
+    try:
+        feature = ml.lookup_feature("Image", "Image_Classification")
+        image_classification_table = feature.feature_table
+    except Exception:
+        image_classification_table = None
     if image_classification_table:
         handle = TableHandle(image_classification_table)
 
