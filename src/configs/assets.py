@@ -254,21 +254,104 @@ asset_store(grid_all_probabilities, name="grid_all_probabilities")
 asset_store(test_only_evaluation_results, name="test_only_evaluation_results")
 
 # =============================================================================
+# Labeled Dataset Experiments (for ROC analysis)
+# =============================================================================
+# These experiments use labeled split datasets where both train and test
+# partitions have ground truth labels, enabling proper ROC analysis.
+
+# -----------------------------------------------------------------------------
+# quick_vs_extended_labeled multirun (parent: 50DE) - Small labeled dataset
+# -----------------------------------------------------------------------------
+# Child executions:
+#   - cifar10_quick (50EJ): 3 epochs, 32→64 channels, batch 128
+#   - cifar10_extended (50Q6): 50 epochs, 64→128 channels, dropout 0.25, weight decay 1e-4
+
+labeled_quick_probabilities = ["50FR"]  # prediction_probabilities.csv from cifar10_quick
+labeled_extended_probabilities = ["50RJ"]  # prediction_probabilities.csv from cifar10_extended
+labeled_comparison_probabilities = ["50FR", "50RJ"]  # Both probability files
+
+# -----------------------------------------------------------------------------
+# lr_sweep_labeled multirun (parent: 510R) - Learning rate sweep with labeled data
+# -----------------------------------------------------------------------------
+# Child executions:
+#   - lr=0.0001 (511W): 10 epochs, 32→64 channels, batch 128
+#   - lr=0.001 (51AG): 10 epochs, 32→64 channels, batch 128
+#   - lr=0.01 (51KA): 10 epochs, 32→64 channels, batch 128
+#   - lr=0.1 (51W4): 10 epochs, 32→64 channels, batch 128
+
+labeled_lr_sweep_0001_probabilities = ["5132"]  # prediction_probabilities.csv, lr=0.0001
+labeled_lr_sweep_001_probabilities = ["51BW"]  # prediction_probabilities.csv, lr=0.001
+labeled_lr_sweep_01_probabilities = ["51MP"]  # prediction_probabilities.csv, lr=0.01
+labeled_lr_sweep_1_probabilities = ["51XG"]  # prediction_probabilities.csv, lr=0.1
+labeled_lr_sweep_all_probabilities = ["5132", "51BW", "51MP", "51XG"]  # All lr sweep probabilities
+
+# -----------------------------------------------------------------------------
+# epoch_sweep_labeled multirun (parent: 525P) - Epoch sweep with labeled data
+# -----------------------------------------------------------------------------
+# Child executions:
+#   - epochs=5 (526T): 64→128 channels, 256 hidden, dropout 0.25, weight decay 1e-4
+#   - epochs=10 (52FE): 64→128 channels, 256 hidden, dropout 0.25, weight decay 1e-4
+#   - epochs=25 (52R8): 64→128 channels, 256 hidden, dropout 0.25, weight decay 1e-4
+#   - epochs=50 (5312): 64→128 channels, 256 hidden, dropout 0.25, weight decay 1e-4
+
+labeled_epoch_sweep_5_probabilities = ["5280"]  # prediction_probabilities.csv, epochs=5
+labeled_epoch_sweep_10_probabilities = ["52GT"]  # prediction_probabilities.csv, epochs=10
+labeled_epoch_sweep_25_probabilities = ["52SM"]  # prediction_probabilities.csv, epochs=25
+labeled_epoch_sweep_50_probabilities = ["532E"]  # prediction_probabilities.csv, epochs=50
+labeled_epoch_sweep_all_probabilities = ["5280", "52GT", "52SM", "532E"]  # All epoch sweep probabilities
+
+# -----------------------------------------------------------------------------
+# lr_batch_grid_labeled multirun (parent: 53AM) - Grid search with labeled data
+# -----------------------------------------------------------------------------
+# Child executions (2x2 grid):
+#   - lr=0.001, batch=64 (53BR): 10 epochs, 32→64 channels
+#   - lr=0.001, batch=128 (53MC): 10 epochs, 32→64 channels
+#   - lr=0.01, batch=64 (53X6): 10 epochs, 32→64 channels
+#   - lr=0.01, batch=128 (5460): 10 epochs, 32→64 channels
+
+labeled_grid_lr001_batch64_probabilities = ["53CY"]  # prediction_probabilities.csv, lr=0.001, batch=64
+labeled_grid_lr001_batch128_probabilities = ["53NR"]  # prediction_probabilities.csv, lr=0.001, batch=128
+labeled_grid_lr01_batch64_probabilities = ["53YJ"]  # prediction_probabilities.csv, lr=0.01, batch=64
+labeled_grid_lr01_batch128_probabilities = ["547C"]  # prediction_probabilities.csv, lr=0.01, batch=128
+labeled_grid_all_probabilities = ["53CY", "53NR", "53YJ", "547C"]  # All grid search probabilities
+
+# Register labeled experiment assets
+asset_store(labeled_quick_probabilities, name="labeled_quick_probabilities")
+asset_store(labeled_extended_probabilities, name="labeled_extended_probabilities")
+asset_store(labeled_comparison_probabilities, name="labeled_comparison_probabilities")
+
+asset_store(labeled_lr_sweep_0001_probabilities, name="labeled_lr_sweep_0001_probabilities")
+asset_store(labeled_lr_sweep_001_probabilities, name="labeled_lr_sweep_001_probabilities")
+asset_store(labeled_lr_sweep_01_probabilities, name="labeled_lr_sweep_01_probabilities")
+asset_store(labeled_lr_sweep_1_probabilities, name="labeled_lr_sweep_1_probabilities")
+asset_store(labeled_lr_sweep_all_probabilities, name="labeled_lr_sweep_all_probabilities")
+
+asset_store(labeled_epoch_sweep_5_probabilities, name="labeled_epoch_sweep_5_probabilities")
+asset_store(labeled_epoch_sweep_10_probabilities, name="labeled_epoch_sweep_10_probabilities")
+asset_store(labeled_epoch_sweep_25_probabilities, name="labeled_epoch_sweep_25_probabilities")
+asset_store(labeled_epoch_sweep_50_probabilities, name="labeled_epoch_sweep_50_probabilities")
+asset_store(labeled_epoch_sweep_all_probabilities, name="labeled_epoch_sweep_all_probabilities")
+
+asset_store(labeled_grid_lr001_batch64_probabilities, name="labeled_grid_lr001_batch64_probabilities")
+asset_store(labeled_grid_lr001_batch128_probabilities, name="labeled_grid_lr001_batch128_probabilities")
+asset_store(labeled_grid_lr01_batch64_probabilities, name="labeled_grid_lr01_batch64_probabilities")
+asset_store(labeled_grid_lr01_batch128_probabilities, name="labeled_grid_lr01_batch128_probabilities")
+asset_store(labeled_grid_all_probabilities, name="labeled_grid_all_probabilities")
+
+# =============================================================================
 # ROC Analysis Asset Configurations
 # =============================================================================
 # Named configurations for ROC analysis notebook
+# These point to the labeled dataset experiments for proper ground truth matching
 
-# Quick vs Extended comparison (small dataset)
-asset_store(multirun_comparison_probabilities, name="roc_quick_vs_extended")
+# Quick vs Extended comparison (small labeled dataset)
+asset_store(labeled_comparison_probabilities, name="roc_quick_vs_extended")
 
-# Quick vs Extended comparison (full dataset)
-asset_store(full_comparison_probabilities, name="roc_full_quick_vs_extended")
+# Learning rate sweep comparison (labeled)
+asset_store(labeled_lr_sweep_all_probabilities, name="roc_lr_sweep")
 
-# Learning rate sweep comparison
-asset_store(lr_sweep_all_probabilities, name="roc_lr_sweep")
+# Epoch sweep comparison (labeled)
+asset_store(labeled_epoch_sweep_all_probabilities, name="roc_epoch_sweep")
 
-# Epoch sweep comparison
-asset_store(epoch_sweep_all_probabilities, name="roc_epoch_sweep")
-
-# LR x Batch grid search comparison
-asset_store(grid_all_probabilities, name="roc_lr_batch_grid")
+# LR x Batch grid search comparison (labeled)
+asset_store(labeled_grid_all_probabilities, name="roc_lr_batch_grid")
