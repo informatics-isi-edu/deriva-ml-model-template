@@ -60,53 +60,52 @@ class ROCAnalysisConfig(BaseConfig):
 # ROC Analysis Notebook Configurations
 # =============================================================================
 
-# Default: Quick vs Extended comparison on small dataset
+# Default: Use test-only prediction probabilities
 notebook_config(
     "roc_analysis",
     config_class=ROCAnalysisConfig,
-    defaults={"assets": "roc_quick_vs_extended"},
-    description="ROC curve analysis (default: quick vs extended)",
+    defaults={"assets": "roc_test_only"},
+    description="ROC curve analysis (default: test-only predictions)",
 )
 
 # -----------------------------------------------------------------------------
-# Quick vs Extended Comparisons
+# Model Comparison Configurations
 # -----------------------------------------------------------------------------
+# NOTE: To run these configs with full ROC comparison, first run test-only mode
+# on each trained model to generate prediction_probabilities.csv files, then
+# update assets.py with the corresponding asset RIDs.
 
 notebook_config(
     "roc_quick_vs_extended",
     config_class=ROCAnalysisConfig,
-    defaults={"assets": "roc_quick_vs_extended"},
-    description="ROC analysis: quick vs extended training (small dataset, 1000 images)",
+    defaults={"assets": "roc_test_only"},  # TODO: Update when comparison probabilities exist
+    description="ROC analysis: quick vs extended training (needs prediction files)",
 )
 
 notebook_config(
     "roc_full_quick_vs_extended",
     config_class=ROCAnalysisConfig,
-    defaults={"assets": "roc_full_quick_vs_extended"},
-    description="ROC analysis: quick vs extended training (full dataset, 10000 images)",
+    defaults={"assets": "roc_test_only"},  # TODO: Update when comparison probabilities exist
+    description="ROC analysis: quick vs extended training (full dataset)",
 )
-
-# -----------------------------------------------------------------------------
-# Hyperparameter Sweep Comparisons
-# -----------------------------------------------------------------------------
 
 notebook_config(
     "roc_lr_sweep",
     config_class=ROCAnalysisConfig,
-    defaults={"assets": "roc_lr_sweep"},
-    description="ROC analysis: learning rate sweep (0.0001, 0.001, 0.01, 0.1)",
+    defaults={"assets": "roc_test_only"},  # TODO: Update when comparison probabilities exist
+    description="ROC analysis: learning rate sweep (needs prediction files)",
 )
 
 notebook_config(
     "roc_epoch_sweep",
     config_class=ROCAnalysisConfig,
-    defaults={"assets": "roc_epoch_sweep"},
-    description="ROC analysis: epoch sweep (5, 10, 25, 50 epochs)",
+    defaults={"assets": "roc_test_only"},  # TODO: Update when comparison probabilities exist
+    description="ROC analysis: epoch sweep (needs prediction files)",
 )
 
 notebook_config(
     "roc_lr_batch_grid",
     config_class=ROCAnalysisConfig,
-    defaults={"assets": "roc_lr_batch_grid"},
-    description="ROC analysis: LR x batch size grid search (2x2)",
+    defaults={"assets": "roc_test_only"},  # TODO: Update when comparison probabilities exist
+    description="ROC analysis: LR x batch size grid (needs prediction files)",
 )
