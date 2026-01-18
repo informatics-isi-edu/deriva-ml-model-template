@@ -478,7 +478,10 @@ For each notebook run:
    - Commit all changes before running: `git add -A && git commit -m "message"`
 
 3. **Dataset version mismatch**
-   - If you added labels after creating dataset versions, call `increment_dataset_version` first
+   - If labels were added after creating the dataset and you need to use those labels, you must:
+     1. Call `increment_dataset_version` on the dataset to create a new version that includes the labels
+     2. Update the dataset spec in `src/configs/datasets.py` to reference the new version number
+   - The bag download only includes assets that were part of the dataset at the specified version
 
 4. **Missing ground truth in test set**
    - Use `*_labeled_split` datasets for ROC analysis, not regular `*_split`
