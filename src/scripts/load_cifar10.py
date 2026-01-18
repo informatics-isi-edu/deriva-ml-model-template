@@ -371,6 +371,132 @@ def iter_images(
 # =============================================================================
 
 
+def setup_table_annotations(ml: DerivaML) -> None:
+    """Configure display annotations for domain tables.
+
+    Sets up Chaise display annotations to improve the web interface:
+    - Friendly display names for tables
+    - Visible columns configuration
+    - Row name patterns for dropdowns
+    - Image thumbnail display
+
+    Args:
+        ml: Connected DerivaML instance.
+    """
+    from deriva_ml.model import (
+        TableHandle,
+        Display,
+        VisibleColumns,
+        TableDisplay,
+        TableDisplayOptions,
+        ColumnDisplay,
+        ColumnDisplayOptions,
+        PseudoColumn,
+        SortKey,
+    )
+
+    logger.info("Configuring table display annotations...")
+
+    # Configure Image table
+    image_table = ml.model.name_to_table("Image")
+    if image_table:
+        handle = TableHandle(image_table)
+
+        # Set display name and description
+        handle.set_annotation(Display(
+            name="Images",
+            comment="CIFAR-10 32x32 RGB images for classification"
+        ))
+
+        # Configure visible columns with thumbnail pseudo-column
+        # Create a pseudo-column for thumbnail display
+        thumbnail_column = PseudoColumn(
+            source="URL",
+            markdown_name="Thumbnail",
+            display={
+                "markdown_pattern": "[![{{{Filename}}}]({{{URL}}})]({{{URL}}})"
+            }
+        )
+
+        vc = VisibleColumns()
+        vc.compact([
+            "RID",
+            thumbnail_column,
+            "Filename",
+            "Length",
+        ])
+        vc.detailed([
+            "RID",
+            thumbnail_column,
+            "Filename",
+            "URL",
+            "Length",
+            "MD5",
+            "Description",
+            "RCT",
+            "RMT"
+        ])
+        vc.entry(["Filename", "Description"])
+        handle.set_annotation(vc)
+
+        # Set row name pattern (shows filename in dropdowns)
+        td = TableDisplay()
+        td.row_name("{{{Filename}}}")
+        td.compact(TableDisplayOptions(
+            row_order=[SortKey("Filename")],
+            page_size=25
+        ))
+        handle.set_annotation(td)
+
+        logger.info("  Configured Image table annotations")
+
+    # Configure Image_Class vocabulary
+    image_class_table = ml.model.name_to_table("Image_Class")
+    if image_class_table:
+        handle = TableHandle(image_class_table)
+
+        # Set display name
+        handle.set_annotation(Display(
+            name="Image Classes",
+            comment="CIFAR-10 classification categories (10 classes)"
+        ))
+
+        # Set row name pattern
+        td = TableDisplay()
+        td.row_name("{{{Name}}}")
+        handle.set_annotation(td)
+
+        logger.info("  Configured Image_Class vocabulary annotations")
+
+    # Configure Image_Classification feature table
+    image_classification_table = ml.model.name_to_table("Image_Classification")
+    if image_classification_table:
+        handle = TableHandle(image_classification_table)
+
+        # Set display name
+        handle.set_annotation(Display(
+            name="Image Classifications",
+            comment="Class labels and confidence scores for images"
+        ))
+
+        # Configure visible columns
+        vc = VisibleColumns()
+        vc.compact(["RID", "Image", "Image_Class", "Confidence"])
+        vc.detailed(["RID", "Image", "Image_Class", "Confidence", "Execution", "RCT"])
+        handle.set_annotation(vc)
+
+        # Set row name pattern
+        td = TableDisplay()
+        td.row_name("{{{Image}}} → {{{Image_Class}}}")
+        td.compact(TableDisplayOptions(
+            row_order=[SortKey("Image")],
+            page_size=50
+        ))
+        handle.set_annotation(td)
+
+        logger.info("  Configured Image_Classification table annotations")
+
+
 def setup_domain_model(ml: DerivaML) -> dict[str, Any]:
     """Create the CIFAR-10 domain model in the catalog.
 
@@ -393,7 +519,7 @@ def setup_domain_model(ml: DerivaML) -> dict[str, Any]:
         Creates:
         - `Image_Class` vocabulary with 10 CIFAR-10 class terms
         - `Image` asset table for storing image files
-        - `Image_Classification` y select linking images to classes
+        - `Image_Classification` feature linking images to classes
     """
     results = {}
 
@@ -1266,6 +1392,9 @@ def main(args: argparse.Namespace | None = None) -> int:
     logger.info("Setting up domain model...")
     setup_domain_model(ml)
     logger.info("Domain model setup complete")
+
+    # Configure table display annotations
+    setup_table_annotations(ml)
 
     # Apply catalog annotations for Chaise web interface
     logger.info("Applying catalog annotations...")
