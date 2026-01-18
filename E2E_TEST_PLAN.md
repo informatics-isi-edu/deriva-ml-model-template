@@ -63,7 +63,21 @@ store(
 )
 ```
 
-### Step 1.4: Commit Changes
+### Step 1.4: Validate Configuration
+
+Before running experiments, validate that all RIDs in the configuration exist:
+
+```bash
+# Using MCP tool
+mcp__deriva-ml__validate_rids(
+    dataset_rids=["<DATASET_RIDS_FROM_CONFIGS>"],
+    dataset_versions={"<RID>": "<VERSION>"},
+)
+```
+
+**Expected Output:** `is_valid: true` with no errors. Warnings for missing descriptions are OK but should be addressed.
+
+### Step 1.5: Commit Changes
 
 **CRITICAL:** DerivaML tracks code provenance. All code must be committed before running models.
 
@@ -469,24 +483,11 @@ For each notebook run:
 
 ## Troubleshooting
 
-### Common Issues
+For general DerivaML troubleshooting (connection issues, code provenance, dataset versioning, labeled vs unlabeled splits), see the DerivaML MCP server instructions.
 
-1. **"Not connected to catalog"**
-   - Always call `mcp__deriva-ml__connect_catalog` first
+### Project-Specific Issues
 
-2. **Code provenance warning**
-   - Commit all changes before running: `git add -A && git commit -m "message"`
-
-3. **Dataset version mismatch**
-   - If labels were added after creating the dataset and you need to use those labels, you must:
-     1. Call `increment_dataset_version` on the dataset to create a new version that includes the labels
-     2. Update the dataset spec in `src/configs/datasets.py` to reference the new version number
-   - The bag download only includes assets that were part of the dataset at the specified version
-
-4. **Missing ground truth in test set**
-   - Use `*_labeled_split` datasets for ROC analysis, not regular `*_split`
-
-5. **CUDA out of memory**
+1. **CUDA out of memory**
    - Reduce batch size: `model_config.batch_size=32`
 
 ---
