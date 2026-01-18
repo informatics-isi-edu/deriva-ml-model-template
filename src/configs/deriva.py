@@ -35,4 +35,10 @@ deriva_store(
     hostname="localhost",
     catalog_id=65,
     use_minid=False,
+    zen_meta={
+        "description": (
+            "Local development catalog (localhost:65) with CIFAR-10 data. "
+            "Schema: cifar10. Use for local testing and development."
+        )
+    },
 )
