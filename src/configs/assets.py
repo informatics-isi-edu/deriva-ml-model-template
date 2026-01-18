@@ -238,3 +238,27 @@ asset_store(
     ),
     name="e2e_test_weights",
 )
+
+# -----------------------------------------------------------------------------
+# Prediction probability assets (from test-only runs)
+# -----------------------------------------------------------------------------
+# These are used for ROC analysis notebooks
+
+asset_store(
+    with_description(
+        ["MDJ"],
+        "Prediction probabilities from test-only run using cifar10_quick weights. "
+        "Contains class probabilities for 100 labeled test images. Source: execution MC8.",
+    ),
+    name="test_only_quick_probabilities",
+)
+
+# ROC analysis asset configuration
+asset_store(
+    with_description(
+        ["MDJ"],
+        "ROC analysis: Single model evaluation on labeled test data. "
+        "Use with roc_analysis notebook for performance metrics.",
+    ),
+    name="roc_test_only",
+)
