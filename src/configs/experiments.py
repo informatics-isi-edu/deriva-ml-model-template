@@ -26,7 +26,12 @@ Reference:
 from hydra_zen import make_config, store
 
 from configs.base import DerivaModelConfig
-from configs.sweeps import QUICK_VS_EXTENDED_DESCRIPTION, FULL_DATASET_DESCRIPTION
+from configs.sweeps import (
+    QUICK_VS_EXTENDED_DESCRIPTION,
+    FULL_DATASET_DESCRIPTION,
+    LEARNING_RATE_SWEEP_DESCRIPTION,
+    EPOCH_SWEEP_DESCRIPTION,
+)
 
 # Use _global_ package to allow overrides at the root level
 experiment_store = store(group="experiment", package="_global_")
@@ -117,4 +122,43 @@ experiment_store(
         bases=(DerivaModelConfig,),
     ),
     name="cifar10_test_only",
+)
+
+# =============================================================================
+# Hyperparameter Sweep Experiments
+# =============================================================================
+# These experiments are designed for parameter sweeps using --multirun
+
+# Learning rate sweep base experiment
+# Usage: uv run deriva-ml-run --multirun +experiment=cifar10_lr_sweep \
+#            model_config.learning_rate=0.0001,0.001,0.01,0.1
+experiment_store(
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "cifar10_lr_sweep"},
+            {"override /datasets": "cifar10_small_split"},
+        ],
+        description="Learning rate sweep: exploring convergence across learning rates",
+        sweep_description=LEARNING_RATE_SWEEP_DESCRIPTION,
+        bases=(DerivaModelConfig,),
+    ),
+    name="cifar10_lr_sweep",
+)
+
+# Epoch sweep base experiment
+# Usage: uv run deriva-ml-run --multirun +experiment=cifar10_epoch_sweep \
+#            model_config.epochs=5,10,25,50
+experiment_store(
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "cifar10_epoch_sweep"},
+            {"override /datasets": "cifar10_small_split"},
+        ],
+        description="Epoch sweep: analyzing training duration effects",
+        sweep_description=EPOCH_SWEEP_DESCRIPTION,
+        bases=(DerivaModelConfig,),
+    ),
+    name="cifar10_epoch_sweep",
 )

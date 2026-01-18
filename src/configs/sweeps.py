@@ -80,3 +80,90 @@ FULL_DATASET_DESCRIPTION = """## CIFAR-10 Full Dataset Comparison
 - Extended model should show less overfitting with more training data
 - Use this sweep for final model selection before production
 """
+
+# =============================================================================
+# Learning Rate Sweep
+# =============================================================================
+# Explores the effect of learning rate on model convergence and final accuracy
+
+LEARNING_RATE_SWEEP_DESCRIPTION = """## Learning Rate Hyperparameter Sweep
+
+**Objective:** Identify the optimal learning rate for the CIFAR-10 CNN architecture
+by comparing training dynamics across a range of values.
+
+### Experiments
+
+| Learning Rate | Expected Behavior |
+|--------------|-------------------|
+| 0.0001 | Slow convergence, may underfit in limited epochs |
+| 0.001 | Standard rate, good balance of speed and stability |
+| 0.01 | Fast convergence, risk of overshooting minima |
+| 0.1 | Aggressive, likely unstable training |
+
+### Methodology
+
+All experiments use the same:
+- Architecture: 32→64 channels, 128 hidden units
+- Dataset: Small Split (1,000 images)
+- Epochs: 10 (enough to observe convergence behavior)
+- Batch size: 128
+
+### Metrics to Compare
+
+- Training loss curve shape
+- Final training/test accuracy
+- Presence of training instability (loss spikes)
+- Generalization gap (train vs test accuracy)
+
+### Command
+
+```bash
+uv run deriva-ml-run --multirun \\
+    +experiment=cifar10_lr_sweep \\
+    model_config.learning_rate=0.0001,0.001,0.01,0.1
+```
+"""
+
+# =============================================================================
+# Epoch Sweep
+# =============================================================================
+# Explores the effect of training duration on model performance
+
+EPOCH_SWEEP_DESCRIPTION = """## Training Duration (Epochs) Sweep
+
+**Objective:** Analyze how training duration affects model performance and identify
+the point of diminishing returns or overfitting onset.
+
+### Experiments
+
+| Epochs | Expected Behavior |
+|--------|-------------------|
+| 5 | Underfitting, model still learning basic features |
+| 10 | Reasonable performance, may still be improving |
+| 25 | Good performance, watch for overfitting signs |
+| 50 | Extended training, likely overfitting on small dataset |
+
+### Methodology
+
+All experiments use the same:
+- Architecture: 64→128 channels, 256 hidden units (extended config)
+- Dataset: Small Split (1,000 images)
+- Learning rate: 0.001
+- Batch size: 64
+- Regularization: Dropout 0.25, weight decay 1e-4
+
+### Metrics to Compare
+
+- Training vs test accuracy divergence (overfitting indicator)
+- Final test accuracy plateau
+- Training time per epoch
+- Optimal early stopping point
+
+### Command
+
+```bash
+uv run deriva-ml-run --multirun \\
+    +experiment=cifar10_epoch_sweep \\
+    model_config.epochs=5,10,25,50
+```
+"""
