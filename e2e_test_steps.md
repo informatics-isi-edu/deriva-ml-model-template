@@ -159,3 +159,228 @@ uv run deriva-ml-run --multirun +experiment=cifar10_quick,cifar10_extended
 - Documented experiment rationale and expected outcomes
 - Reusable, named experiment combinations
 - Bypasses Hydra command-line parsing limitations for special characters
+
+---
+
+## Catalog Migration to 65
+
+Migrated to catalog 65 with updated schema name `cifar10` (instead of `cifar-10`).
+
+### Configuration Updates
+- Updated `src/configs/deriva.py`: catalog_id = 65
+- Updated all RIDs in `src/configs/datasets.py` and `src/configs/assets.py`
+
+---
+
+## Hyperparameter Sweep Experiments
+
+### 6. Learning Rate Sweep
+
+```bash
+uv run deriva-ml-run --host localhost --catalog 65 --multirun +multirun=lr_sweep
+```
+
+**Configuration:** 10 epochs, 32→64 channels, batch 128, varying learning rates
+
+| Learning Rate | Execution | Test Accuracy |
+|--------------|-----------|---------------|
+| 0.0001 | 511W | 18% |
+| 0.001 | 51AG | 35% |
+| 0.01 | 51KA | 29% |
+| 0.1 | 51W4 | 6% |
+
+**Parent Execution:** 510R
+
+### 7. Epoch Sweep
+
+```bash
+uv run deriva-ml-run --host localhost --catalog 65 --multirun +multirun=epoch_sweep
+```
+
+**Configuration:** 64→128 channels, 256 hidden, dropout 0.25, weight decay 1e-4
+
+| Epochs | Execution | Test Accuracy |
+|--------|-----------|---------------|
+| 5 | 526T | 39% |
+| 10 | 52FE | 41% |
+| 25 | 52R8 | 48% |
+| 50 | 5312 | 49% |
+
+**Parent Execution:** 525P
+
+### 8. Learning Rate × Batch Size Grid Search
+
+```bash
+uv run deriva-ml-run --host localhost --catalog 65 --multirun +multirun=lr_batch_grid
+```
+
+**Configuration:** 10 epochs, 32→64 channels
+
+| LR | Batch Size | Execution | Test Accuracy |
+|----|------------|-----------|---------------|
+| 0.001 | 64 | 53BR | 41% |
+| 0.001 | 128 | 53MC | 40% |
+| 0.01 | 64 | 53X6 | 24% |
+| 0.01 | 128 | 5460 | 30% |
+
+**Parent Execution:** 53AM
+
+---
+
+## Critical Discovery: Labeled vs Unlabeled Datasets
+
+### The Problem
+ROC analysis notebooks failed with `ValueError: Found array with 0 sample(s)` because:
+1. Experiments were run with `cifar10_small_split` dataset
+2. The test partition in this dataset has **no ground truth labels**
+3. Ground truth labels only exist for training images (from CIFAR-10 original labels)
+4. Test images in the unlabeled split come from CIFAR-10's test set, which wasn't labeled in the catalog
+
+### The Solution
+Use **labeled split datasets** for any experiment requiring evaluation:
+- `cifar10_small_labeled_split` (28GR) - 500 images: 400 train + 100 test (both labeled)
+- `cifar10_labeled_split` (28FG) - 5,000 images: 4,000 train + 1,000 test (both labeled)
+
+These datasets are created from the **training images only** (which have ground truth), then split into train/test partitions.
+
+### Configuration Updates
+
+Updated `src/configs/experiments.py`:
+```python
+# Changed from:
+{"override /datasets": "cifar10_small_split"}
+# To:
+{"override /datasets": "cifar10_small_labeled_split"}
+```
+
+### Documentation Added
+1. **CLAUDE.md** - Added "CIFAR-10 Dataset Requirements" section
+2. **README.md** - Added dataset types table
+3. **docs/reference/cifar10-example.md** - Added comprehensive dataset documentation with decision tree
+
+---
+
+## Re-run Experiments with Labeled Datasets
+
+### 9. Quick vs Extended (Labeled)
+
+```bash
+uv run deriva-ml-run --host localhost --catalog 65 --multirun +multirun=quick_vs_extended
+```
+
+| Experiment | Execution | Test Accuracy |
+|------------|-----------|---------------|
+| cifar10_quick | 50EJ | 32% |
+| cifar10_extended | 50Q6 | 43% |
+
+**Parent Execution:** 50DE
+
+### 10. Learning Rate Sweep (Labeled)
+
+```bash
+uv run deriva-ml-run --host localhost --catalog 65 --multirun +multirun=lr_sweep
+```
+
+| Learning Rate | Execution | Probability RID |
+|--------------|-----------|-----------------|
+| 0.0001 | 511W | 5132 |
+| 0.001 | 51AG | 51BW |
+| 0.01 | 51KA | 51MP |
+| 0.1 | 51W4 | 51XG |
+
+**Parent Execution:** 510R
+
+### 11. Epoch Sweep (Labeled)
+
+```bash
+uv run deriva-ml-run --host localhost --catalog 65 --multirun +multirun=epoch_sweep
+```
+
+| Epochs | Execution | Probability RID |
+|--------|-----------|-----------------|
+| 5 | 526T | 5280 |
+| 10 | 52FE | 52GT |
+| 25 | 52R8 | 52SM |
+| 50 | 5312 | 532E |
+
+**Parent Execution:** 525P
+
+### 12. LR × Batch Grid (Labeled)
+
+```bash
+uv run deriva-ml-run --host localhost --catalog 65 --multirun +multirun=lr_batch_grid
+```
+
+| LR | Batch | Execution | Probability RID |
+|----|-------|-----------|-----------------|
+| 0.001 | 64 | 53BR | 53CY |
+| 0.001 | 128 | 53MC | 53NR |
+| 0.01 | 64 | 53X6 | 53YJ |
+| 0.01 | 128 | 5460 | 547C |
+
+**Parent Execution:** 53AM
+
+---
+
+## ROC Analysis Notebooks
+
+### 13. Run ROC Analysis for All Experiments
+
+```bash
+# Quick vs Extended
+uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb \
+  --host localhost --catalog 65 --config roc_quick_vs_extended
+# Result: Execution 54FJ
+
+# Learning Rate Sweep
+uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb \
+  --host localhost --catalog 65 --config roc_lr_sweep
+# Result: Execution 54H2
+
+# Epoch Sweep
+uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb \
+  --host localhost --catalog 65 --config roc_epoch_sweep
+# Result: Execution 54JJ
+
+# LR × Batch Grid
+uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb \
+  --host localhost --catalog 65 --config roc_lr_batch_grid
+# Result: Execution 54M2
+```
+
+**All ROC analysis notebooks completed successfully** with proper ground truth matching.
+
+---
+
+## Final Asset Configuration
+
+Updated `src/configs/assets.py` with labeled experiment assets:
+
+| Configuration | Asset RIDs |
+|--------------|------------|
+| `roc_quick_vs_extended` | 50FR, 50RJ |
+| `roc_lr_sweep` | 5132, 51BW, 51MP, 51XG |
+| `roc_epoch_sweep` | 5280, 52GT, 52SM, 532E |
+| `roc_lr_batch_grid` | 53CY, 53NR, 53YJ, 547C |
+
+---
+
+## Commits
+
+1. `261c190` - Use labeled datasets for experiments requiring evaluation
+2. `1b3729e` - Add CIFAR-10 dataset documentation
+3. `f3c9963` - Add labeled dataset experiment assets for ROC analysis
+
+---
+
+## Key Lessons Learned
+
+1. **Always use labeled datasets for evaluation**: The unlabeled split datasets cannot be used for ROC analysis or accuracy metrics on test data.
+
+2. **Dataset naming convention**:
+   - `*_split` = test portion is unlabeled
+   - `*_labeled_split` = both train and test have labels
+
+3. **Ground truth source**: Labels come from the `Image_Classification` feature table in the catalog, not from filenames.
+
+4. **Documentation is critical**: Added dataset requirements to CLAUDE.md, README.md, and docs to prevent this mistake in the future.
