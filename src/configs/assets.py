@@ -252,3 +252,23 @@ asset_store(grid_all_probabilities, name="grid_all_probabilities")
 
 # cifar10_test_only evaluation results
 asset_store(test_only_evaluation_results, name="test_only_evaluation_results")
+
+# =============================================================================
+# ROC Analysis Asset Configurations
+# =============================================================================
+# Named configurations for ROC analysis notebook
+
+# Quick vs Extended comparison (small dataset)
+asset_store(multirun_comparison_probabilities, name="roc_quick_vs_extended")
+
+# Quick vs Extended comparison (full dataset)
+asset_store(full_comparison_probabilities, name="roc_full_quick_vs_extended")
+
+# Learning rate sweep comparison
+asset_store(lr_sweep_all_probabilities, name="roc_lr_sweep")
+
+# Epoch sweep comparison
+asset_store(epoch_sweep_all_probabilities, name="roc_epoch_sweep")
+
+# LR x Batch grid search comparison
+asset_store(grid_all_probabilities, name="roc_lr_batch_grid")

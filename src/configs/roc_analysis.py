@@ -14,13 +14,26 @@ Usage:
 
     From command line:
 
+        # Run with specific configuration
         deriva-ml-run-notebook notebooks/roc_analysis.ipynb \\
-            --host localhost --catalog 45 \\
-            assets=roc_quick_probabilities
+            --host localhost --catalog 65 \\
+            --config roc_quick_vs_extended
+
+        # Or override assets directly
+        deriva-ml-run-notebook notebooks/roc_analysis.ipynb \\
+            assets=roc_lr_sweep
+
+Available Configurations:
+    - roc_analysis: Default (quick vs extended on small dataset)
+    - roc_quick_vs_extended: Compare quick vs extended training (small dataset)
+    - roc_full_quick_vs_extended: Compare quick vs extended training (full dataset)
+    - roc_lr_sweep: Compare learning rate sweep (0.0001, 0.001, 0.01, 0.1)
+    - roc_epoch_sweep: Compare epoch sweep (5, 10, 25, 50 epochs)
+    - roc_lr_batch_grid: Compare LR x batch size grid (2x2)
 
 Configuration Groups:
     - deriva_ml: DerivaML connection settings (default_deriva, eye_ai, etc.)
-    - assets: Asset RID lists for probability files (roc_quick_probabilities, etc.)
+    - assets: Asset RID lists for probability files
 """
 
 from dataclasses import dataclass
@@ -43,10 +56,57 @@ class ROCAnalysisConfig(BaseConfig):
     confidence_threshold: float = 0.0
 
 
-# Register the ROC analysis notebook configuration with custom parameters.
+# =============================================================================
+# ROC Analysis Notebook Configurations
+# =============================================================================
+
+# Default: Quick vs Extended comparison on small dataset
 notebook_config(
     "roc_analysis",
     config_class=ROCAnalysisConfig,
-    defaults={"assets": "roc_comparison_probabilities"},
-    description="ROC curve analysis",
+    defaults={"assets": "roc_quick_vs_extended"},
+    description="ROC curve analysis (default: quick vs extended)",
+)
+
+# -----------------------------------------------------------------------------
+# Quick vs Extended Comparisons
+# -----------------------------------------------------------------------------
+
+notebook_config(
+    "roc_quick_vs_extended",
+    config_class=ROCAnalysisConfig,
+    defaults={"assets": "roc_quick_vs_extended"},
+    description="ROC analysis: quick vs extended training (small dataset, 1000 images)",
+)
+
+notebook_config(
+    "roc_full_quick_vs_extended",
+    config_class=ROCAnalysisConfig,
+    defaults={"assets": "roc_full_quick_vs_extended"},
+    description="ROC analysis: quick vs extended training (full dataset, 10000 images)",
+)
+
+# -----------------------------------------------------------------------------
+# Hyperparameter Sweep Comparisons
+# -----------------------------------------------------------------------------
+
+notebook_config(
+    "roc_lr_sweep",
+    config_class=ROCAnalysisConfig,
+    defaults={"assets": "roc_lr_sweep"},
+    description="ROC analysis: learning rate sweep (0.0001, 0.001, 0.01, 0.1)",
+)
+
+notebook_config(
+    "roc_epoch_sweep",
+    config_class=ROCAnalysisConfig,
+    defaults={"assets": "roc_epoch_sweep"},
+    description="ROC analysis: epoch sweep (5, 10, 25, 50 epochs)",
+)
+
+notebook_config(
+    "roc_lr_batch_grid",
+    config_class=ROCAnalysisConfig,
+    defaults={"assets": "roc_lr_batch_grid"},
+    description="ROC analysis: LR x batch size grid search (2x2)",
 )
