@@ -126,3 +126,34 @@ git add -A && git commit -m "Complete E2E test: catalog 62, multirun experiments
 - The extended model shows significant overfitting (100% train vs 11% test accuracy)
 - This is expected with only 500 training images and 50 epochs
 - For production use, consider early stopping or data augmentation
+
+---
+
+## Using Sweep Configurations
+
+For future multi-experiment runs, use the `sweep` config group for rich markdown descriptions.
+
+### Available Sweeps
+
+| Sweep Name | Description |
+|------------|-------------|
+| `quick_vs_extended` | Compare quick (3 epochs) vs extended (50 epochs) on small dataset |
+| `quick_vs_extended_full` | Same comparison on full dataset |
+
+### Running a Sweep
+```bash
+# Run pre-defined sweep with rich markdown description
+uv run deriva-ml-run --multirun +sweep=quick_vs_extended
+
+# Override parameters within a sweep
+uv run deriva-ml-run --multirun +sweep=quick_vs_extended model_config.epochs=5,10
+
+# Ad-hoc parameter sweeps still work (no rich description)
+uv run deriva-ml-run --multirun model_config.epochs=10,20,50
+```
+
+### Benefits of Sweep Configs
+- Full markdown support in parent execution descriptions
+- Documented experiment rationale and expected outcomes
+- Reusable, named experiment combinations
+- Bypasses Hydra command-line parsing limitations for special characters

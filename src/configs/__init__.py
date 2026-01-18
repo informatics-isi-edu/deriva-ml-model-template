@@ -14,6 +14,7 @@ Configuration Groups
 - workflow: Workflow definitions
 - model_config: Model hyperparameters
 - experiments: Preset experiment configurations
+- sweep: Multi-experiment sweep configurations with rich markdown descriptions
 
 Adding New Configurations
 -------------------------
