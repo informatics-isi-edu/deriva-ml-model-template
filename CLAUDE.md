@@ -166,6 +166,25 @@ When interacting with DerivaML catalogs, **always prefer MCP tools over writing 
 - Use Google docstring format and type hints
 - **Always check function/class signatures before modifying calls** - use `inspect.signature()` or check the source to verify required parameters before editing code that instantiates classes or calls functions
 
+## CIFAR-10 Dataset Requirements
+
+**IMPORTANT: Always use labeled datasets for experiments that require evaluation or analysis.**
+
+The CIFAR-10 catalog contains two types of split datasets:
+- **Unlabeled splits** (`cifar10_split`, `cifar10_small_split`): Test partition has no ground truth labels
+- **Labeled splits** (`cifar10_labeled_split`, `cifar10_small_labeled_split`): Both train and test partitions have ground truth labels
+
+For any experiment where you need to:
+- Compute accuracy on the test set
+- Generate ROC curves or other evaluation metrics
+- Compare model predictions to ground truth
+
+**You MUST use the labeled split datasets:**
+- `cifar10_small_labeled_split` for small dataset experiments
+- `cifar10_labeled_split` for full dataset experiments
+
+The unlabeled splits are only appropriate for training-only runs where test evaluation is not needed.
+
 ## Overriding Configs at Runtime
 
 ```bash

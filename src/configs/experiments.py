@@ -41,7 +41,7 @@ experiment_store(
         hydra_defaults=[
             "_self_",
             {"override /model_config": "cifar10_quick"},
-            {"override /datasets": "cifar10_small_split"},
+            {"override /datasets": "cifar10_small_labeled_split"},
         ],
         description="Quick CIFAR-10 training: 3 epochs, 32->64 channels, batch size 128 for fast validation",
         bases=(DerivaModelConfig,),
@@ -67,7 +67,7 @@ experiment_store(
         hydra_defaults=[
             "_self_",
             {"override /model_config": "cifar10_extended"},
-            {"override /datasets": "cifar10_small_split"},
+            {"override /datasets": "cifar10_small_labeled_split"},
         ],
         description="Extended CIFAR-10 training: 50 epochs, 64->128 channels, dropout 0.25, weight decay 1e-4",
         bases=(DerivaModelConfig,),
@@ -84,7 +84,7 @@ experiment_store(
         hydra_defaults=[
             "_self_",
             {"override /model_config": "cifar10_quick"},
-            {"override /datasets": "cifar10_split"},
+            {"override /datasets": "cifar10_labeled_split"},
         ],
         description="Quick CIFAR-10 on full dataset: 3 epochs, 32->64 channels for baseline validation",
         bases=(DerivaModelConfig,),
@@ -97,7 +97,7 @@ experiment_store(
         hydra_defaults=[
             "_self_",
             {"override /model_config": "cifar10_extended"},
-            {"override /datasets": "cifar10_split"},
+            {"override /datasets": "cifar10_labeled_split"},
         ],
         description="Extended CIFAR-10 on full dataset: 50 epochs, 64->128 channels, full regularization",
         bases=(DerivaModelConfig,),
