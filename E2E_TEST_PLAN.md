@@ -12,29 +12,23 @@ This plan validates the complete DerivaML workflow from catalog creation through
 
 ## Phase 1: Catalog Creation and Setup
 
-### Step 1.1: Create New CIFAR-10 Catalog
+### Step 1.1: Create New CIFAR-10 Catalog and Load Data
 
-Use MCP tools to create a fresh catalog:
-
-```bash
-# First, connect to verify MCP is working
-mcp__deriva-ml__list_catalog_registry(hostname="localhost")
-
-# Create new catalog with alias
-mcp__deriva-ml__create_catalog(
-    hostname="localhost",
-    project_name="cifar10_e2e_test",
-    catalog_alias="cifar10-e2e"
-)
-```
-
-**Expected Output:** New catalog ID and confirmation of alias creation.
-
-### Step 1.2: Load CIFAR-10 Data
+Use the `load-cifar10` script with the `--create-catalog` option to create a fresh catalog and load data in one step:
 
 ```bash
-uv run load-cifar10 --host localhost --catalog_id <NEW_CATALOG_ID> --num_images 1000
+uv run load-cifar10 --hostname localhost --create-catalog cifar10_e2e_test --num-images 1000 --show-urls
 ```
+
+This command:
+1. Creates a new DerivaML catalog with project name `cifar10_e2e_test`
+2. Sets up the domain schema with Image table, Image_Class vocabulary, and Image_Classification feature
+3. Downloads CIFAR-10 from Kaggle
+4. Uploads 1,000 images (500 training + 500 testing)
+5. Creates all dataset hierarchies
+6. Shows Chaise URLs for easy access
+
+**Expected Output:** New catalog ID and summary of created datasets with RIDs.
 
 **What this creates:**
 - `Image` asset table with 1,000 32×32 RGB images
@@ -47,7 +41,7 @@ uv run load-cifar10 --host localhost --catalog_id <NEW_CATALOG_ID> --num_images 
   - `Labeled_Split` (both partitions have ground truth for ROC analysis)
   - `Small_Labeled_Split` (small version with labels)
 
-### Step 1.3: Update Configuration
+### Step 1.2: Update Configuration
 
 Edit `src/configs/deriva.py` to point to the new catalog:
 
@@ -63,7 +57,7 @@ store(
 )
 ```
 
-### Step 1.4: Validate Configuration
+### Step 1.3: Validate Configuration
 
 Before running experiments, validate that all RIDs in the configuration exist:
 
@@ -77,7 +71,7 @@ mcp__deriva-ml__validate_rids(
 
 **Expected Output:** `is_valid: true` with no errors. Warnings for missing descriptions are OK but should be addressed.
 
-### Step 1.5: Commit Changes
+### Step 1.4: Commit Changes
 
 **CRITICAL:** DerivaML tracks code provenance. All code must be committed before running models.
 
