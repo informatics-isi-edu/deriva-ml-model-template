@@ -41,6 +41,12 @@ from deriva_ml.execution import with_description
 
 datasets_store = store(group="datasets")
 
+# Special config for notebooks that don't need datasets (e.g., ROC analysis)
+datasets_store(
+    [],
+    name="no_datasets",
+)
+
 # -----------------------------------------------------------------------------
 # Full datasets (1,000 images total in this catalog)
 # -----------------------------------------------------------------------------

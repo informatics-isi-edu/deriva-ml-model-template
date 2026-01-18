@@ -61,10 +61,11 @@ class ROCAnalysisConfig(BaseConfig):
 # =============================================================================
 
 # Default: Use quick vs extended comparison
+# Note: Use "no_datasets" to avoid type conflicts with with_description wrapped datasets
 notebook_config(
     "roc_analysis",
     config_class=ROCAnalysisConfig,
-    defaults={"assets": "roc_quick_vs_extended"},
+    defaults={"assets": "roc_quick_vs_extended", "datasets": "no_datasets"},
     description="ROC curve analysis (default: quick vs extended training)",
 )
 
@@ -72,32 +73,33 @@ notebook_config(
 # Model Comparison Configurations
 # -----------------------------------------------------------------------------
 # Each configuration references prediction probability files from the
-# corresponding multirun experiment.
+# corresponding multirun experiment. All use "no_datasets" since ROC analysis
+# only needs assets (prediction probability files).
 
 notebook_config(
     "roc_quick_vs_extended",
     config_class=ROCAnalysisConfig,
-    defaults={"assets": "roc_quick_vs_extended"},
+    defaults={"assets": "roc_quick_vs_extended", "datasets": "no_datasets"},
     description="ROC analysis: quick (3 epochs) vs extended (50 epochs) training",
 )
 
 notebook_config(
     "roc_lr_sweep",
     config_class=ROCAnalysisConfig,
-    defaults={"assets": "roc_lr_sweep"},
+    defaults={"assets": "roc_lr_sweep", "datasets": "no_datasets"},
     description="ROC analysis: learning rate sweep (0.0001, 0.001, 0.01, 0.1)",
 )
 
 notebook_config(
     "roc_epoch_sweep",
     config_class=ROCAnalysisConfig,
-    defaults={"assets": "roc_epoch_sweep"},
+    defaults={"assets": "roc_epoch_sweep", "datasets": "no_datasets"},
     description="ROC analysis: epoch sweep (5, 10, 25, 50 epochs)",
 )
 
 notebook_config(
     "roc_lr_batch_grid",
     config_class=ROCAnalysisConfig,
-    defaults={"assets": "roc_lr_batch_grid"},
+    defaults={"assets": "roc_lr_batch_grid", "datasets": "no_datasets"},
     description="ROC analysis: LR x batch size grid (2x2)",
 )
