@@ -43,9 +43,18 @@ from deriva_ml.execution import with_description
 asset_store = store(group="assets")
 
 # REQUIRED: default_asset - used when no assets are specified (typically empty)
+# Note: Using plain list (not with_description) because this is used as a merge base
+# in notebook configs. with_description creates a DictConfig which can't merge with
+# the ListConfig default in BaseConfig.
 asset_store(
-    with_description([], "No assets - empty default configuration"),
+    [],
     name="default_asset",
+)
+
+# Alias for clarity in notebook configs
+asset_store(
+    [],
+    name="no_assets",
 )
 
 # =============================================================================
@@ -85,13 +94,20 @@ asset_store(
 )
 
 # Prediction probabilities for ROC analysis
+# Note: Using plain list for notebook config compatibility. Description is in the
+# notebook config or can be accessed via roc_quick_vs_extended_described.
+asset_store(
+    ["K0E", "K98"],
+    name="roc_quick_vs_extended",
+)
+# With description for non-notebook uses
 asset_store(
     with_description(
         ["K0E", "K98"],
         "Prediction probability files from quick_vs_extended multirun. "
         "Contains class probabilities for 100 labeled test images from each run.",
     ),
-    name="roc_quick_vs_extended",
+    name="roc_quick_vs_extended_described",
 )
 
 # -----------------------------------------------------------------------------
@@ -142,13 +158,18 @@ asset_store(
 )
 
 # Prediction probabilities for ROC analysis
+# Note: Using plain list for notebook config compatibility
+asset_store(
+    ["KKR", "KWJ", "M5C", "ME6"],
+    name="roc_lr_sweep",
+)
 asset_store(
     with_description(
         ["KKR", "KWJ", "M5C", "ME6"],
         "Prediction probability files from lr_sweep multirun. "
         "lr=0.0001 (KKR), lr=0.001 (KWJ), lr=0.01 (M5C), lr=0.1 (ME6).",
     ),
-    name="roc_lr_sweep",
+    name="roc_lr_sweep_described",
 )
 
 # -----------------------------------------------------------------------------
@@ -199,13 +220,18 @@ asset_store(
 )
 
 # Prediction probabilities for ROC analysis
+# Note: Using plain list for notebook config compatibility
+asset_store(
+    ["MRP", "N1G", "NAA", "NK4"],
+    name="roc_epoch_sweep",
+)
 asset_store(
     with_description(
         ["MRP", "N1G", "NAA", "NK4"],
         "Prediction probability files from epoch_sweep multirun. "
         "5 epochs (MRP), 10 epochs (N1G), 25 epochs (NAA), 50 epochs (NK4).",
     ),
-    name="roc_epoch_sweep",
+    name="roc_epoch_sweep_described",
 )
 
 # -----------------------------------------------------------------------------
@@ -256,6 +282,11 @@ asset_store(
 )
 
 # Prediction probabilities for ROC analysis
+# Note: Using plain list for notebook config compatibility
+asset_store(
+    ["NXM", "P6E", "PF8", "PR2"],
+    name="roc_lr_batch_grid",
+)
 asset_store(
     with_description(
         ["NXM", "P6E", "PF8", "PR2"],
@@ -263,7 +294,7 @@ asset_store(
         "lr=0.001/batch=64 (NXM), lr=0.001/batch=128 (P6E), "
         "lr=0.01/batch=64 (PF8), lr=0.01/batch=128 (PR2).",
     ),
-    name="roc_lr_batch_grid",
+    name="roc_lr_batch_grid_described",
 )
 
 # -----------------------------------------------------------------------------

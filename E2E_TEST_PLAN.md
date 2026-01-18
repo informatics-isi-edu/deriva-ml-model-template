@@ -17,11 +17,11 @@ This plan validates the complete DerivaML workflow from catalog creation through
 Use the `load-cifar10` script with the `--create-catalog` option to create a fresh catalog and load data in one step:
 
 ```bash
-uv run load-cifar10 --hostname localhost --create-catalog cifar10_e2e_test --num-images 1000 --show-urls
+uv run load-cifar10 --hostname localhost --create-catalog cifar10 --num-images 1000 --show-urls
 ```
 
 This command:
-1. Creates a new DerivaML catalog with project name `cifar10_e2e_test`
+1. Creates a new DerivaML catalog with project name `cifar10`
 2. Sets up the domain schema with Image table, Image_Class vocabulary, and Image_Classification feature
 3. Downloads CIFAR-10 from Kaggle
 4. Uploads 1,000 images (500 training + 500 testing)

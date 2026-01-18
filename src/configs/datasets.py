@@ -185,12 +185,10 @@ datasets_store(
 # -----------------------------------------------------------------------------
 # REQUIRED: default_dataset - used when no dataset is specified
 # -----------------------------------------------------------------------------
+# Note: Using plain list for notebook config compatibility (with_description creates
+# a DictConfig which can't merge with BaseConfig's ListConfig defaults)
 
 datasets_store(
-    with_description(
-        [DatasetSpecConfig(rid="AX0", version="0.4.0")],
-        "Default dataset: cifar10_split (500 train + 500 test, test unlabeled). "
-        "Used when no dataset override is specified.",
-    ),
+    [DatasetSpecConfig(rid="AX0", version="0.4.0")],
     name="default_dataset",
 )
