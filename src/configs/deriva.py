@@ -33,6 +33,6 @@ deriva_store(
     DerivaMLConfig,
     name="default_deriva",
     hostname="localhost",
-    catalog_id=62,
+    catalog_id=65,
     use_minid=False,
 )

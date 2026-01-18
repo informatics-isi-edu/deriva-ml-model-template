@@ -124,32 +124,3 @@ model_store(
     weights_filename="cifar10_cnn_weights.pt",
 )
 
-# ---------------------------------------------------------------------------
-# Hyperparameter Sweep Base Configs
-# ---------------------------------------------------------------------------
-# These configs are designed for multirun sweeps where specific parameters
-# will be overridden via command line (e.g., model_config.learning_rate=0.001,0.01)
-
-# Learning rate sweep base - 10 epochs, standard architecture
-# Override learning_rate on command line
-model_store(
-    Cifar10CNNConfig,
-    name="cifar10_lr_sweep",
-    epochs=10,
-    batch_size=128,
-    # learning_rate will be overridden in multirun
-)
-
-# Epoch sweep base - extended architecture with regularization
-# Override epochs on command line
-model_store(
-    Cifar10CNNConfig,
-    name="cifar10_epoch_sweep",
-    conv1_channels=64,
-    conv2_channels=128,
-    hidden_size=256,
-    dropout_rate=0.25,
-    weight_decay=1e-4,
-    batch_size=64,
-    # epochs will be overridden in multirun
-)

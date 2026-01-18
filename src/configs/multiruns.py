@@ -1,5 +1,6 @@
 """Multirun configurations for experiment sweeps.
 
+
 This module defines named multirun configurations that bundle together Hydra
 overrides and rich markdown descriptions. Use these to run reproducible
 experiment sweeps with full documentation.
@@ -54,12 +55,14 @@ multirun_config(
 # =============================================================================
 # Hyperparameter Sweeps
 # =============================================================================
-# Sweep over parameter ranges to find optimal values
+# Sweep over parameter ranges to find optimal values.
+# Built on existing experiments with parameter overrides.
 
 multirun_config(
     "lr_sweep",
     overrides=[
-        "+experiment=cifar10_lr_sweep",
+        "+experiment=cifar10_quick",
+        "model_config.epochs=10",
         "model_config.learning_rate=0.0001,0.001,0.01,0.1",
     ],
     description=LEARNING_RATE_SWEEP_DESCRIPTION,
@@ -68,7 +71,7 @@ multirun_config(
 multirun_config(
     "epoch_sweep",
     overrides=[
-        "+experiment=cifar10_epoch_sweep",
+        "+experiment=cifar10_extended",
         "model_config.epochs=5,10,25,50",
     ],
     description=EPOCH_SWEEP_DESCRIPTION,
@@ -82,7 +85,8 @@ multirun_config(
 multirun_config(
     "lr_batch_grid",
     overrides=[
-        "+experiment=cifar10_lr_sweep",
+        "+experiment=cifar10_quick",
+        "model_config.epochs=10",
         "model_config.learning_rate=0.001,0.01",
         "model_config.batch_size=64,128",
     ],

@@ -14,8 +14,9 @@ Usage:
     # Override experiment settings
     uv run deriva-ml-run +experiment=cifar10_quick datasets=cifar10_small_training
 
-For multirun experiments with rich descriptions, define them in configs/multiruns.py
-using multirun_config(). This keeps the sweep documentation with the sweep definition.
+For hyperparameter sweeps and grid searches, use multirun configs defined in
+configs/multiruns.py - they are self-contained and don't require separate
+experiment definitions.
 
 Reference:
     https://mit-ll-responsible-ai.github.io/hydra-zen/how_to/configuring_experiments.html
@@ -123,36 +124,3 @@ experiment_store(
     name="cifar10_test_only",
 )
 
-# =============================================================================
-# Hyperparameter Sweep Base Experiments
-# =============================================================================
-# These experiments are designed as bases for parameter sweeps.
-# Use them with multirun configs defined in configs/multiruns.py:
-#   uv run deriva-ml-run +multirun=lr_sweep
-#   uv run deriva-ml-run +multirun=epoch_sweep
-
-experiment_store(
-    make_config(
-        hydra_defaults=[
-            "_self_",
-            {"override /model_config": "cifar10_lr_sweep"},
-            {"override /datasets": "cifar10_small_split"},
-        ],
-        description="Learning rate sweep: exploring convergence across learning rates",
-        bases=(DerivaModelConfig,),
-    ),
-    name="cifar10_lr_sweep",
-)
-
-experiment_store(
-    make_config(
-        hydra_defaults=[
-            "_self_",
-            {"override /model_config": "cifar10_epoch_sweep"},
-            {"override /datasets": "cifar10_small_split"},
-        ],
-        description="Epoch sweep: analyzing training duration effects",
-        bases=(DerivaModelConfig,),
-    ),
-    name="cifar10_epoch_sweep",
-)

@@ -35,7 +35,7 @@ from deriva_ml.dataset import DatasetSpecConfig
 # match the parameter name in BaseConfig.
 
 # =============================================================================
-# Catalog 62: CIFAR-10 with 10,000 images (localhost, schema: cifar-10)
+# Catalog 65: CIFAR-10 with 10,000 images (localhost, schema: cifar10)
 # =============================================================================
 
 # Full datasets
