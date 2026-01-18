@@ -143,13 +143,15 @@ For future multi-experiment runs, use the `sweep` config group for rich markdown
 ### Running a Sweep
 ```bash
 # Run pre-defined sweep with rich markdown description
-uv run deriva-ml-run --multirun +sweep=quick_vs_extended
+uv run deriva-ml-run --multirun +sweep=quick_vs_extended \
+    +experiment=cifar10_quick,cifar10_extended
 
 # Override parameters within a sweep
-uv run deriva-ml-run --multirun +sweep=quick_vs_extended model_config.epochs=5,10
+uv run deriva-ml-run --multirun +sweep=quick_vs_extended \
+    +experiment=cifar10_quick,cifar10_extended model_config.epochs=5
 
 # Ad-hoc parameter sweeps still work (no rich description)
-uv run deriva-ml-run --multirun model_config.epochs=10,20,50
+uv run deriva-ml-run --multirun +experiment=cifar10_quick,cifar10_extended
 ```
 
 ### Benefits of Sweep Configs

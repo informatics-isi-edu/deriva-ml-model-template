@@ -6,13 +6,18 @@ the main DerivaModelConfig.
 
 Usage:
     # Run a single experiment
-    uv run src/deriva_run.py +experiment=cifar10_quick
+    uv run deriva-ml-run +experiment=cifar10_quick
 
-    # Run multiple experiments
-    uv run src/deriva_run.py --multirun +experiment=cifar10_quick,cifar10_extended
+    # Run multiple experiments (multirun)
+    uv run deriva-ml-run --multirun +experiment=cifar10_quick,cifar10_extended
 
     # Override experiment settings
-    uv run src/deriva_run.py +experiment=cifar10_quick datasets=cifar10_small_training
+    uv run deriva-ml-run +experiment=cifar10_quick datasets=cifar10_small_training
+
+Multirun with sweep_description:
+    When running multiple experiments together, the `sweep_description` from the
+    FIRST experiment (Job 0) is used for the parent execution. This allows you to
+    document the purpose of the comparison with full markdown formatting.
 
 Reference:
     https://mit-ll-responsible-ai.github.io/hydra-zen/how_to/configuring_experiments.html
@@ -21,6 +26,7 @@ Reference:
 from hydra_zen import make_config, store
 
 from configs.base import DerivaModelConfig
+from configs.sweeps import QUICK_VS_EXTENDED_DESCRIPTION, FULL_DATASET_DESCRIPTION
 
 # Use _global_ package to allow overrides at the root level
 experiment_store = store(group="experiment", package="_global_")
@@ -38,6 +44,7 @@ experiment_store(
             {"override /datasets": "cifar10_small_split"},
         ],
         description="Quick CIFAR-10 training: 3 epochs, 32→64 channels, batch size 128 for fast validation",
+        sweep_description=QUICK_VS_EXTENDED_DESCRIPTION,
         bases=(DerivaModelConfig,),
     ),
     name="cifar10_quick",
@@ -75,9 +82,10 @@ experiment_store(
         hydra_defaults=[
             "_self_",
             {"override /model_config": "cifar10_quick"},
-            {"override /datasets": "cifar10_small_split"},
+            {"override /datasets": "cifar10_split"},
         ],
         description="Quick CIFAR-10 on full dataset: 3 epochs, 32→64 channels for baseline validation",
+        sweep_description=FULL_DATASET_DESCRIPTION,
         bases=(DerivaModelConfig,),
     ),
     name="cifar10_quick_full",
