@@ -848,8 +848,7 @@ wheels = [
 
 [[package]]
 name = "deriva-ml"
-version = "1.17.10.post135+g656cb2071"
-source = { git = "https://github.com/informatics-isi-edu/deriva-ml.git#656cb20711e7dd39c477c24d7db067c523d63058" }
+source = { editable = "../deriva-ml" }
 dependencies = [
     { name = "bdbag" },
     { name = "bump-my-version" },
@@ -869,6 +868,44 @@ dependencies = [
     { name = "setuptools-scm" },
     { name = "sqlalchemy" },
 ]
+
+[package.metadata]
+requires-dist = [
+    { name = "bdbag" },
+    { name = "bump-my-version" },
+    { name = "deepdiff" },
+    { name = "deriva", specifier = "~=1.7.10" },
+    { name = "hydra-zen" },
+    { name = "nbconvert" },
+    { name = "nbstripout" },
+    { name = "pandas" },
+    { name = "pandas-stubs" },
+    { name = "papermill" },
+    { name = "pydantic", specifier = ">=2.11" },
+    { name = "pyyaml" },
+    { name = "regex" },
+    { name = "semver", specifier = ">3.0.0" },
+    { name = "setuptools", specifier = ">=80" },
+    { name = "setuptools-scm", specifier = ">=8.0" },
+    { name = "sqlalchemy" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "icecream", specifier = ">=2.1.4" },
+    { name = "ipykernel" },
+    { name = "jupyter", specifier = ">=1.1.1" },
+    { name = "mkdocs-jupyter" },
+    { name = "mkdocs-material" },
+    { name = "mkdocstrings", extras = ["python"] },
+    { name = "pip-system-certs" },
+    { name = "pyright", specifier = ">=1.1.408" },
+    { name = "pytest", specifier = ">=8.4.1" },
+    { name = "pytest-coverage", specifier = ">=0.0" },
+    { name = "pytest-mock" },
+    { name = "ruff" },
+]
+lint = [{ name = "ruff", specifier = ">=0.12.0" }]
 
 [[package]]
 name = "deriva-ml-model-template"
@@ -914,7 +951,7 @@ torch = [
 
 [package.metadata]
 requires-dist = [
-    { name = "deriva-ml", git = "https://github.com/informatics-isi-edu/deriva-ml.git" },
+    { name = "deriva-ml", editable = "../deriva-ml" },
     { name = "ipykernel", specifier = ">=7.1.0" },
     { name = "kaggle", specifier = ">=1.8.3" },
     { name = "matplotlib" },
