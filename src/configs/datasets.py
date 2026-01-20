@@ -53,7 +53,7 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="AWP", version="0.3.0")],
+        [DatasetSpecConfig(rid="AWM", version="0.3.0")],
         "Complete CIFAR-10 dataset with all 1,000 images (500 training + 500 testing). "
         "Use for full-scale experiments.",
     ),
@@ -62,7 +62,7 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="AX0", version="0.4.0")],
+        [DatasetSpecConfig(rid="AWY", version="0.4.0")],
         "Split dataset containing nested training (500) and testing (500) subsets. "
         "Testing images are unlabeled. Use for standard train/test workflows.",
     ),
@@ -71,7 +71,7 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="AX8", version="0.4.0")],
+        [DatasetSpecConfig(rid="AX6", version="0.4.0")],
         "Training partition with 500 labeled CIFAR-10 images. "
         "All images have ground truth classifications.",
     ),
@@ -80,7 +80,7 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="AXJ", version="0.4.0")],
+        [DatasetSpecConfig(rid="AXG", version="0.4.0")],
         "Testing partition with 500 CIFAR-10 images. "
         "These images are unlabeled (no ground truth) for blind evaluation.",
     ),
@@ -93,7 +93,7 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="AY6", version="0.4.0")],
+        [DatasetSpecConfig(rid="AY4", version="0.4.0")],
         "Small split dataset with 1,000 images (500 training + 500 testing). "
         "Use for quick iteration and debugging.",
     ),
@@ -102,7 +102,7 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="AYE", version="0.4.0")],
+        [DatasetSpecConfig(rid="AYC", version="0.4.0")],
         "Small training set with 500 labeled images. "
         "Use for rapid prototyping and testing model code.",
     ),
@@ -111,7 +111,7 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="AYR", version="0.4.0")],
+        [DatasetSpecConfig(rid="AYP", version="0.4.0")],
         "Small testing set with 500 unlabeled images. "
         "Use for quick inference testing.",
     ),
@@ -125,7 +125,7 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="AZC", version="0.4.0")],
+        [DatasetSpecConfig(rid="AZA", version="0.4.0")],
         "Labeled split dataset with 500 images (400 train + 100 test). "
         "BOTH partitions have ground truth labels, enabling ROC curve analysis "
         "and proper evaluation metrics on the test set.",
@@ -135,7 +135,7 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="AZP", version="0.4.0")],
+        [DatasetSpecConfig(rid="AZM", version="0.4.0")],
         "Labeled training partition with 400 images. "
         "All images have ground truth classifications.",
     ),
@@ -144,7 +144,7 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="B00", version="0.4.0")],
+        [DatasetSpecConfig(rid="AZY", version="0.4.0")],
         "Labeled testing partition with 100 images WITH ground truth. "
         "Use for evaluation when you need metrics like accuracy, ROC curves, etc.",
     ),
@@ -157,7 +157,7 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="B0M", version="0.4.0")],
+        [DatasetSpecConfig(rid="B0J", version="0.4.0")],
         "Small labeled split with 500 images (400 train + 100 test). "
         "Both partitions have labels. Use for quick testing with evaluation metrics.",
     ),
@@ -166,7 +166,7 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="B0Y", version="0.4.0")],
+        [DatasetSpecConfig(rid="B0W", version="0.4.0")],
         "Small labeled training set with 400 images. "
         "For rapid prototyping with labeled data.",
     ),
@@ -175,7 +175,7 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="B18", version="0.4.0")],
+        [DatasetSpecConfig(rid="B16", version="0.4.0")],
         "Small labeled testing set with 100 images WITH ground truth. "
         "For quick evaluation testing with metrics.",
     ),
@@ -189,6 +189,6 @@ datasets_store(
 # a DictConfig which can't merge with BaseConfig's ListConfig defaults)
 
 datasets_store(
-    [DatasetSpecConfig(rid="AX0", version="0.4.0")],
+    [DatasetSpecConfig(rid="AWY", version="0.4.0")],
     name="default_dataset",
 )
