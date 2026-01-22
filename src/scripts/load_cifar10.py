@@ -1105,7 +1105,7 @@ def load_images(
     logger.info(f"  Found {len(assets)} uploaded images")
 
     # Build filename -> RID mapping
-    filename_to_rid = {a["Filename"]: a["RID"] for a in assets}
+    filename_to_rid = {a.filename: a.asset_rid for a in assets}
 
     # Separate RIDs by dataset membership
     train_rids = [filename_to_rid[f] for f in train_filenames if f in filename_to_rid]
