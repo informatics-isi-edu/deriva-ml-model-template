@@ -134,6 +134,7 @@ from typing import Any, Callable
 
 from deriva.core.ermrest_model import Schema
 from deriva_ml import DerivaML
+from deriva_ml.catalog import set_catalog_provenance
 from deriva_ml.core.ermrest import ColumnDefinition, UploadProgress
 from deriva_ml.core.enums import BuiltinTypes
 from deriva_ml.dataset import VersionPart
@@ -1381,6 +1382,15 @@ def main(args: argparse.Namespace | None = None) -> int:
             domain_schema=domain_schema,
             check_auth=True,
         )
+
+        # Set catalog provenance for traceability
+        set_catalog_provenance(
+            ml.catalog,
+            name=f"CIFAR-10 ({args.create_catalog})",
+            description="CIFAR-10 image classification catalog created by load_cifar10.py",
+            workflow_url="https://github.com/informatics-isi-edu/deriva-ml-model-template/blob/main/src/scripts/load_cifar10.py",
+        )
+        logger.info("Set catalog provenance")
     else:
         logger.info(f"Connecting to {args.hostname}, catalog {args.catalog_id}")
         ml = DerivaML(
