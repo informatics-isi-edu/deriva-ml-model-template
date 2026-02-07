@@ -63,7 +63,7 @@ def build_filename_to_rid_map(ml_instance: DerivaML) -> dict[str, str]:
         Dictionary mapping filename (without path) to RID.
     """
     assets = ml_instance.list_assets("Image")
-    return {a["Filename"]: a["RID"] for a in assets if "Filename" in a and "RID" in a}
+    return {a.filename: a.asset_rid for a in assets}
 
 
 def record_test_predictions(
