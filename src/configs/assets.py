@@ -60,5 +60,26 @@ asset_store(
 # =============================================================================
 # Catalog 3: CIFAR-10 Assets (localhost, schema: cifar10)
 # =============================================================================
-# Asset configurations will be added here after running experiments.
-# Use MCP tools (find_assets, list_asset_executions) to discover output RIDs.
+
+# -----------------------------------------------------------------------------
+# quick_vs_extended multirun (parent: 3WPM)
+# -----------------------------------------------------------------------------
+# Compares quick training (3 epochs) vs extended training (50 epochs)
+# on small labeled dataset (500 images)
+
+# Prediction probabilities for ROC analysis
+# 3WRT: cifar10_quick (exec 3WQM), 3X1G: cifar10_extended (exec 3X08)
+asset_store(
+    ["3WRT", "3X1G"],
+    name="roc_quick_vs_extended",
+)
+
+# Pre-trained weights from cifar10_quick (execution 3WQM)
+asset_store(
+    with_description(
+        ["3WRP"],
+        "Pre-trained weights from cifar10_quick (execution 3WQM, 3 epochs). "
+        "Use with cifar10_test_only experiment for inference.",
+    ),
+    name="quick_weights",
+)

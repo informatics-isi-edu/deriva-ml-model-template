@@ -532,7 +532,7 @@ def setup_domain_model(ml: DerivaML) -> dict[str, Any]:
     # Check existing vocabularies across both schemas
     vocabs = [
         v.name
-        for schema in [ml.ml_schema, ml.domain_schema]
+        for schema in [ml.ml_schema, ml.default_schema]
         for v in ml.model.schemas[schema].tables.values()
         if ml.model.is_vocabulary(v)
     ]
@@ -566,7 +566,7 @@ def setup_domain_model(ml: DerivaML) -> dict[str, Any]:
             logger.info(f"  Term exists: {class_name}")
 
     # Check existing tables in domain schema
-    tables = [t.name for t in ml.model.schemas[ml.domain_schema].tables.values()]
+    tables = [t.name for t in ml.model.schemas[ml.default_schema].tables.values()]
 
     # Create Image asset table if needed
     if "Image" not in tables:
@@ -1379,7 +1379,7 @@ def main(args: argparse.Namespace | None = None) -> int:
         ml = DerivaML(
             hostname=args.hostname,
             catalog_id=str(catalog_id),
-            domain_schema=domain_schema,
+            domain_schemas={domain_schema},
             check_auth=True,
         )
 
@@ -1396,11 +1396,11 @@ def main(args: argparse.Namespace | None = None) -> int:
         ml = DerivaML(
             hostname=args.hostname,
             catalog_id=str(args.catalog_id),
-            domain_schema=args.domain_schema,
+            domain_schemas={args.domain_schema} if args.domain_schema else None,
             check_auth=True,
         )
         catalog_id = args.catalog_id
-        domain_schema = ml.domain_schema
+        domain_schema = ml.default_schema
         logger.info(f"Connected to catalog, domain schema: {domain_schema}")
 
     # Set up domain model
@@ -1409,7 +1409,8 @@ def main(args: argparse.Namespace | None = None) -> int:
     logger.info("Domain model setup complete")
 
     # Configure table display annotations
-    setup_table_annotations(ml)
+    # TODO: Update setup_table_annotations to use current TableHandle API
+    # setup_table_annotations(ml)
 
     # Apply catalog annotations for Chaise web interface
     logger.info("Applying catalog annotations...")
@@ -1448,7 +1449,7 @@ def main(args: argparse.Namespace | None = None) -> int:
         logger.info("Fetching Chaise URLs for datasets...")
         for name, rid in datasets.items():
             try:
-                url = ml.chaise_url(rid)
+                url = ml.cite(rid, current=True)
                 dataset_urls[name] = url
                 logger.info(f"  {name}: {url}")
             except Exception as e:
