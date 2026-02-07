@@ -36,7 +36,7 @@ from deriva_ml.execution import with_description
 # match the parameter name in BaseConfig.
 
 # =============================================================================
-# Catalog 2: CIFAR-10 E2E Test with 1,000 images (localhost, schema: cifar10_e2e_test)
+# Catalog 3: CIFAR-10 with 10,000 images (localhost, schema: cifar10)
 # =============================================================================
 
 datasets_store = store(group="datasets")
@@ -48,13 +48,13 @@ datasets_store(
 )
 
 # -----------------------------------------------------------------------------
-# Full datasets (1,000 images total in this catalog)
+# Full datasets (10,000 images total in this catalog)
 # -----------------------------------------------------------------------------
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="AWM", version="0.3.0")],
-        "Complete CIFAR-10 dataset with all 1,000 images (500 training + 500 testing). "
+        [DatasetSpecConfig(rid="28D0", version="0.21.0")],
+        "Complete CIFAR-10 dataset with all 10,000 images (5,000 training + 5,000 testing). "
         "Use for full-scale experiments.",
     ),
     name="cifar10_complete",
@@ -62,8 +62,8 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="AWY", version="0.4.0")],
-        "Split dataset containing nested training (500) and testing (500) subsets. "
+        [DatasetSpecConfig(rid="28DA", version="0.22.0")],
+        "Split dataset containing nested training (5,000) and testing (5,000) subsets. "
         "Testing images are unlabeled. Use for standard train/test workflows.",
     ),
     name="cifar10_split",
@@ -71,8 +71,8 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="AX6", version="0.4.0")],
-        "Training partition with 500 labeled CIFAR-10 images. "
+        [DatasetSpecConfig(rid="28DJ", version="0.22.0")],
+        "Training partition with 5,000 labeled CIFAR-10 images. "
         "All images have ground truth classifications.",
     ),
     name="cifar10_training",
@@ -80,8 +80,8 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="AXG", version="0.4.0")],
-        "Testing partition with 500 CIFAR-10 images. "
+        [DatasetSpecConfig(rid="28DW", version="0.22.0")],
+        "Testing partition with 5,000 CIFAR-10 images. "
         "These images are unlabeled (no ground truth) for blind evaluation.",
     ),
     name="cifar10_testing",
@@ -93,7 +93,7 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="AY4", version="0.4.0")],
+        [DatasetSpecConfig(rid="28EG", version="0.4.0")],
         "Small split dataset with 1,000 images (500 training + 500 testing). "
         "Use for quick iteration and debugging.",
     ),
@@ -102,7 +102,7 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="AYC", version="0.4.0")],
+        [DatasetSpecConfig(rid="28ER", version="0.4.0")],
         "Small training set with 500 labeled images. "
         "Use for rapid prototyping and testing model code.",
     ),
@@ -111,7 +111,7 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="AYP", version="0.4.0")],
+        [DatasetSpecConfig(rid="28F2", version="0.4.0")],
         "Small testing set with 500 unlabeled images. "
         "Use for quick inference testing.",
     ),
@@ -125,8 +125,8 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="AZA", version="0.4.0")],
-        "Labeled split dataset with 500 images (400 train + 100 test). "
+        [DatasetSpecConfig(rid="28FP", version="0.11.0")],
+        "Labeled split dataset (4,000 train + 1,000 test). "
         "BOTH partitions have ground truth labels, enabling ROC curve analysis "
         "and proper evaluation metrics on the test set.",
     ),
@@ -135,8 +135,8 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="AZM", version="0.4.0")],
-        "Labeled training partition with 400 images. "
+        [DatasetSpecConfig(rid="28G0", version="0.11.0")],
+        "Labeled training partition with 4,000 images. "
         "All images have ground truth classifications.",
     ),
     name="cifar10_labeled_training",
@@ -144,8 +144,8 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="AZY", version="0.4.0")],
-        "Labeled testing partition with 100 images WITH ground truth. "
+        [DatasetSpecConfig(rid="28GA", version="0.11.0")],
+        "Labeled testing partition with 1,000 images WITH ground truth. "
         "Use for evaluation when you need metrics like accuracy, ROC curves, etc.",
     ),
     name="cifar10_labeled_testing",
@@ -157,7 +157,7 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="B0J", version="0.4.0")],
+        [DatasetSpecConfig(rid="28GY", version="0.4.0")],
         "Small labeled split with 500 images (400 train + 100 test). "
         "Both partitions have labels. Use for quick testing with evaluation metrics.",
     ),
@@ -166,7 +166,7 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="B0W", version="0.4.0")],
+        [DatasetSpecConfig(rid="28H8", version="0.4.0")],
         "Small labeled training set with 400 images. "
         "For rapid prototyping with labeled data.",
     ),
@@ -175,7 +175,7 @@ datasets_store(
 
 datasets_store(
     with_description(
-        [DatasetSpecConfig(rid="B16", version="0.4.0")],
+        [DatasetSpecConfig(rid="28HJ", version="0.4.0")],
         "Small labeled testing set with 100 images WITH ground truth. "
         "For quick evaluation testing with metrics.",
     ),
@@ -189,6 +189,6 @@ datasets_store(
 # a DictConfig which can't merge with BaseConfig's ListConfig defaults)
 
 datasets_store(
-    [DatasetSpecConfig(rid="AWY", version="0.4.0")],
+    [DatasetSpecConfig(rid="28DA", version="0.22.0")],
     name="default_dataset",
 )
