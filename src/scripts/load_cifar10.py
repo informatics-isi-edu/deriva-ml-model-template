@@ -23,6 +23,8 @@ What This Script Creates:
         - ``Small_Split``: Parent dataset for small train/test split (1,000 images)
         - ``Small_Training``: 500 labeled training images (subset)
         - ``Small_Testing``: 500 test images (subset)
+        - ``Labeled_Split``: 80/20 split of training images (created via ``split_dataset()``)
+        - ``Small_Labeled_Split``: 400/100 split of training images (created via ``split_dataset()``)
 
     Provenance Tracking:
         - All datasets are created within an Execution context
@@ -138,6 +140,7 @@ from deriva_ml.catalog import set_catalog_provenance
 from deriva_ml.core.ermrest import ColumnDefinition, UploadProgress
 from deriva_ml.core.enums import BuiltinTypes
 from deriva_ml.dataset import VersionPart
+from deriva_ml.dataset.split import split_dataset
 from deriva_ml.execution import ExecutionConfiguration
 from deriva_ml.schema import create_ml_catalog
 
@@ -697,12 +700,11 @@ def create_dataset_hierarchy(ml: DerivaML, exe: Any = None) -> dict[str, str]:
     - Small_Split: Parent dataset for small train/test split (1,000 images)
       - Small_Training: Child of Small_Split, 500 randomly selected training images (Labeled)
       - Small_Testing: Child of Small_Split, 500 randomly selected test images (Unlabeled)
-    - Labeled_Split: Parent dataset for split from labeled images only (enables ROC analysis)
-      - Labeled_Training: 80% of labeled training images
-      - Labeled_Testing: 20% of labeled training images (has ground truth!)
-    - Small_Labeled_Split: Smaller version of labeled split for quick testing
-      - Small_Labeled_Training: 400 labeled images for training
-      - Small_Labeled_Testing: 100 labeled images for testing
+
+    Note:
+        Labeled split datasets (Labeled_Split, Small_Labeled_Split) are created
+        later using ``split_dataset()`` after the Training dataset is populated
+        with images and features.
 
     Args:
         ml: Connected DerivaML instance.
@@ -712,11 +714,6 @@ def create_dataset_hierarchy(ml: DerivaML, exe: Any = None) -> dict[str, str]:
 
     Returns:
         Mapping of dataset names to their RIDs.
-
-    Note:
-        The Split datasets use nested datasets to organize their Training and
-        Testing children. The Labeled_Split datasets are created from training
-        images only (which have ground truth) to enable metrics like ROC curves.
     """
     datasets = {}
 
@@ -792,66 +789,9 @@ def create_dataset_hierarchy(ml: DerivaML, exe: Any = None) -> dict[str, str]:
     )
     logger.info("  Linked Small_Training and Small_Testing to Small_Split dataset")
 
-    # Create Labeled_Split dataset (from training images only - all have ground truth)
-    # This enables ROC analysis since both train and test have labels
-    labeled_split_ds = create_ds(
-        "CIFAR-10 labeled split: train/test from training images (all have ground truth)",
-        ["Split", "Labeled"],
-    )
-    datasets["labeled_split"] = labeled_split_ds.dataset_rid
-    logger.info(f"  Created Labeled_Split dataset: {labeled_split_ds.dataset_rid}")
-
-    # Create Labeled_Training dataset (80% of labeled images)
-    labeled_training_ds = create_ds(
-        "CIFAR-10 labeled training subset (80% of labeled images, with ground truth)",
-        ["Training", "Labeled"],
-    )
-    datasets["labeled_training"] = labeled_training_ds.dataset_rid
-    logger.info(f"  Created Labeled_Training dataset: {labeled_training_ds.dataset_rid}")
-
-    # Create Labeled_Testing dataset (20% of labeled images - has ground truth!)
-    labeled_testing_ds = create_ds(
-        "CIFAR-10 labeled test subset (20% of labeled images, with ground truth for ROC analysis)",
-        ["Testing", "Labeled"],
-    )
-    datasets["labeled_testing"] = labeled_testing_ds.dataset_rid
-    logger.info(f"  Created Labeled_Testing dataset: {labeled_testing_ds.dataset_rid}")
-
-    # Add Labeled_Training and Labeled_Testing as children of Labeled_Split
-    labeled_split_ds.add_dataset_members(
-        [labeled_training_ds.dataset_rid, labeled_testing_ds.dataset_rid], validate=False
-    )
-    logger.info("  Linked Labeled_Training and Labeled_Testing to Labeled_Split dataset")
-
-    # Create Small_Labeled_Split dataset (500 labeled images for quick testing)
-    small_labeled_split_ds = create_ds(
-        "Small CIFAR-10 labeled split with 500 images (all have ground truth)",
-        ["Split", "Labeled"],
-    )
-    datasets["small_labeled_split"] = small_labeled_split_ds.dataset_rid
-    logger.info(f"  Created Small_Labeled_Split dataset: {small_labeled_split_ds.dataset_rid}")
-
-    # Create Small_Labeled_Training dataset (400 labeled images)
-    small_labeled_training_ds = create_ds(
-        "Small CIFAR-10 labeled training subset (400 images with ground truth)",
-        ["Training", "Labeled"],
-    )
-    datasets["small_labeled_training"] = small_labeled_training_ds.dataset_rid
-    logger.info(f"  Created Small_Labeled_Training dataset: {small_labeled_training_ds.dataset_rid}")
-
-    # Create Small_Labeled_Testing dataset (100 labeled images)
-    small_labeled_testing_ds = create_ds(
-        "Small CIFAR-10 labeled test subset (100 images with ground truth for ROC analysis)",
-        ["Testing", "Labeled"],
-    )
-    datasets["small_labeled_testing"] = small_labeled_testing_ds.dataset_rid
-    logger.info(f"  Created Small_Labeled_Testing dataset: {small_labeled_testing_ds.dataset_rid}")
-
-    # Add Small_Labeled_Training and Small_Labeled_Testing as children of Small_Labeled_Split
-    small_labeled_split_ds.add_dataset_members(
-        [small_labeled_training_ds.dataset_rid, small_labeled_testing_ds.dataset_rid], validate=False
-    )
-    logger.info("  Linked Small_Labeled_Training and Small_Labeled_Testing to Small_Labeled_Split dataset")
+    # Note: Labeled splits (Labeled_Split, Small_Labeled_Split) are created
+    # later using split_dataset() after the Training dataset is populated
+    # with images and features.
 
     return datasets
 
@@ -1244,62 +1184,73 @@ def load_images(
         logger.info(f"  Adding {len(test_rids)} images to Small_Testing dataset (all available)...")
         small_testing_ds.add_dataset_members({"Image": test_rids}, validate=False)
 
-    # Create labeled split datasets from training images only (all have ground truth)
-    # This enables ROC analysis since both train and test partitions have labels
+    # Create labeled split datasets from the Training dataset using split_dataset().
+    # This enables ROC analysis since both train and test partitions have labels.
     if train_rids:
-        # Shuffle training RIDs for random split
-        shuffled_train_rids = train_rids.copy()
-        random.shuffle(shuffled_train_rids)
-
         # Full labeled split: 80/20 split of all training images
-        split_point = int(len(shuffled_train_rids) * 0.8)
-        labeled_train_rids = shuffled_train_rids[:split_point]
-        labeled_test_rids = shuffled_train_rids[split_point:]
+        logger.info("  Creating Labeled_Split (80/20 of training images)...")
+        labeled_result = split_dataset(
+            ml,
+            datasets["training"],
+            test_size=0.2,
+            seed=42,
+            training_types=["Labeled"],
+            testing_types=["Labeled"],
+            element_table="Image",
+            split_description="CIFAR-10 labeled split: 80/20 from training images (all have ground truth)",
+        )
+        datasets["labeled_split"] = labeled_result["split"]
+        datasets["labeled_training"] = labeled_result["training"]
+        datasets["labeled_testing"] = labeled_result["testing"]
+        logger.info(
+            f"    Labeled_Split: {labeled_result['split']}, "
+            f"Training: {labeled_result['training']}, "
+            f"Testing: {labeled_result['testing']}"
+        )
 
-        labeled_training_ds = ml.lookup_dataset(datasets["labeled_training"])
-        logger.info(f"  Adding {len(labeled_train_rids)} images to Labeled_Training dataset...")
-        for i in range(0, len(labeled_train_rids), batch_size):
-            batch = labeled_train_rids[i : i + batch_size]
-            labeled_training_ds.add_dataset_members({"Image": batch}, validate=False)
-        logger.info(f"    Added {len(labeled_train_rids)} images")
-
-        labeled_testing_ds = ml.lookup_dataset(datasets["labeled_testing"])
-        logger.info(f"  Adding {len(labeled_test_rids)} images to Labeled_Testing dataset...")
-        labeled_testing_ds.add_dataset_members({"Image": labeled_test_rids}, validate=False)
-        logger.info(f"    Added {len(labeled_test_rids)} images")
-
-        # Small labeled split: 500 images (400 train / 100 test) from training images
-        small_labeled_total = 500
-        small_labeled_train_size = 400
-        small_labeled_test_size = 100
-
-        if len(train_rids) >= small_labeled_total:
-            small_labeled_sample = random.sample(train_rids, small_labeled_total)
-            small_labeled_train_rids = small_labeled_sample[:small_labeled_train_size]
-            small_labeled_test_rids = small_labeled_sample[small_labeled_train_size:]
-
-            small_labeled_training_ds = ml.lookup_dataset(datasets["small_labeled_training"])
-            logger.info(f"  Adding {len(small_labeled_train_rids)} images to Small_Labeled_Training dataset...")
-            small_labeled_training_ds.add_dataset_members({"Image": small_labeled_train_rids}, validate=False)
-            logger.info(f"    Added {len(small_labeled_train_rids)} images")
-
-            small_labeled_testing_ds = ml.lookup_dataset(datasets["small_labeled_testing"])
-            logger.info(f"  Adding {len(small_labeled_test_rids)} images to Small_Labeled_Testing dataset...")
-            small_labeled_testing_ds.add_dataset_members({"Image": small_labeled_test_rids}, validate=False)
-            logger.info(f"    Added {len(small_labeled_test_rids)} images")
+        # Small labeled split: 400 train / 100 test from training images
+        if len(train_rids) >= 500:
+            logger.info("  Creating Small_Labeled_Split (400/100 of training images)...")
+            small_labeled_result = split_dataset(
+                ml,
+                datasets["training"],
+                test_size=100,
+                train_size=400,
+                seed=42,
+                training_types=["Labeled"],
+                testing_types=["Labeled"],
+                element_table="Image",
+                split_description="Small CIFAR-10 labeled split: 400/100 from training images (all have ground truth)",
+            )
+            datasets["small_labeled_split"] = small_labeled_result["split"]
+            datasets["small_labeled_training"] = small_labeled_result["training"]
+            datasets["small_labeled_testing"] = small_labeled_result["testing"]
+            logger.info(
+                f"    Small_Labeled_Split: {small_labeled_result['split']}, "
+                f"Training: {small_labeled_result['training']}, "
+                f"Testing: {small_labeled_result['testing']}"
+            )
         else:
             # If fewer than 500 training images, use 80/20 split of what we have
-            small_split_point = int(len(train_rids) * 0.8)
-            small_labeled_train_rids = train_rids[:small_split_point]
-            small_labeled_test_rids = train_rids[small_split_point:]
-
-            small_labeled_training_ds = ml.lookup_dataset(datasets["small_labeled_training"])
-            logger.info(f"  Adding {len(small_labeled_train_rids)} images to Small_Labeled_Training dataset...")
-            small_labeled_training_ds.add_dataset_members({"Image": small_labeled_train_rids}, validate=False)
-
-            small_labeled_testing_ds = ml.lookup_dataset(datasets["small_labeled_testing"])
-            logger.info(f"  Adding {len(small_labeled_test_rids)} images to Small_Labeled_Testing dataset...")
-            small_labeled_testing_ds.add_dataset_members({"Image": small_labeled_test_rids}, validate=False)
+            logger.info("  Creating Small_Labeled_Split (80/20 of available training images)...")
+            small_labeled_result = split_dataset(
+                ml,
+                datasets["training"],
+                test_size=0.2,
+                seed=123,  # Different seed from the full labeled split
+                training_types=["Labeled"],
+                testing_types=["Labeled"],
+                element_table="Image",
+                split_description="Small CIFAR-10 labeled split from training images (all have ground truth)",
+            )
+            datasets["small_labeled_split"] = small_labeled_result["split"]
+            datasets["small_labeled_training"] = small_labeled_result["training"]
+            datasets["small_labeled_testing"] = small_labeled_result["testing"]
+            logger.info(
+                f"    Small_Labeled_Split: {small_labeled_result['split']}, "
+                f"Training: {small_labeled_result['training']}, "
+                f"Testing: {small_labeled_result['testing']}"
+            )
 
     return datasets, {
         "total_images": len(all_rids),
