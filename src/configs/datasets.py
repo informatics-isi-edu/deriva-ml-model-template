@@ -36,7 +36,7 @@ from deriva_ml.execution import with_description
 # match the parameter name in BaseConfig.
 
 # =============================================================================
-# Catalog 3: CIFAR-10 with 10,000 images (localhost, schema: cifar10)
+# Catalog 9: CIFAR-10 with 10,000 images (localhost, schema: cifar10)
 # =============================================================================
 
 datasets_store = store(group="datasets")
