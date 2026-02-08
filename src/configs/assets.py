@@ -58,27 +58,27 @@ asset_store(
 )
 
 # =============================================================================
-# Catalog 3: CIFAR-10 Assets (localhost, schema: cifar10)
+# Catalog 9: CIFAR-10 Assets (localhost, schema: cifar10)
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# quick_vs_extended multirun (parent: 3WPM)
+# quick_vs_extended multirun (parent: 3WJC)
 # -----------------------------------------------------------------------------
 # Compares quick training (3 epochs) vs extended training (50 epochs)
 # on small labeled dataset (500 images)
 
 # Prediction probabilities for ROC analysis
-# 3WRT: cifar10_quick (exec 3WQM), 3X1G: cifar10_extended (exec 3X08)
+# 3WMP: cifar10_quick (exec 3WKG), 3WXG: cifar10_extended (exec 3WW4)
 asset_store(
-    ["3WRT", "3X1G"],
+    ["3WMP", "3WXG"],
     name="roc_quick_vs_extended",
 )
 
-# Pre-trained weights from cifar10_quick (execution 3WQM)
+# Pre-trained weights from cifar10_quick (execution 3WKG)
 asset_store(
     with_description(
-        ["3WRP"],
-        "Pre-trained weights from cifar10_quick (execution 3WQM, 3 epochs). "
+        ["3WMJ"],
+        "Pre-trained weights from cifar10_quick (execution 3WKG, 3 epochs). "
         "Use with cifar10_test_only experiment for inference.",
     ),
     name="quick_weights",
