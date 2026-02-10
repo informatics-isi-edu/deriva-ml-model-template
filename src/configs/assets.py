@@ -69,12 +69,10 @@ asset_store(
 
 # Prediction probabilities for ROC analysis
 # 3WS6: cifar10_quick (exec 3WR0), 3X20: cifar10_extended (exec 3X0M)
+# Note: Using plain list (not with_description) because this is used in notebook configs.
+# with_description creates a DictConfig which can't merge with BaseConfig's ListConfig.
 asset_store(
-    with_description(
-        ["3WS6", "3X20"],
-        "Prediction probability CSVs from quick_vs_extended multirun (parent 3WPT). "
-        "Quick (3 epochs, exec 3WR0) vs extended (50 epochs, exec 3X0M) on small labeled split.",
-    ),
+    ["3WS6", "3X20"],
     name="roc_quick_vs_extended",
 )
 
