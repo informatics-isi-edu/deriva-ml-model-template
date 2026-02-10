@@ -33,12 +33,12 @@ deriva_store(
     DerivaMLConfig,
     name="default_deriva",
     hostname="localhost",
-    catalog_id=9,
+    catalog_id=6,
     use_minid=False,
     zen_meta={
         "description": (
-            "Local development catalog (localhost:9) with CIFAR-10 data. "
-            "Schema: cifar10. Use for E2E testing and development."
+            "Local development catalog (localhost:6) with CIFAR-10 data. "
+            "Schema: cifar10_10k. Use for E2E testing and development."
         )
     },
 )
