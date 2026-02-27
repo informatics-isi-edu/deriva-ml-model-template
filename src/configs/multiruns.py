@@ -24,7 +24,7 @@ Benefits:
 """
 
 from deriva_ml.execution import multirun_config
-from configs.sweeps import (
+from configs.multirun_descriptions import (
     QUICK_VS_EXTENDED_DESCRIPTION,
     FULL_DATASET_DESCRIPTION,
     LEARNING_RATE_SWEEP_DESCRIPTION,

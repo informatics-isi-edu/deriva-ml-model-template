@@ -1,23 +1,12 @@
-"""Sweep configurations for multi-experiment runs.
+"""Multirun descriptions for multi-experiment runs.
 
-Sweeps provide rich markdown descriptions for the parent execution when running
-multiple experiments together. The sweep config documents why experiments are
-being compared and what outcomes are expected.
-
-Unlike ad-hoc parameter sweeps (e.g., `--multirun model_config.epochs=10,20,50`),
-sweep configs let you:
-- Document why experiments are being compared
-- Use full markdown formatting in descriptions (tables, headers, bold, etc.)
-- Track sweep metadata in the parent execution
-- Keep the rationale alongside the code
+Rich markdown descriptions for the parent execution when running multiple
+experiments together. Each description documents why experiments are being
+compared and what outcomes are expected.
 
 Usage:
-    # Run a pre-defined sweep (specify experiments on command line)
-    uv run deriva-ml-run --multirun \\
-        +experiment=cifar10_quick,cifar10_extended \\
-        sweep_description="$(<src/configs/sweep_descriptions/quick_vs_extended.md)"
-
-    # Or set sweep_description in your experiment config directly
+    # Run a pre-defined multirun
+    uv run deriva-ml-run +multirun=quick_vs_extended
 """
 
 # =============================================================================
