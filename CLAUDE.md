@@ -88,90 +88,15 @@ All configuration is Python-first using hydra-zen, no YAML files. Configs are in
 - Always document new experiments in `Experiments.md` alongside the code in `experiments.py`
 - Use `dry_run=true` to test before committing and running for real
 
-### Model Pattern
-
-Models follow this signature pattern:
-```python
-def model_name(
-    param1: type = default,
-    param2: type = default,
-    # Always present - injected by framework
-    ml_instance: DerivaML = None,
-    execution: Execution | None = None,
-) -> None:
-```
-
-Wrap with `builds(..., zen_partial=True)` for deferred execution:
-```python
-from hydra_zen import builds, store
-
-ModelConfig = builds(model_function, param1=val1, zen_partial=True)
-store(ModelConfig, group="model_config", name="default")
-store(ModelConfig, param1=val2, group="model_config", name="variant")
-```
-
 ### Entry Point
 
 `deriva-ml-run` - CLI provided by deriva-ml. Loads config modules from `src/configs/` automatically.
 
-### Notebook Configuration Pattern
+### Skills
 
-Notebooks use the simplified `run_notebook()` API for initialization:
-
-1. **Define a config module** in `src/configs/` (e.g., `my_analysis.py`):
-
-   Simple notebook (only standard fields):
-   ```python
-   from deriva_ml.execution import notebook_config
-
-   notebook_config(
-       "my_analysis",
-       defaults={"assets": "my_assets", "datasets": "my_dataset"},
-   )
-   ```
-
-   Notebook with custom parameters:
-   ```python
-   from dataclasses import dataclass
-   from deriva_ml.execution import BaseConfig, notebook_config
-
-   @dataclass
-   class MyAnalysisConfig(BaseConfig):
-       threshold: float = 0.5
-       num_iterations: int = 100
-
-   notebook_config(
-       "my_analysis",
-       config_class=MyAnalysisConfig,
-       defaults={"assets": "my_assets"},
-   )
-   ```
-
-2. **Initialize the notebook** (single call does everything):
-   ```python
-   from deriva_ml.execution import run_notebook
-
-   ml, execution, config = run_notebook("my_analysis")
-
-   # Ready to use:
-   # - ml: Connected DerivaML instance
-   # - execution: Execution context with downloaded inputs
-   # - config: Resolved configuration (config.assets, config.threshold, etc.)
-
-   # At the end of notebook:
-   execution.upload_execution_outputs()
-   ```
-
-3. **Run notebook with overrides** (command line):
-   ```bash
-   # Show available configuration options
-   uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb --info
-
-   # Run with overrides (positional Hydra overrides, NOT --config)
-   uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb \
-     --host localhost --catalog 45 \
-     assets=different_assets
-   ```
+Step-by-step guides for scaffolding new components (invoke with `/`):
+- `/new-model` — Create a new DerivaML model with config and workflow
+- `/new-notebook` — Create a new analysis notebook with hydra-zen config
 
 ## Catalog Environments
 
