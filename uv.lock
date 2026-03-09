@@ -36,13 +36,13 @@ name = "aiohttp"
 version = "3.13.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "aiohappyeyeballs", marker = "python_full_version < '3.14'" },
-    { name = "aiosignal", marker = "python_full_version < '3.14'" },
-    { name = "attrs", marker = "python_full_version < '3.14'" },
-    { name = "frozenlist", marker = "python_full_version < '3.14'" },
-    { name = "multidict", marker = "python_full_version < '3.14'" },
-    { name = "propcache", marker = "python_full_version < '3.14'" },
-    { name = "yarl", marker = "python_full_version < '3.14'" },
+    { name = "aiohappyeyeballs", marker = "python_full_version < '3.13'" },
+    { name = "aiosignal", marker = "python_full_version < '3.13'" },
+    { name = "attrs", marker = "python_full_version < '3.13'" },
+    { name = "frozenlist", marker = "python_full_version < '3.13'" },
+    { name = "multidict", marker = "python_full_version < '3.13'" },
+    { name = "propcache", marker = "python_full_version < '3.13'" },
+    { name = "yarl", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/42/32cf8e7704ceb4481406eb87161349abb46a57fee3f008ba9cb610968646/aiohttp-3.13.3.tar.gz", hash = "sha256:a949eee43d3782f2daae4f4a2819b2cb9b0c5d3b7f7a927067cc84dafdbb9f88", size = 7844556, upload-time = "2026-01-03T17:33:05.204Z" }
 wheels = [
@@ -121,7 +121,7 @@ name = "aiosignal"
 version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "frozenlist", marker = "python_full_version < '3.14'" },
+    { name = "frozenlist", marker = "python_full_version < '3.13'" },
     { name = "typing-extensions", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/61/62/06741b579156360248d1ec624842ad0edf697050bbaf7c3e46394e106ad1/aiosignal-1.4.0.tar.gz", hash = "sha256:f47eecd9468083c2029cc99945502cb7708b082c232f9aca65da147157b251c7", size = 25007, upload-time = "2025-07-03T22:54:43.528Z" }
@@ -840,8 +840,8 @@ dependencies = [
 
 [[package]]
 name = "deriva-ml"
-version = "1.18.0.post9+gf9d5a3852"
-source = { git = "https://github.com/informatics-isi-edu/deriva-ml.git#f9d5a385202a2affe431c13c342f1100d7f6f55d" }
+version = "1.19.0.post1+g981bc2f22"
+source = { git = "https://github.com/informatics-isi-edu/deriva-ml.git#981bc2f22ca69644ba63495a798bc35739a3c45a" }
 dependencies = [
     { name = "bdbag" },
     { name = "bump-my-version" },
@@ -4334,8 +4334,8 @@ name = "tensorflow-metal"
 version = "1.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "six" },
-    { name = "wheel" },
+    { name = "six", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
+    { name = "wheel", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/dc/bf/988b619322d5617a928e7f31cbb1ed8dd7f375f69dfa73dab26409a00382/tensorflow_metal-1.2.0-cp312-cp312-macosx_12_0_arm64.whl", hash = "sha256:4bece0ecb154b713b9f5ad4aec676a366d312822161e3cf0e1dea737c64cec04", size = 1357400, upload-time = "2025-01-31T00:52:57.924Z" },
@@ -4767,9 +4767,9 @@ name = "yarl"
 version = "1.23.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "idna", marker = "python_full_version < '3.14'" },
-    { name = "multidict", marker = "python_full_version < '3.14'" },
-    { name = "propcache", marker = "python_full_version < '3.14'" },
+    { name = "idna", marker = "python_full_version < '3.13'" },
+    { name = "multidict", marker = "python_full_version < '3.13'" },
+    { name = "propcache", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/23/6e/beb1beec874a72f23815c1434518bfc4ed2175065173fb138c3705f658d4/yarl-1.23.0.tar.gz", hash = "sha256:53b1ea6ca88ebd4420379c330aea57e258408dd0df9af0992e5de2078dc9f5d5", size = 194676, upload-time = "2026-03-01T22:07:53.373Z" }
 wheels = [
