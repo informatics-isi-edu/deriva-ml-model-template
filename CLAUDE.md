@@ -83,10 +83,7 @@ All configuration is Python-first using hydra-zen, no YAML files. Configs are in
 
 ### Experiments (`Experiments.md`)
 
-`Experiments.md` is the canonical registry of all defined experiments. It documents each experiment's config group references (workflow, model_config, datasets, assets), model parameters, and outputs. When adding or modifying experiments:
-- **Prefer creating new experiments** over modifying existing ones to keep the history clear
-- Always document new experiments in `Experiments.md` alongside the code in `experiments.py`
-- Use `dry_run=true` to test before committing and running for real
+`Experiments.md` is a human-readable registry of all defined experiments, generated from `src/configs/experiments.py` and `src/configs/multiruns.py`. The `configure-experiment` skill automatically updates this file when experiment configs change. Prefer creating new experiments over modifying existing ones to keep the history clear.
 
 ### Entry Point
 
