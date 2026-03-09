@@ -50,13 +50,50 @@ uv run nbstripout --install
 uv run deriva-ml-install-kernel
 ```
 
-### 4. Authenticate
+### 4. Set Up Claude Code (Optional)
+
+If using [Claude Code](https://claude.ai/code), install the DerivaML MCP server and skills plugin.
+
+**Install the MCP server** (provides catalog tools, dataset management, execution tracking):
+
+```bash
+# Using Docker (recommended)
+docker pull ghcr.io/informatics-isi-edu/deriva-mcp:latest
+```
+
+Add to `~/.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "deriva-ml": {
+      "type": "stdio",
+      "command": "/bin/sh",
+      "args": [
+        "-c",
+        "docker run -i --rm --add-host localhost:host-gateway -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+**Install the skills plugin** (provides workflow guidance, auto-invoked best practices):
+
+```
+/plugin marketplace add informatics-isi-edu/deriva-mcp
+/plugin install deriva
+```
+
+See the [deriva-mcp README](https://github.com/informatics-isi-edu/deriva-mcp) for full setup options including HTTP transport, localhost configuration, and native installs.
+
+### 5. Authenticate
 
 ```bash
 uv run deriva-globus-auth-utils login --host www.eye-ai.org
 ```
 
-### 5. Run
+### 6. Run
 
 ```bash
 # Run the example model
@@ -129,9 +166,9 @@ The CIFAR-10 example includes multiple dataset configurations:
 
 **Important:** For ROC analysis or accuracy metrics, use the **labeled** datasets. The unlabeled datasets have test images without ground truth labels.
 
-## Using MCP Tools with AI Assistants
+## Using Claude Code with DerivaML
 
-If you're using AI assistants like Claude with the [DerivaML MCP Server](https://github.com/informatics-isi-edu/deriva-ml-mcp), you can interact with catalogs directly through natural language.
+With the [DerivaML MCP server and skills plugin](https://github.com/informatics-isi-edu/deriva-mcp) (see step 4), you can interact with catalogs through natural language and get guided workflows for common tasks. Use `/deriva:<skill-name>` to invoke skills like `/deriva:create-dataset`, `/deriva:run-experiment`, etc.
 
 ## Further Reading
 
