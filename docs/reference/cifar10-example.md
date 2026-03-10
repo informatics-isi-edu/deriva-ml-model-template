@@ -22,7 +22,7 @@ uv run load-cifar10 --host <hostname> --catalog_id <catalog_id> [options]
 
 | Argument | Description |
 |----------|-------------|
-| `--host` | Deriva server hostname (e.g., `www.eye-ai.org`) |
+| `--host` | Deriva server hostname (e.g., `<hostname>`) |
 | `--catalog_id` | Catalog ID to load data into |
 
 ### Optional Arguments
@@ -40,7 +40,7 @@ uv run load-cifar10 --host <hostname> --catalog_id <catalog_id> [options]
 
 ```bash
 # Load 500 images
-uv run load-cifar10 --host dev.eye-ai.org --catalog_id 5 --num_images 500
+uv run load-cifar10 --host <hostname> --catalog_id 5 --num_images 500
 
 # Load only training images
 uv run load-cifar10 --host localhost --catalog_id 45 --num_images 1000 --train_only
@@ -108,23 +108,23 @@ All model parameters are configurable via Hydra:
 
 ```bash
 # Default configuration
-uv run src/deriva_run.py model_config=cifar10_default
+uv run deriva-ml-run
 
 # Quick test
-uv run src/deriva_run.py model_config=cifar10_quick
+uv run deriva-ml-run model_config=cifar10_quick
 
 # Extended training
-uv run src/deriva_run.py model_config=cifar10_extended
+uv run deriva-ml-run +experiment=cifar10_extended
 ```
 
 ### Override Parameters
 
 ```bash
 # Change learning rate
-uv run src/deriva_run.py model_config=cifar10_default model_config.learning_rate=0.01
+uv run deriva-ml-run model_config=cifar10_default model_config.learning_rate=0.01
 
 # Change epochs and batch size
-uv run src/deriva_run.py model_config=cifar10_default model_config.epochs=20 model_config.batch_size=128
+uv run deriva-ml-run model_config=cifar10_default model_config.epochs=20 model_config.batch_size=128
 ```
 
 ## Data Pipeline

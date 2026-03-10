@@ -25,6 +25,8 @@ Quick links:
 
 ## Quick Start
 
+> **Note:** Running models requires access to a DerivaML catalog. If you don't have access to an existing Deriva server, you can run one locally using [deriva-docker](https://github.com/informatics-isi-edu/deriva-docker).
+
 ### 1. Create Your Repository
 
 Use this template to create a new repository: [Creating a repository from a template](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template)

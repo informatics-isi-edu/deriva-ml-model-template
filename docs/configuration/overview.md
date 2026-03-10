@@ -18,8 +18,11 @@ src/configs/
 ├─ datasets.py          # Dataset specifications
 ├─ assets.py            # Asset RID configurations
 ├─ workflow.py          # Workflow metadata
-├─ simple_model.py      # Model hyperparameters
+├─ base.py              # Base DerivaModelConfig
+├─ workflow.py          # Workflow metadata
+├─ cifar10_cnn.py       # Model hyperparameters
 ├─ experiments.py       # Experiment presets
+├─ multiruns.py         # Named multirun configurations
 └─ my_notebook.py       # Notebook configurations
 ```
 
@@ -87,13 +90,13 @@ Override at runtime:
 
 ```bash
 # Use a different config from a group
-uv run src/deriva_run.py datasets=testing
+uv run deriva-ml-run datasets=testing
 
 # Override a specific field
-uv run src/deriva_run.py model_config.epochs=100
+uv run deriva-ml-run model_config.epochs=100
 
 # Combine multiple overrides
-uv run src/deriva_run.py datasets=testing model_config=extended
+uv run deriva-ml-run datasets=testing model_config=extended
 ```
 
 ## Next Steps

@@ -7,37 +7,38 @@ Experiments allow you to define reusable combinations of configuration choices.
 Define experiments in `src/configs/experiments.py`:
 
 ```python
-from hydra_zen import store
+from hydra_zen import make_config, store
+from configs.base import DerivaModelConfig
 
-experiment_store = store(group="experiment")
+experiment_store = store(group="experiment", package="_global_")
 
 # A quick test experiment
 experiment_store(
-    {
-        "model_config": "quick",
-        "datasets": "small_test",
-    },
-    name="quick_test",
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "cifar10_quick"},
+            {"override /datasets": "cifar10_small_labeled_split"},
+        ],
+        description="Quick CIFAR-10 training: 3 epochs, batch size 128",
+        bases=(DerivaModelConfig,),
+    ),
+    name="cifar10_quick",
 )
 
 # Full training run
 experiment_store(
-    {
-        "model_config": "extended",
-        "datasets": "full_training",
-        "assets": "pretrained_weights",
-    },
-    name="full_training",
-)
-
-# Ablation study - no pretrained weights
-experiment_store(
-    {
-        "model_config": "extended",
-        "datasets": "full_training",
-        "assets": "no_pretrain",
-    },
-    name="ablation_no_pretrain",
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "cifar10_extended"},
+            {"override /datasets": "cifar10_labeled_split"},
+            {"override /assets": "pretrained_weights"},
+        ],
+        description="Full CIFAR-10 training with extended epochs",
+        bases=(DerivaModelConfig,),
+    ),
+    name="cifar10_extended",
 )
 ```
 
@@ -46,19 +47,50 @@ experiment_store(
 Run a single experiment:
 
 ```bash
-uv run src/deriva_run.py experiment=full_training
+uv run deriva-ml-run +experiment=cifar10_quick
 ```
 
-Run multiple experiments in sequence (multirun):
+Run multiple experiments in sequence (ad-hoc multirun):
 
 ```bash
-uv run src/deriva_run.py --multirun experiment=quick_test,full_training
+uv run deriva-ml-run --multirun +experiment=cifar10_quick,cifar10_extended
 ```
 
 Override within an experiment:
 
 ```bash
-uv run src/deriva_run.py experiment=full_training model_config.epochs=100
+uv run deriva-ml-run +experiment=cifar10_extended model_config.epochs=100
+```
+
+## Named Multiruns
+
+For predefined multirun configurations, define them in `src/configs/multiruns.py`:
+
+```python
+from deriva_ml.execution import multirun_config
+
+multirun_config(
+    "lr_sweep",
+    overrides=[
+        "+experiment=cifar10_quick",
+        "model_config.learning_rate=0.0001,0.001,0.01,0.1",
+    ],
+    description="Learning rate sweep",
+)
+
+multirun_config(
+    "quick_vs_extended",
+    overrides=[
+        "+experiment=cifar10_quick,cifar10_extended",
+    ],
+    description="Compare quick and extended training",
+)
+```
+
+Run a named multirun:
+
+```bash
+uv run deriva-ml-run +multirun=lr_sweep
 ```
 
 ## Experiment Design Patterns
@@ -72,25 +104,49 @@ model_store(MyModelConfig, learning_rate=1e-3, name="lr_medium")
 model_store(MyModelConfig, learning_rate=1e-4, name="lr_low")
 
 # Create experiments for each
-experiment_store({"model_config": "lr_high"}, name="sweep_lr_high")
-experiment_store({"model_config": "lr_medium"}, name="sweep_lr_medium")
-experiment_store({"model_config": "lr_low"}, name="sweep_lr_low")
+experiment_store(
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "lr_high"},
+        ],
+        description="High learning rate experiment",
+        bases=(DerivaModelConfig,),
+    ),
+    name="sweep_lr_high",
+)
 ```
 
-Run the sweep:
+Or use a named multirun for parameter sweeps:
 ```bash
-uv run src/deriva_run.py --multirun experiment=sweep_lr_high,sweep_lr_medium,sweep_lr_low
+uv run deriva-ml-run +multirun=lr_sweep
 ```
 
 ### Dataset Comparison
 
 ```python
 experiment_store(
-    {"datasets": "dataset_v1", "model_config": "default"},
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /datasets": "dataset_v1"},
+            {"override /model_config": "default"},
+        ],
+        description="Evaluation on dataset v1",
+        bases=(DerivaModelConfig,),
+    ),
     name="compare_v1",
 )
 experiment_store(
-    {"datasets": "dataset_v2", "model_config": "default"},
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /datasets": "dataset_v2"},
+            {"override /model_config": "default"},
+        ],
+        description="Evaluation on dataset v2",
+        bases=(DerivaModelConfig,),
+    ),
     name="compare_v2",
 )
 ```
@@ -100,42 +156,44 @@ experiment_store(
 ```python
 # Full model
 experiment_store(
-    {
-        "model_config": "full_model",
-        "assets": "all_features",
-    },
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "full_model"},
+            {"override /assets": "all_features"},
+        ],
+        description="Full model with all features",
+        bases=(DerivaModelConfig,),
+    ),
     name="ablation_full",
 )
 
 # Without feature A
 experiment_store(
-    {
-        "model_config": "no_feature_a",
-        "assets": "no_feature_a",
-    },
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "no_feature_a"},
+            {"override /assets": "no_feature_a"},
+        ],
+        description="Ablation: without feature A",
+        bases=(DerivaModelConfig,),
+    ),
     name="ablation_no_a",
-)
-
-# Without feature B
-experiment_store(
-    {
-        "model_config": "no_feature_b",
-        "assets": "no_feature_b",
-    },
-    name="ablation_no_b",
 )
 ```
 
 ## Best Practices
 
 1. **Name experiments descriptively**: Use names that describe what's different
-2. **Document your experiments**: Add comments explaining the purpose
+2. **Document your experiments**: Add a `description` field explaining the purpose
 3. **Version your data**: Use specific dataset versions in experiments
 4. **Track results**: Each run creates an Execution record in the catalog
+5. **Prefer named multiruns** over ad-hoc `--multirun` sweeps for reproducibility
 
 ## Multirun Output
 
-When using `--multirun`, Hydra creates separate output directories:
+When using multiruns, Hydra creates separate output directories:
 
 ```
 outputs/

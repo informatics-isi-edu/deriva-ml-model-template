@@ -18,13 +18,13 @@ Before running an experiment:
 
 ```bash
 # Run with default configuration
-uv run src/deriva_run.py
+uv run deriva-ml-run
 
 # Run with specific model config
-uv run src/deriva_run.py model_config=extended
+uv run deriva-ml-run model_config=extended
 
 # Run with multiple overrides
-uv run src/deriva_run.py model_config=extended datasets=full_training
+uv run deriva-ml-run model_config=extended datasets=full_training
 ```
 
 ### Dry Run (Development)
@@ -32,7 +32,7 @@ uv run src/deriva_run.py model_config=extended datasets=full_training
 During development, use dry runs to test without creating catalog records:
 
 ```bash
-uv run src/deriva_run.py dry_run=true
+uv run deriva-ml-run dry_run=true
 ```
 
 This:
@@ -47,38 +47,41 @@ Override specific parameters without creating new configurations:
 
 ```bash
 # Override model parameters
-uv run src/deriva_run.py model_config.epochs=100 model_config.learning_rate=0.01
+uv run deriva-ml-run model_config.epochs=100 model_config.learning_rate=0.01
 
-# Override connection
-uv run src/deriva_run.py deriva_ml.hostname=localhost deriva_ml.catalog_id=45
+# Override connection from command line
+uv run deriva-ml-run --host localhost --catalog 45
 ```
 
 ## Multiple Experiments (Multirun)
 
-### Using Experiment Presets
+### Using Named Multiruns
 
 ```bash
-# Run multiple predefined experiments
-uv run src/deriva_run.py --multirun experiment=baseline,extended,regularized
+# Run a predefined named multirun
+uv run deriva-ml-run +multirun=quick_vs_extended
 ```
 
 ### Sweeping Parameters
 
 ```bash
 # Sweep learning rates
-uv run src/deriva_run.py --multirun model_config.learning_rate=0.1,0.01,0.001
+uv run deriva-ml-run --multirun model_config.learning_rate=0.1,0.01,0.001
 
 # Sweep multiple parameters (creates all combinations)
-uv run src/deriva_run.py --multirun \
+uv run deriva-ml-run --multirun \
   model_config.learning_rate=0.1,0.01 \
   model_config.epochs=10,50
 ```
 
-### Combining Sweeps with Presets
+### Ad-hoc Multirun with Experiment Presets
 
 ```bash
+# Run multiple experiments as ad-hoc multirun
+uv run deriva-ml-run --multirun +experiment=baseline,extended,regularized
+
 # Use preset but sweep one parameter
-uv run src/deriva_run.py experiment=baseline --multirun model_config.epochs=10,25,50
+uv run deriva-ml-run --multirun +experiment=baseline model_config.epochs=10,25,50
 ```
 
 ## Notebook Experiments
@@ -97,22 +100,16 @@ uv run jupyter lab
 
 ```bash
 # Run notebook and upload to catalog
-uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb \
-  --host www.eye-ai.org \
-  --catalog 2 \
-  --kernel my-repo-name
+uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb
 
 # With configuration overrides
-uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb \
-  --host www.eye-ai.org \
-  --catalog 2 \
-  threshold=0.8 show_plots=false
+uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb assets=different_assets
 ```
 
 ### View Configuration Options
 
 ```bash
-uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb --info
+uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb --info
 ```
 
 ## Monitoring Progress
@@ -170,7 +167,7 @@ rm -rf outputs/2024-01-*/
 ### "No credentials found"
 
 ```bash
-uv run deriva-globus-auth-utils login --host www.eye-ai.org
+uv run deriva-globus-auth-utils login --host <hostname>
 ```
 
 ### "Configuration not found"

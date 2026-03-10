@@ -34,7 +34,7 @@ git add .
 git commit -m "Add new model with extended training"
 
 # Now run
-uv run src/deriva_run.py model_config=extended
+uv run deriva-ml-run model_config=extended
 ```
 
 ### 3. Use Meaningful Commits
@@ -68,7 +68,7 @@ During development and debugging, use dry runs to avoid creating execution recor
 
 ```bash
 # Dry run - downloads data but doesn't create records
-uv run src/deriva_run.py dry_run=true
+uv run deriva-ml-run dry_run=true
 
 # Make changes based on results
 # ...
@@ -76,7 +76,7 @@ uv run src/deriva_run.py dry_run=true
 # Once satisfied, commit and do a real run
 git add .
 git commit -m "Fix model architecture"
-uv run src/deriva_run.py
+uv run deriva-ml-run
 ```
 
 ## Branch Strategy

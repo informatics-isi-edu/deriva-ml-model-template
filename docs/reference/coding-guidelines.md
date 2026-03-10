@@ -155,13 +155,16 @@ Instantiate your custom class in scripts and notebooks for domain-specific funct
 src/
 ├─ configs/           # All configuration files
 │  ├─ __init__.py
+│  ├─ base.py
 │  ├─ deriva.py
 │  ├─ datasets.py
-│  └─ my_model.py
+│  ├─ assets.py
+│  ├─ workflow.py
+│  └─ cifar10_cnn.py
 ├─ models/            # Model implementations
-│  └─ my_model.py
-├─ deriva_run.py      # Entry point
-└─ model_runner.py    # Model execution helper
+│  └─ cifar10_cnn.py
+└─ scripts/           # Data loading scripts
+   └─ load_cifar10.py
 ```
 
 ## Naming Conventions

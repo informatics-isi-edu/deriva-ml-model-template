@@ -114,7 +114,6 @@ uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb --info
 
 # Override standard fields
 uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb \
-  --host localhost --catalog 45 \
   assets=different_assets
 
 # Override custom fields

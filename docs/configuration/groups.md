@@ -26,7 +26,7 @@ deriva_store(
 # Production server
 deriva_store(
     DerivaMLConfig(
-        hostname="www.eye-ai.org",
+        hostname="<hostname>",
         catalog_id="2",
     ),
     name="eye_ai",
@@ -44,7 +44,7 @@ deriva_store(
 
 **Usage:**
 ```bash
-uv run src/deriva_run.py deriva_ml=eye_ai
+uv run deriva-ml-run deriva_ml=eye_ai
 ```
 
 ## Datasets (`datasets`)
@@ -97,7 +97,7 @@ datasets_store(training, name="default_dataset")  # REQUIRED
 
 **Usage:**
 ```bash
-uv run src/deriva_run.py datasets=testing
+uv run deriva-ml-run datasets=testing
 ```
 
 ## Assets (`assets`)
@@ -108,30 +108,36 @@ uv run src/deriva_run.py datasets=testing
 
 ```python
 from hydra_zen import store
-from deriva_ml.execution import AssetRIDConfig
+from deriva_ml.execution import with_description
 
 assets_store = store(group="assets")
 
-# Pretrained model weights
-pretrained = [
-    AssetRIDConfig(rid="XYZ1", description="ImageNet pretrained weights"),
-]
+# Plain RID strings
+assets_store(
+    with_description(
+        ["XYZ1", "XYZ2"],
+        "Model weights and config file.",
+    ),
+    name="pretrained",
+)
 
-# Multiple assets
-full_assets = [
-    AssetRIDConfig(rid="XYZ1", description="Model weights"),
-    AssetRIDConfig(rid="XYZ2", description="Config file"),
-]
+# For large files with caching
+from deriva_ml.asset.aux_classes import AssetSpecConfig
+assets_store(
+    with_description(
+        [AssetSpecConfig(rid="XYZ1", cache=True)],
+        "Large model weights, cached locally.",
+    ),
+    name="cached_weights",
+)
 
-# Register configurations
-assets_store(pretrained, name="pretrained")
-assets_store(full_assets, name="full")
-assets_store([], name="default_asset")  # REQUIRED (empty is OK)
+# REQUIRED: default_asset (plain list, no with_description)
+assets_store([], name="default_asset")
 ```
 
 **Usage:**
 ```bash
-uv run src/deriva_run.py assets=pretrained
+uv run deriva-ml-run assets=pretrained
 ```
 
 ## Model Configuration (`model_config`)
@@ -166,10 +172,10 @@ model_store(MyModelConfig, learning_rate=1e-2, name="fast_lr")
 **Usage:**
 ```bash
 # Use a variant
-uv run src/deriva_run.py model_config=quick
+uv run deriva-ml-run model_config=quick
 
 # Override inline
-uv run src/deriva_run.py model_config.epochs=25
+uv run deriva-ml-run model_config.epochs=25
 ```
 
 ## Workflow (`workflow`)
@@ -179,36 +185,19 @@ uv run src/deriva_run.py model_config.epochs=25
 **Purpose:** Define workflow metadata for provenance tracking.
 
 ```python
-from hydra_zen import store
+from hydra_zen import store, builds
 from deriva_ml.execution import Workflow
 
+Cifar10CNNWorkflow = builds(
+    Workflow,
+    name="CIFAR-10 2-Layer CNN",
+    workflow_type=["Training", "Image Classification"],
+    description="Train a CNN on CIFAR-10.",
+    populate_full_signature=True,
+)
+
 workflow_store = store(group="workflow")
-
-workflow_store(
-    Workflow(
-        name="Model Training",
-        workflow_type="Training",
-        description="Train the model on input datasets",
-    ),
-    name="training",
-)
-
-workflow_store(
-    Workflow(
-        name="Analysis",
-        workflow_type="Analysis",
-        description="Analyze model outputs",
-    ),
-    name="analysis",
-)
-
-workflow_store(
-    Workflow(
-        name="Default Workflow",
-        workflow_type="Training",
-    ),
-    name="default_workflow",  # REQUIRED
-)
+workflow_store(Cifar10CNNWorkflow, name="default_workflow")
 ```
 
 ## Required Defaults

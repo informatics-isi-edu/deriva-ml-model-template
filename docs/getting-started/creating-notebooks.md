@@ -160,17 +160,13 @@ uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb --info
 
 # Dry run (if supported by your notebook)
 uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb \
-  --host localhost --catalog 45 \
   dry_run=true
 
 # Full run with default configuration
-uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb \
-  --host www.eye-ai.org --catalog 2 \
-  --kernel your-repo-name
+uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb
 
 # Run with overrides
 uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb \
-  --host www.eye-ai.org --catalog 2 \
   threshold=0.8 show_plots=false
 ```
 

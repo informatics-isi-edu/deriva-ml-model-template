@@ -89,7 +89,7 @@ git commit -m "Prepare for production run"
 uv run bump-version minor
 
 # Run the model
-uv run src/deriva_run.py
+uv run deriva-ml-run
 ```
 
 ### For Experiment Sweeps
@@ -98,8 +98,11 @@ uv run src/deriva_run.py
 # Version before starting sweep
 uv run bump-version minor
 
-# Run multiple experiments
-uv run src/deriva_run.py --multirun experiment=run1,run2,run3
+# Run multiple experiments using a named multirun
+uv run deriva-ml-run +multirun=quick_vs_extended
+
+# Or run ad-hoc multirun with experiment presets
+uv run deriva-ml-run --multirun +experiment=run1,run2,run3
 ```
 
 All experiments share the same version, making them easy to compare.
@@ -110,12 +113,12 @@ During active development, you don't need to version every run:
 
 ```bash
 # Development runs (no versioning needed)
-uv run src/deriva_run.py dry_run=true
+uv run deriva-ml-run dry_run=true
 
 # Ready for real run? Create a version
 git add . && git commit -m "Ready for testing"
 uv run bump-version patch
-uv run src/deriva_run.py
+uv run deriva-ml-run
 ```
 
 ## GitHub Integration
@@ -144,5 +147,5 @@ git checkout v1.2.0
 uv sync
 
 # Run with same configuration
-uv run src/deriva_run.py experiment=original_experiment
+uv run deriva-ml-run +experiment=original_experiment
 ```

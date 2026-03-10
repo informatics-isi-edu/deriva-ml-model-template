@@ -133,18 +133,22 @@ model_store(MyModelConfig, learning_rate=1e-4, epochs=30, name="my_model_slow_lr
 
 ## Step 3: Update Defaults (Optional)
 
-If you want your new model to be the default, update `src/deriva_run.py`:
+If you want your new model to be the default, update `src/configs/base.py`:
 
 ```python
-# In deriva_run.py, update the hydra_defaults list:
-hydra_defaults=[
-    "_self_",
-    {"deriva_ml": "default_deriva"},
-    {"datasets": "default_dataset"},
-    {"assets": "default_asset"},
-    {"workflow": "default_workflow"},
-    {"model_config": "my_model_default"},  # Change this
-]
+# In src/configs/base.py, update the hydra_defaults:
+DerivaModelConfig = create_model_config(
+    DerivaML,
+    description="Simple model run",
+    hydra_defaults=[
+        "_self_",
+        {"deriva_ml": "default_deriva"},
+        {"datasets": "default_dataset"},
+        {"assets": "default_asset"},
+        {"workflow": "default_workflow"},
+        {"model_config": "my_model_default"},  # Change this
+    ],
+)
 ```
 
 Or create an experiment preset in `src/configs/experiments.py`:
@@ -164,19 +168,19 @@ experiment_store(
 
 ```bash
 # Run with your model configuration
-uv run src/deriva_run.py model_config=my_model_default
+uv run deriva-ml-run model_config=my_model_default
 
 # Run a quick test
-uv run src/deriva_run.py model_config=my_model_quick
+uv run deriva-ml-run model_config=my_model_quick
 
 # Override parameters inline
-uv run src/deriva_run.py model_config=my_model_default model_config.epochs=25
+uv run deriva-ml-run model_config=my_model_default model_config.epochs=25
 
 # Dry run (no catalog writes)
-uv run src/deriva_run.py model_config=my_model_default dry_run=true
+uv run deriva-ml-run model_config=my_model_default dry_run=true
 
 # Run experiment preset
-uv run src/deriva_run.py experiment=my_experiment
+uv run deriva-ml-run +experiment=my_experiment
 ```
 
 ## Complete Example: CIFAR-10 CNN

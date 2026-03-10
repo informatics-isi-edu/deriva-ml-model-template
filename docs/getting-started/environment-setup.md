@@ -7,7 +7,7 @@ This guide covers setting up and managing your development environment.
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/) - Python package manager
 - Git
-- Access to a Deriva catalog
+- Access to a Deriva catalog — use an existing server or run one locally with [deriva-docker](https://github.com/informatics-isi-edu/deriva-docker)
 
 ## Installing uv
 
@@ -139,7 +139,7 @@ After upgrading, commit your updated `uv.lock` file.
 Before accessing catalog data, authenticate with Globus:
 
 ```bash
-uv run deriva-globus-auth-utils login --host www.eye-ai.org
+uv run deriva-globus-auth-utils login --host <hostname>
 ```
 
 This opens a browser for Globus authentication. Credentials are cached locally.
@@ -147,8 +147,8 @@ This opens a browser for Globus authentication. Credentials are cached locally.
 For multiple servers:
 
 ```bash
-uv run deriva-globus-auth-utils login --host www.eye-ai.org
-uv run deriva-globus-auth-utils login --host dev.eye-ai.org
+uv run deriva-globus-auth-utils login --host <hostname>
+uv run deriva-globus-auth-utils login --host <dev-hostname>
 ```
 
 ## GitHub Actions
@@ -168,14 +168,14 @@ These run automatically - no setup required.
 
 Re-authenticate:
 ```bash
-uv run deriva-globus-auth-utils login --host www.eye-ai.org
+uv run deriva-globus-auth-utils login --host <hostname>
 ```
 
 ### "Token expired"
 
 Force re-authentication:
 ```bash
-uv run deriva-globus-auth-utils login --host www.eye-ai.org --force
+uv run deriva-globus-auth-utils login --host <hostname> --force
 ```
 
 ### Kernel not found in Jupyter
