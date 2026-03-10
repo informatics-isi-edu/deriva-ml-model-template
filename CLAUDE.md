@@ -41,7 +41,7 @@ uv run ruff format src/
 # Testing
 uv run pytest
 
-# Version management
+# Version management (bump-version is provided by deriva-ml, not bump-my-version)
 uv run bump-version major|minor|patch
 uv run python -m setuptools_scm
 
@@ -114,8 +114,8 @@ When writing model code, always use `execution.asset_file_path("Execution_Asset"
 **IMPORTANT: Always start with DerivaML MCP tools for catalog operations.**
 
 When interacting with DerivaML catalogs, **always prefer MCP tools over writing Python scripts**:
-- **First**: Use `mcp__deriva-ml__connect_catalog` to establish a connection before any other catalog operation
-- Use `mcp__deriva-ml__*` tools for catalog operations (connect, list datasets, download, query, etc.)
+- **First**: Use `mcp__deriva__connect_catalog` to establish a connection before any other catalog operation
+- Use `mcp__deriva__*` tools for catalog operations (connect, list datasets, download, query, etc.)
 - Only write Python scripts when MCP tools are insufficient or when creating production code
 - MCP tools provide cleaner, more direct interaction with the catalog
 
