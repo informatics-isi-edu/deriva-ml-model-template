@@ -89,12 +89,6 @@ All configuration is Python-first using hydra-zen, no YAML files. Configs are in
 
 `deriva-ml-run` - CLI provided by deriva-ml. Loads config modules from `src/configs/` automatically.
 
-### Skills
-
-Step-by-step guides for scaffolding new components (invoke with `/`):
-- `/new-model` — Create a new DerivaML model with config and workflow
-- `/new-notebook` — Create a new analysis notebook with hydra-zen config
-
 ## Catalog Environments
 
 When using multiple catalogs (e.g., dev + production), add configs in `src/configs/dev/`:
