@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-DerivaML Model Template - a template for creating ML models integrated with DerivaML, a Python library for reproducible ML workflows backed by a Deriva catalog. It captures code provenance, configuration, and outputs for reproducibility.
+DerivaML Model Template - a template for creating ML models integrated with DerivaML. This specific instance implements a CIFAR-10 CNN classifier with 7 model variants and an ROC analysis notebook.
 
 ## Common Commands
 
@@ -14,25 +14,16 @@ uv sync                                    # Initialize environment
 uv sync --group=jupyter                   # Add Jupyter support
 uv sync --group=pytorch                   # Add PyTorch support
 
-# Running models (uses Hydra config defaults for host/catalog)
-uv run deriva-ml-run                                  # Run with defaults
-uv run deriva-ml-run model_config=cifar10_quick      # Override model config
-uv run deriva-ml-run +experiment=cifar10_quick       # Use experiment preset
-uv run deriva-ml-run dry_run=true                    # Dry run (no catalog writes)
-uv run deriva-ml-run +multirun=quick_vs_extended     # Named multirun
-uv run deriva-ml-run --info                          # Show available configs
+# Running models
+uv run deriva-ml-run +experiment=cifar10_quick       # Quick training (3 epochs)
+uv run deriva-ml-run +experiment=cifar10_extended     # Extended training (50 epochs)
+uv run deriva-ml-run +multirun=quick_vs_extended      # Compare quick vs extended
+uv run deriva-ml-run dry_run=true                     # Dry run (no catalog writes)
+uv run deriva-ml-run --info                           # Show available configs
 
-# Override host/catalog from command line
-uv run deriva-ml-run --host localhost --catalog 45 +experiment=cifar10_quick
-
-# Notebook execution (uses Hydra config defaults for host/catalog)
+# Notebook execution
 uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb
 uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb assets=my_assets
-uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb --info
-
-# Override host/catalog from command line
-uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb \
-  --host www.example.org --catalog 2
 
 # Linting and formatting
 uv run ruff check src/
@@ -41,126 +32,70 @@ uv run ruff format src/
 # Testing
 uv run pytest
 
-# Version management (bump-version is provided by deriva-ml, not bump-my-version)
+# Version management (bump-version is provided by deriva-ml)
 uv run bump-version major|minor|patch
-uv run python -m setuptools_scm
 
-# Authentication
-uv run deriva-globus-auth-utils login --host <hostname>
-
-# Asset upload
-uv run python scripts/upload_assets.py --dry-run     # Preview
-uv run python scripts/upload_assets.py                # Upload from manifest
-
-# Data loading (CIFAR-10 example)
+# Data loading
 uv run load-cifar10 --host <hostname> --catalog_id <id> --num_images 500
 ```
 
-## Architecture
+## Models
 
-### Source Layout (`src/`)
+### CIFAR-10 2-Layer CNN (`src/models/cifar10_cnn.py`)
 
-- `src/configs/` — Hydra-zen configuration modules (Python, no YAML)
-  - `base.py` — Base `DerivaModelConfig`
-  - `deriva.py` — Catalog connection settings
-  - `datasets.py` — Dataset specifications
-  - `assets.py` — Asset RID configurations
-  - `workflow.py` — Workflow definitions
-  - `cifar10_cnn.py` — Model variant configs (7 variants)
-  - `experiments.py` — Experiment presets
-  - `multiruns.py` — Named multirun configurations
-  - `multirun_descriptions.py` — Rich markdown descriptions for multiruns
-  - `roc_analysis.py` — ROC analysis notebook config
-  - `dev/` — Alternate catalog configs (connection, datasets, assets, experiments)
-- `src/models/` — DerivaML model implementations
-  - `cifar10_cnn.py` — CIFAR-10 CNN model
-- `src/scripts/` — Data loading scripts
-  - `load_cifar10.py` — CIFAR-10 dataset loader
+A PyTorch convolutional neural network for CIFAR-10 image classification.
 
-### Configuration System (Hydra-Zen)
+**Architecture:** Conv2d(3, C1) → ReLU → MaxPool → Conv2d(C1, C2) → ReLU → MaxPool → Linear(C2×8×8, hidden) → ReLU → Linear(hidden, 10)
 
-All configuration is Python-first using hydra-zen, no YAML files. Configs are in `src/configs/`. Config modules are auto-discovered via `pkgutil.iter_modules()` in `load_configs()`.
+**Model configs** (in `src/configs/cifar10_cnn.py`):
 
-### Experiments (`Experiments.md`)
+| Config | Channels | Hidden | Epochs | LR | Notes |
+|--------|----------|--------|--------|------|-------|
+| `default_model` | 32→64 | 128 | 10 | 1e-3 | Standard training |
+| `cifar10_quick` | 32→64 | 128 | 3 | 1e-3 | Fast validation |
+| `cifar10_large` | 64→128 | 256 | 20 | 1e-3 | More capacity |
+| `cifar10_regularized` | 32→64 | 128 | 20 | 1e-3 | Dropout 0.25, weight decay 1e-4 |
+| `cifar10_fast_lr` | 32→64 | 128 | 15 | 1e-2 | Fast convergence |
+| `cifar10_slow_lr` | 32→64 | 128 | 30 | 1e-4 | Stable convergence |
+| `cifar10_extended` | 64→128 | 256 | 50 | 1e-3 | Best accuracy, full regularization |
+| `cifar10_test_only` | 32→64 | 128 | — | — | Load weights, evaluate only |
 
-`Experiments.md` is a human-readable registry of all defined experiments, generated from `src/configs/experiments.py` and `src/configs/multiruns.py`. The `configure-experiment` skill automatically updates this file when experiment configs change. Prefer creating new experiments over modifying existing ones to keep the history clear.
+**Experiments** (in `src/configs/experiments.py`):
 
-### Entry Point
+| Experiment | Model Config | Dataset | Purpose |
+|-----------|-------------|---------|---------|
+| `cifar10_quick` | quick | small labeled split | Fast pipeline validation |
+| `cifar10_default` | default | small training | Standard training |
+| `cifar10_extended` | extended | small labeled split | Best accuracy on small set |
+| `cifar10_quick_full` | quick | full labeled split | Baseline on full data |
+| `cifar10_extended_full` | extended | full labeled split | Production run |
+| `cifar10_test_only` | test_only | small labeled testing | Evaluate pretrained weights |
 
-`deriva-ml-run` - CLI provided by deriva-ml. Loads config modules from `src/configs/` automatically.
+**Data flow:** Downloads dataset as BDBag → `restructure_assets()` creates ImageFolder layout → torchvision DataLoader → training/evaluation → saves weights + prediction CSV as execution assets.
+
+### ROC Analysis Notebook (`notebooks/roc_analysis.ipynb`)
+
+Compares model predictions across experiments by generating ROC curves. Configured via `src/configs/roc_analysis.py`. Takes asset RIDs (prediction CSVs) as input.
+
+## Source Layout
+
+- `src/configs/` — Hydra-zen configuration (Python, no YAML)
+- `src/models/` — Model implementations (cifar10_cnn.py)
+- `src/scripts/` — Data loading (load_cifar10.py)
+- `notebooks/` — Analysis notebooks (roc_analysis.ipynb)
+
+## Key Rules
+
+- **Commit before running** — DerivaML tracks git commit hash for provenance
+- **Use labeled datasets for evaluation** — `cifar10_small_labeled_split` or `cifar10_labeled_split` (unlabeled splits have no test ground truth)
+- **`Execution_Asset`** for model outputs (weights, predictions, plots); `Execution_Metadata` is auto-managed
+- **Test with `dry_run=true`** before production runs
+- **`--config` on `deriva-ml-run-notebook` does NOT override `run_notebook()` config name** — use positional Hydra overrides instead (e.g., `assets=my_assets_prod`)
 
 ## Catalog Environments
-
-When using multiple catalogs (e.g., dev + production), add configs in `src/configs/dev/`:
 
 | Config Name | Hostname | Usage |
 |------------|----------|-------|
 | `default_deriva` | localhost | Local development and testing |
-| *(add more)* | *(your server)* | *(production, staging, etc.)* |
 
-Production configs use a `*_prod` suffix convention (e.g., `my_dataset_prod`, `my_weights_prod`).
-
-## Execution_Asset vs Execution_Metadata
-
-DerivaML has two asset tables for execution files:
-
-- **`Execution_Asset`** — Files **produced by** the execution (model outputs): checkpoints, metrics CSVs, predictions, plots, notebook outputs. Everything the model or notebook generates goes here.
-- **`Execution_Metadata`** — Files **about** the execution environment: hydra configs, uv.lock, environment snapshots, configuration.json. These are auto-uploaded by DerivaML during initialization.
-
-When writing model code, always use `execution.asset_file_path("Execution_Asset", filename)` for outputs. Never use `Execution_Metadata` for model-produced files.
-
-## Tool Preferences
-
-**IMPORTANT: Always start with DerivaML MCP tools for catalog operations.**
-
-When interacting with DerivaML catalogs, **always prefer MCP tools over writing Python scripts**:
-- **First**: Use `mcp__deriva__connect_catalog` to establish a connection before any other catalog operation
-- Use `mcp__deriva__*` tools for catalog operations (connect, list datasets, download, query, etc.)
-- Only write Python scripts when MCP tools are insufficient or when creating production code
-- MCP tools provide cleaner, more direct interaction with the catalog
-
-## Key Workflow Rules
-
-- **MUST** commit changes before running models (DerivaML tracks code provenance)
-- Use `dry_run=true` during debugging (downloads inputs without creating execution records)
-- Tag versions with `bump-version` before significant model runs
-- Commit `uv.lock` to repository
-- Never commit notebooks with output cells (use `uv run nbstripout --install`)
-- Use Google docstring format and type hints
-- **Always check function/class signatures before modifying calls** - use `inspect.signature()` or check the source to verify required parameters before editing code that instantiates classes or calls functions
-- **`--config` on `deriva-ml-run-notebook` does NOT override the `run_notebook()` config name** — use positional Hydra overrides instead (e.g., `assets=my_assets_prod`)
-
-## CIFAR-10 Dataset Requirements
-
-**IMPORTANT: Always use labeled datasets for experiments that require evaluation or analysis.**
-
-The CIFAR-10 catalog contains two types of split datasets:
-- **Unlabeled splits** (`cifar10_split`, `cifar10_small_split`): Test partition has no ground truth labels
-- **Labeled splits** (`cifar10_labeled_split`, `cifar10_small_labeled_split`): Both train and test partitions have ground truth labels
-
-For any experiment where you need to:
-- Compute accuracy on the test set
-- Generate ROC curves or other evaluation metrics
-- Compare model predictions to ground truth
-
-**You MUST use the labeled split datasets:**
-- `cifar10_small_labeled_split` for small dataset experiments
-- `cifar10_labeled_split` for full dataset experiments
-
-The unlabeled splits are only appropriate for training-only runs where test evaluation is not needed.
-
-## Overriding Configs at Runtime
-
-```bash
-# Choose different configs (no + prefix for groups with defaults)
-uv run deriva-ml-run datasets=cifar10_small_training model_config=cifar10_quick
-
-# Override specific fields (use + for adding new fields)
-uv run deriva-ml-run model_config.epochs=50 model_config.learning_rate=0.01
-
-# Use experiment presets
-uv run deriva-ml-run +experiment=cifar10_extended
-
-# Named multiruns (no --multirun flag needed)
-uv run deriva-ml-run +multirun=lr_sweep
-```
+Production configs use a `*_prod` suffix convention. Add alternate configs in `src/configs/dev/`.
