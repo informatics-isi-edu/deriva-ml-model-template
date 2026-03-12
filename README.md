@@ -173,41 +173,17 @@ uv run bump-version major   # Breaking changes
 
 ## CIFAR-10 Example
 
-The template includes a complete CIFAR-10 CNN example. See the [CIFAR-10 documentation](https://informatics-isi-edu.github.io/deriva-ml-model-template/reference/cifar10-example/) for details.
-
-```bash
-# Load data into catalog
-uv run load-cifar10 --host <hostname> --catalog_id <id> --num_images 500
-
-# Train the model
-uv run deriva-ml-run +experiment=cifar10_quick
-
-# Run a learning rate sweep
-uv run deriva-ml-run +multirun=lr_sweep
-
-# Analyze results with ROC curves
-uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb
-```
-
-### Dataset Types
-
-The CIFAR-10 example includes multiple dataset configurations:
-
-| Type | Use Case |
-|------|----------|
-| `cifar10_small_labeled_split` | Quick experiments with evaluation (recommended) |
-| `cifar10_labeled_split` | Full experiments with evaluation |
-| `cifar10_small_split` | Quick training without evaluation |
-| `cifar10_split` | Full training without evaluation |
-
-**Important:** For ROC analysis or accuracy metrics, use the **labeled** datasets. The unlabeled datasets have test images without ground truth labels.
+The template includes a complete CIFAR-10 CNN example. See [CIFAR10.md](CIFAR10.md) for usage and dataset details, or the [full CIFAR-10 documentation](https://informatics-isi-edu.github.io/deriva-ml-model-template/reference/cifar10-example/) for architecture and model variants.
 
 ## Using Claude Code with DerivaML
 
 With the [DerivaML MCP server and skills plugin](https://github.com/informatics-isi-edu/deriva-mcp) (see step 4), you can interact with catalogs through natural language and get guided workflows for common tasks. Skills auto-trigger based on context, or you can invoke them directly with `/deriva:<skill-name>` (e.g., `/deriva:create-dataset`, `/deriva:run-experiment`).
 
+To see what's available, ask Claude *"help with deriva"* or run `/deriva:help` — this will show all the capabilities organized by task: environment setup, catalog structure, data management, running experiments, and troubleshooting.
+
 ## Further Reading
 
 - [Full Documentation](https://informatics-isi-edu.github.io/deriva-ml-model-template/)
 - [DerivaML Library](https://informatics-isi-edu.github.io/deriva-ml/) - Core library documentation
+- [DerivaML User Guide](https://deriva-ml.readthedocs.io/) - Tutorials, concepts, and API reference
 - [Hydra-zen](https://mit-ll-responsible-ai.github.io/hydra-zen/) - Configuration framework
