@@ -1199,13 +1199,13 @@ def load_images(
             element_table="Image",
             split_description="CIFAR-10 labeled split: 80/20 from training images (all have ground truth)",
         )
-        datasets["labeled_split"] = labeled_result["split"]
-        datasets["labeled_training"] = labeled_result["training"]
-        datasets["labeled_testing"] = labeled_result["testing"]
+        datasets["labeled_split"] = labeled_result.split.rid
+        datasets["labeled_training"] = labeled_result.training.rid
+        datasets["labeled_testing"] = labeled_result.testing.rid
         logger.info(
-            f"    Labeled_Split: {labeled_result['split']}, "
-            f"Training: {labeled_result['training']}, "
-            f"Testing: {labeled_result['testing']}"
+            f"    Labeled_Split: {labeled_result.split.rid}, "
+            f"Training: {labeled_result.training.rid}, "
+            f"Testing: {labeled_result.testing.rid}"
         )
 
         # Small labeled split: 400 train / 100 test from training images
@@ -1222,13 +1222,13 @@ def load_images(
                 element_table="Image",
                 split_description="Small CIFAR-10 labeled split: 400/100 from training images (all have ground truth)",
             )
-            datasets["small_labeled_split"] = small_labeled_result["split"]
-            datasets["small_labeled_training"] = small_labeled_result["training"]
-            datasets["small_labeled_testing"] = small_labeled_result["testing"]
+            datasets["small_labeled_split"] = small_labeled_result.split.rid
+            datasets["small_labeled_training"] = small_labeled_result.training.rid
+            datasets["small_labeled_testing"] = small_labeled_result.testing.rid
             logger.info(
-                f"    Small_Labeled_Split: {small_labeled_result['split']}, "
-                f"Training: {small_labeled_result['training']}, "
-                f"Testing: {small_labeled_result['testing']}"
+                f"    Small_Labeled_Split: {small_labeled_result.split.rid}, "
+                f"Training: {small_labeled_result.training.rid}, "
+                f"Testing: {small_labeled_result.testing.rid}"
             )
         else:
             # If fewer than 500 training images, use 80/20 split of what we have
@@ -1243,13 +1243,13 @@ def load_images(
                 element_table="Image",
                 split_description="Small CIFAR-10 labeled split from training images (all have ground truth)",
             )
-            datasets["small_labeled_split"] = small_labeled_result["split"]
-            datasets["small_labeled_training"] = small_labeled_result["training"]
-            datasets["small_labeled_testing"] = small_labeled_result["testing"]
+            datasets["small_labeled_split"] = small_labeled_result.split.rid
+            datasets["small_labeled_training"] = small_labeled_result.training.rid
+            datasets["small_labeled_testing"] = small_labeled_result.testing.rid
             logger.info(
-                f"    Small_Labeled_Split: {small_labeled_result['split']}, "
-                f"Training: {small_labeled_result['training']}, "
-                f"Testing: {small_labeled_result['testing']}"
+                f"    Small_Labeled_Split: {small_labeled_result.split.rid}, "
+                f"Training: {small_labeled_result.training.rid}, "
+                f"Testing: {small_labeled_result.testing.rid}"
             )
 
     return datasets, {
