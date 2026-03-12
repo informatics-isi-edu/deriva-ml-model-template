@@ -88,6 +88,18 @@ Add to `~/.mcp.json`:
 /plugin install deriva
 ```
 
+**Update the skills plugin** when a new version is released:
+
+```
+/plugin install deriva
+```
+
+To check if all DerivaML components are up to date (skills, deriva-ml library, MCP server):
+
+```
+/deriva:check-versions
+```
+
 See the [deriva-mcp README](https://github.com/informatics-isi-edu/deriva-mcp) for full setup options including HTTP transport, localhost configuration, and native installs.
 
 ### 5. Authenticate
