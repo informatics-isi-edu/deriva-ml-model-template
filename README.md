@@ -94,11 +94,13 @@ Add to `~/.mcp.json`:
 /plugin install deriva
 ```
 
-To check if all DerivaML components are up to date (skills, deriva-ml library, MCP server):
+To check if all DerivaML components are up to date, use the version check skill. It checks three components — the **deriva-ml** Python package, the **deriva-mcp skills plugin**, and the **deriva-mcp MCP server** — against upstream releases and offers to update outdated ones:
 
 ```
 /deriva:check-versions
 ```
+
+You can also just ask *"check deriva versions"* or *"am I up to date?"* and the skill will be invoked automatically.
 
 See the [deriva-mcp README](https://github.com/informatics-isi-edu/deriva-mcp) for full setup options including HTTP transport, localhost configuration, and native installs.
 

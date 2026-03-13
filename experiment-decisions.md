@@ -29,3 +29,7 @@ a static method returning a closure-based selector. Chose this over adding an
 `execution` parameter to `fetch_table_features` directly because the selector pattern
 is more composable and consistent with the existing API. Also added `execution`
 parameter to the MCP `fetch_table_features` tool (deriva-ml v1.23.3, deriva-mcp v0.10.4).
+
+### Added description guidance and git workflow to deriva-mcp skills (v0.10.6)
+
+Added entity-specific description guidance to 9 skills (configure-experiment, write-hydra-config, generate-descriptions, create-dataset, create-feature, create-table, dataset-versioning, manage-vocabulary) so good description practices are available at the point of action. Added critical rule #5 to configure-experiment requiring goal-oriented experiment descriptions rather than just technical parameters. Updated feature selection documentation in create-feature to include the new `execution` parameter. Added branch-based git workflow (branch → develop → PR → merge → bump version) to the new-model skill, with guidance that PRs are valuable even for solo developers and that Claude Code can handle PR creation/merge via the GitHub CLI.
