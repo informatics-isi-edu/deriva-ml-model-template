@@ -80,6 +80,11 @@ Compares model predictions across experiments by generating ROC curves. Configur
 ## Source Layout
 
 - `src/configs/` — Hydra-zen configuration (Python, no YAML)
+  - `cifar10_cnn.py` — Model configs (architectures, hyperparameters)
+  - `experiments.py` — Experiment configs (model + dataset combinations)
+  - `multiruns.py` — Multirun sweep configs (parameter combinations)
+  - `roc_analysis.py` — ROC notebook asset configs
+  - `dev/` — Per-environment Deriva connection overrides
 - `src/models/` — Model implementations (cifar10_cnn.py)
 - `src/scripts/` — Data loading (load_cifar10.py)
 - `notebooks/` — Analysis notebooks (roc_analysis.ipynb)
