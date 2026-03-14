@@ -55,5 +55,5 @@ For model configurations, use hydra-zen directly::
 # Re-export load_configs from deriva-ml for convenience
 from deriva_ml.execution import load_configs
 
-# Backwards compatibility alias
+# Deprecated: use load_configs("configs") directly. Kept for backward compatibility.
 load_all_configs = lambda: load_configs("configs")

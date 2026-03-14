@@ -80,13 +80,23 @@ Compares model predictions across experiments by generating ROC curves. Configur
 ## Source Layout
 
 - `src/configs/` — Hydra-zen configuration (Python, no YAML)
+  - `__init__.py` — Re-exports `load_configs`; has deprecated `load_all_configs` alias
+  - `base.py` — `BaseConfig` dataclass (shared config fields)
   - `cifar10_cnn.py` — Model configs (architectures, hyperparameters)
+  - `datasets.py` — `DatasetSpecConfig` entries for each dataset
+  - `deriva.py` — Deriva connection configs (`default_deriva`)
+  - `workflow.py` — Workflow definitions
+  - `assets.py` — Asset RID configs for model weights and predictions
   - `experiments.py` — Experiment configs (model + dataset combinations)
   - `multiruns.py` — Multirun sweep configs (parameter combinations)
+  - `multirun_descriptions.py` — Rich markdown descriptions for multirun parent executions
   - `roc_analysis.py` — ROC notebook asset configs
-  - `dev/` — Per-environment Deriva connection overrides
-- `src/models/` — Model implementations (cifar10_cnn.py)
-- `src/scripts/` — Data loading (load_cifar10.py)
+  - `dev/` — Per-environment overrides (deriva, datasets, assets, experiments)
+- `src/models/` — Model implementations
+  - `cifar10_cnn.py` — CNN model, training loop, prediction recording
+  - `model_protocol.py` — Protocol/interface for model functions
+- `src/scripts/` — Data loading
+  - `load_cifar10.py` — Downloads CIFAR-10 from Kaggle, sets up catalog schema, loads images
 - `notebooks/` — Analysis notebooks (roc_analysis.ipynb)
 
 ## Key Rules
@@ -104,3 +114,16 @@ Compares model predictions across experiments by generating ROC curves. Configur
 | `default_deriva` | localhost | Local development and testing |
 
 Production configs use a `*_prod` suffix convention. Add alternate configs in `src/configs/dev/`.
+
+## Gotchas
+
+- **Kaggle API key required** for `load-cifar10` — must have `~/.kaggle/kaggle.json` configured
+- **No test suite** — `uv run pytest` is configured but no tests exist yet
+- **Two `scripts/` dirs** — `src/scripts/` (Python package, importable) vs `scripts/` (standalone shell/CLI utilities, not a package)
+- **`num_workers=0`** in DataLoaders — required on macOS because `fork()` + MPS/GPU threads deadlock
+
+## Related Docs
+
+- `CIFAR10.md` — End-to-end guide for CIFAR-10 workflow (catalog setup, data loading, training, analysis)
+- `experiments.md` — Experiment configuration reference
+- `experiment-decisions.md` — Design rationale and decision log

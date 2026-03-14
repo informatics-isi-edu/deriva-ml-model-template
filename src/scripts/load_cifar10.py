@@ -132,6 +132,7 @@ import sys
 import tempfile
 import zipfile
 from pathlib import Path
+from collections.abc import Iterator
 from typing import Any, Callable
 
 from deriva.core.ermrest_model import Schema
@@ -333,7 +334,7 @@ def load_train_labels(data_dir: Path) -> dict[str, str]:
 
 def iter_images(
     data_dir: Path, split: str, labels: dict[str, str]
-) -> tuple[Path, str | None, str]:
+) -> Iterator[tuple[Path, str | None, str]]:
     """Iterate over images in a dataset split.
 
     Generator that yields image paths with their class labels and IDs.
@@ -373,137 +374,6 @@ def iter_images(
 # =============================================================================
 # Schema Setup Functions
 # =============================================================================
-
-
-def setup_table_annotations(ml: DerivaML) -> None:
-    """Configure display annotations for domain tables.
-
-    Sets up Chaise display annotations to improve the web interface:
-    - Friendly display names for tables
-    - Visible columns configuration
-    - Row name patterns for dropdowns
-    - Image thumbnail display
-
-    Args:
-        ml: Connected DerivaML instance.
-    """
-    from deriva_ml.model import (
-        TableHandle,
-        Display,
-        VisibleColumns,
-        TableDisplay,
-        TableDisplayOptions,
-        ColumnDisplay,
-        ColumnDisplayOptions,
-        PseudoColumn,
-        SortKey,
-    )
-
-    logger.info("Configuring table display annotations...")
-
-    # Configure Image table
-    image_table = ml.model.name_to_table("Image")
-    if image_table:
-        handle = TableHandle(image_table)
-
-        # Set display name and description
-        handle.set_annotation(Display(
-            name="Images",
-            comment="CIFAR-10 32x32 RGB images for classification"
-        ))
-
-        # Configure visible columns with thumbnail pseudo-column
-        # Create a pseudo-column for thumbnail display
-        thumbnail_column = PseudoColumn(
-            source="URL",
-            markdown_name="Thumbnail",
-            display=ColumnDisplayOptions(
-                markdown_pattern="[![{{{Filename}}}]({{{URL}}})]({{{URL}}})"
-            )
-        )
-
-        vc = VisibleColumns()
-        vc.compact([
-            "RID",
-            thumbnail_column,
-            "Filename",
-            "Length",
-        ])
-        vc.detailed([
-            "RID",
-            thumbnail_column,
-            "Filename",
-            "URL",
-            "Length",
-            "MD5",
-            "Description",
-            "RCT",
-            "RMT"
-        ])
-        vc.entry(["Filename", "Description"])
-        handle.set_annotation(vc)
-
-        # Set row name pattern (shows filename in dropdowns)
-        td = TableDisplay()
-        td.row_name("{{{Filename}}}")
-        td.compact(TableDisplayOptions(
-            row_order=[SortKey("Filename")],
-            page_size=25
-        ))
-        handle.set_annotation(td)
-
-        logger.info("  Configured Image table annotations")
-
-    # Configure Image_Class vocabulary
-    image_class_table = ml.model.name_to_table("Image_Class")
-    if image_class_table:
-        handle = TableHandle(image_class_table)
-
-        # Set display name
-        handle.set_annotation(Display(
-            name="Image Classes",
-            comment="CIFAR-10 classification categories (10 classes)"
-        ))
-
-        # Set row name pattern
-        td = TableDisplay()
-        td.row_name("{{{Name}}}")
-        handle.set_annotation(td)
-
-        logger.info("  Configured Image_Class vocabulary annotations")
-
-    # Configure Image_Classification feature table
-    # Look up the feature to get its table (avoids hardcoding internal naming convention)
-    try:
-        feature = ml.lookup_feature("Image", "Image_Classification")
-        image_classification_table = feature.feature_table
-    except Exception:
-        image_classification_table = None
-    if image_classification_table:
-        handle = TableHandle(image_classification_table)
-
-        # Set display name
-        handle.set_annotation(Display(
-            name="Image Classifications",
-            comment="Class labels and confidence scores for images"
-        ))
-
-        # Configure visible columns
-        vc = VisibleColumns()
-        vc.compact(["RID", "Image", "Image_Class", "Confidence"])
-        vc.detailed(["RID", "Image", "Image_Class", "Confidence", "Execution", "RCT"])
-        handle.set_annotation(vc)
-
-        # Set row name pattern
-        td = TableDisplay()
-        td.row_name("{{{Image}}} → {{{Image_Class}}}")
-        td.compact(TableDisplayOptions(
-            row_order=[SortKey("Image")],
-            page_size=50
-        ))
-        handle.set_annotation(td)
-
-        logger.info("  Configured Image_Classification table annotations")
 
 
 def setup_domain_model(ml: DerivaML) -> dict[str, Any]:
@@ -1095,30 +965,17 @@ def load_images(
     # This ensures dataset bags include feature data from the start
     logger.info("Creating dataset hierarchy (after features are loaded)...")
 
-    # Create a new execution for dataset creation if we don't have one from labeling
-    if label_exe is None:
-        ds_workflow = ml.create_workflow(
-            name="CIFAR-10 Dataset Creation",
-            workflow_type="CIFAR_Data_Load",
-            description="Create CIFAR-10 dataset hierarchy",
-        )
-        ds_config = ExecutionConfiguration(workflow=ds_workflow)
-        with ml.create_execution(ds_config) as ds_exe:
-            logger.info(f"  Dataset creation execution RID: {ds_exe.execution_rid}")
-            datasets = create_dataset_hierarchy(ml, ds_exe)
-        ds_exe.upload_execution_outputs(clean_folder=True)
-    else:
-        # Create another execution for dataset creation
-        ds_workflow = ml.create_workflow(
-            name="CIFAR-10 Dataset Creation",
-            workflow_type="CIFAR_Data_Load",
-            description="Create CIFAR-10 dataset hierarchy",
-        )
-        ds_config = ExecutionConfiguration(workflow=ds_workflow)
-        with ml.create_execution(ds_config) as ds_exe:
-            logger.info(f"  Dataset creation execution RID: {ds_exe.execution_rid}")
-            datasets = create_dataset_hierarchy(ml, ds_exe)
-        ds_exe.upload_execution_outputs(clean_folder=True)
+    # Create a new execution for dataset creation
+    ds_workflow = ml.create_workflow(
+        name="CIFAR-10 Dataset Creation",
+        workflow_type="CIFAR_Data_Load",
+        description="Create CIFAR-10 dataset hierarchy",
+    )
+    ds_config = ExecutionConfiguration(workflow=ds_workflow)
+    with ml.create_execution(ds_config) as ds_exe:
+        logger.info(f"  Dataset creation execution RID: {ds_exe.execution_rid}")
+        datasets = create_dataset_hierarchy(ml, ds_exe)
+    ds_exe.upload_execution_outputs(clean_folder=True)
 
     # Assign images to datasets
     logger.info("Assigning images to datasets...")
@@ -1283,7 +1140,7 @@ def main(args: argparse.Namespace | None = None) -> int:
 
             load-cifar10 --hostname localhost --create-catalog demo --num-images 100
 
-        Programmatic usage::cre
+        Programmatic usage::
 
             >>> args = argparse.Namespace(
             ...     hostname='localhost',
@@ -1359,9 +1216,8 @@ def main(args: argparse.Namespace | None = None) -> int:
     setup_domain_model(ml)
     logger.info("Domain model setup complete")
 
-    # Configure table display annotations
-    # TODO: Update setup_table_annotations to use current TableHandle API
-    # setup_table_annotations(ml)
+    # Table display annotations are configured via set_visible_columns / set_row_name_pattern
+    # in the table setup functions above.
 
     # Apply catalog annotations for Chaise web interface
     logger.info("Applying catalog annotations...")

@@ -201,6 +201,7 @@ class SimpleCNN(nn.Module):
         conv2_channels: Number of output channels for second conv layer.
         hidden_size: Size of the hidden fully connected layer.
         dropout_rate: Dropout probability for regularization.
+        num_classes: Number of output classes.
     """
 
     def __init__(
@@ -209,6 +210,7 @@ class SimpleCNN(nn.Module):
         conv2_channels: int = 64,
         hidden_size: int = 128,
         dropout_rate: float = 0.0,
+        num_classes: int = 10,
     ):
         super().__init__()
         self.conv1 = nn.Conv2d(3, conv1_channels, kernel_size=3, padding=1)
@@ -218,7 +220,7 @@ class SimpleCNN(nn.Module):
 
         # After two 2x2 pooling operations: 32x32 -> 16x16 -> 8x8
         self.fc1 = nn.Linear(conv2_channels * 8 * 8, hidden_size)
-        self.fc2 = nn.Linear(hidden_size, 10)
+        self.fc2 = nn.Linear(hidden_size, num_classes)
         self.relu = nn.ReLU()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -320,7 +322,7 @@ def load_cifar10_from_execution(
             train_dataset,
             batch_size=batch_size,
             shuffle=True,
-            num_workers=0,  # Set to 0 for compatibility
+            num_workers=0,  # macOS fork() + MPS/GPU threads can deadlock with num_workers > 0
         )
         class_names = train_dataset.classes
         print(f"  Training classes: {train_dataset.classes}")
@@ -333,7 +335,7 @@ def load_cifar10_from_execution(
             test_dataset,
             batch_size=batch_size,
             shuffle=False,
-            num_workers=0,
+            num_workers=0,  # macOS fork() + MPS/GPU threads can deadlock with num_workers > 0
         )
         # Use test classes if no training data
         if not class_names:
@@ -359,7 +361,7 @@ def cifar10_cnn(
     test_only: bool = False,
     weights_filename: str = "cifar10_cnn_weights.pt",
     # DerivaML integration
-    ml_instance: DerivaML = None,
+    ml_instance: DerivaML | None = None,
     execution: Execution | None = None,
 ) -> None:
     """Train or evaluate a simple 2-layer CNN on CIFAR-10 data.
@@ -393,6 +395,9 @@ def cifar10_cnn(
         ml_instance: DerivaML instance for catalog access.
         execution: DerivaML execution context with datasets and assets.
     """
+    if ml_instance is None or execution is None:
+        raise ValueError("ml_instance and execution are required")
+
     mode = "Test-only" if test_only else "Training"
     print(f"CIFAR-10 CNN {mode}")
     print(f"  Host: {ml_instance.host_name}, Catalog: {ml_instance.catalog_id}")
@@ -433,8 +438,8 @@ def cifar10_cnn(
         print(f"  Test batches: {len(test_loader)}")
 
         # For test-only mode, use standard CIFAR-10 class names since test data may not have labels
-        cifar10_classes = ['airplane', 'automobile', 'bird', 'cat', 'deer',
-                          'dog', 'frog', 'horse', 'ship', 'truck']
+        from scripts.load_cifar10 import CIFAR10_CLASSES
+        cifar10_classes = [name for name, _, _ in CIFAR10_CLASSES]
         if class_names == ['unknown'] or len(class_names) != 10:
             print(f"  Using standard CIFAR-10 class names (test data has: {class_names})")
             class_names = cifar10_classes

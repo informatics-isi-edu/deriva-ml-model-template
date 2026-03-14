@@ -8,6 +8,8 @@ authors = [
 description = "A test template for using DerivaML"
 readme = "README.md"
 requires-python = ">=3.12"
+license = "Apache-2.0"
+keywords = ["deriva-ml"]
 
 dependencies = [
     # Change this to be the module with the domain specific class derived from deriva-ml.
@@ -95,7 +97,3 @@ post_commit_hooks = ["git push", "git push --tags"]
 [build-system]
 requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2", "wheel"]
 build-backend = "setuptools.build_meta"
-
-[metadata]
-license = "Apache 2.0"
-keywords = ["deriva-ml"]
