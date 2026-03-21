@@ -44,3 +44,15 @@ on eye-ai dataset 4-411G. Changed default `fetch_concurrency` from 8 to 1 in
 `download_dataset_bag`, `cache`, and `_materialize_dataset_bag`. Chose to fix the
 default rather than patch bdbag because the upstream bug is in shared mutable state
 across threads, and per-thread sessions would require a bdbag fork.
+
+### Fixed duplicate association table denormalization bug (deriva-ml v1.26.3)
+
+Bag-based denormalization returned empty DataFrames on eye-ai dataset 4-411G because
+the schema has two association tables linking Dataset to Image: `Image_Dataset` (343 rows)
+and `Dataset_Image` (0 rows). `_schema_to_paths()` discovered paths through both;
+`_prepare_wide_table()` merged them into a single join graph. The INNER JOIN through the
+empty table produced 0 rows. Fixed by deduplicating paths in `_prepare_wide_table()` that
+reach the same `(element, endpoint)` via different association tables, using
+`is_association(pure=False)` for structural detection rather than naming conventions.
+Added `Image_Dataset_Legacy` to the demo schema as a regression test. Verified fix
+produces 347 rows x 18 columns for `['Subject', 'Clinical_Records']` on 4-411G.
