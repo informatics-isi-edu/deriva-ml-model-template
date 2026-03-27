@@ -192,3 +192,6 @@ datasets_store(
     [DatasetSpecConfig(rid="28DY", version="0.9.0")],
     name="default_dataset",
 )
+
+# Empty dataset list — used by script-only experiments that manage their own data
+datasets_store([], name="none")

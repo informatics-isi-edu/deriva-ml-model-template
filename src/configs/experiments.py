@@ -18,11 +18,15 @@ For hyperparameter sweeps and grid searches, use multirun configs defined in
 configs/multiruns.py - they are self-contained and don't require separate
 experiment definitions.
 
+IMPORTANT: When overriding optional fields (like script_config), set them to
+MISSING in make_config() so Hydra fills them from the defaults list instead of
+using the base's None default, which would shadow the resolved value.
+
 Reference:
     https://mit-ll-responsible-ai.github.io/hydra-zen/how_to/configuring_experiments.html
 """
 
-from hydra_zen import make_config, store
+from hydra_zen import make_config, store, MISSING
 
 from configs.base import DerivaModelConfig
 

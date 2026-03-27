@@ -25,6 +25,7 @@ DerivaModelConfig = create_model_config(
         {"assets": "default_asset"},
         {"workflow": "default_workflow"},
         {"model_config": "default_model"},
+        {"optional script_config": "none"},
     ],
 )
 
