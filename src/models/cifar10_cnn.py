@@ -171,7 +171,8 @@ def record_test_predictions(
     # Save full probability distributions to CSV
     if csv_rows:
         csv_file = execution.asset_file_path(
-            MLAsset.execution_asset, "prediction_probabilities.csv", ExecAssetType.output_file
+            MLAsset.execution_asset, "prediction_probabilities.csv", ExecAssetType.output_file,
+            description="Per-image predicted class and probability distributions over all CIFAR-10 classes",
         )
         fieldnames = ["Image_RID", "Filename", "Predicted_Class", "Confidence"] + [
             f"prob_{c}" for c in class_names
@@ -518,7 +519,8 @@ def cifar10_cnn(
 
         # Save evaluation results
         results_file = execution.asset_file_path(
-            MLAsset.execution_asset, "evaluation_results.txt", ExecAssetType.output_file
+            MLAsset.execution_asset, "evaluation_results.txt", ExecAssetType.output_file,
+            description="Test set evaluation summary: loss, accuracy, and configuration",
         )
         with results_file.open("w") as f:
             f.write("CIFAR-10 CNN Evaluation Results\n")
@@ -538,7 +540,8 @@ def cifar10_cnn(
         print("  Make sure your execution configuration includes CIFAR-10 datasets.")
         # Write a status file indicating no data
         status_file = execution.asset_file_path(
-            MLAsset.execution_asset, "training_status.txt", ExecAssetType.output_file
+            MLAsset.execution_asset, "training_status.txt", ExecAssetType.output_file,
+            description="Training status: indicates no training data was available",
         )
         with status_file.open("w") as f:
             f.write("No training data available in execution datasets.\n")
@@ -623,7 +626,8 @@ def cifar10_cnn(
     # Save model weights
     print("\nSaving model...")
     weights_file = execution.asset_file_path(
-        MLAsset.execution_asset, "cifar10_cnn_weights.pt", ExecAssetType.model_file
+        MLAsset.execution_asset, "cifar10_cnn_weights.pt", ExecAssetType.model_file,
+        description="Trained CNN model weights, optimizer state, and training log",
     )
     torch.save({
         'model_state_dict': model.state_dict(),
@@ -640,7 +644,8 @@ def cifar10_cnn(
 
     # Save training log as text
     log_file = execution.asset_file_path(
-        MLAsset.execution_asset, "training_log.txt", ExecAssetType.output_file
+        MLAsset.execution_asset, "training_log.txt", ExecAssetType.output_file,
+        description="Per-epoch training log: loss, accuracy, and architecture details",
     )
     with log_file.open("w") as f:
         f.write("CIFAR-10 CNN Training Log\n")
