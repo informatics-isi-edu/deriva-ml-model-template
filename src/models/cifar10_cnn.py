@@ -1,11 +1,9 @@
-"""
-CIFAR-10 2-Layer CNN Model.
+"""CIFAR-10 2-Layer CNN Model.
 
-A simple convolutional neural network for CIFAR-10 classification.
-This model demonstrates how to integrate PyTorch training with DerivaML
-execution tracking and asset management.
+A small convolutional network for CIFAR-10 classification, used as the
+canonical end-to-end example of integrating PyTorch with DerivaML.
 
-The model architecture:
+Architecture:
 - Conv2d(3, 32) -> ReLU -> MaxPool2d
 - Conv2d(32, 64) -> ReLU -> MaxPool2d
 - Linear(64*8*8, hidden_size) -> ReLU
@@ -13,83 +11,156 @@ The model architecture:
 
 Expected accuracy: ~60-70% with default parameters.
 
-Data Loading:
-The model uses DerivaML's restructure_assets() method to reorganize downloaded
-images into a directory structure that torchvision's ImageFolder can consume:
-
-    data_dir/
-        training/
-            airplane/
-            automobile/
-            ...
-        testing/
-            airplane/
-            automobile/
-            ...
-
-Test Evaluation:
-After training, the model evaluates on the test set and records per-image
-classification predictions to the DerivaML catalog using the Image_Classification
-feature. This enables tracking of model predictions and comparison with ground
-truth labels.
+Data loading uses DerivaML's framework adapter ``DatasetBag.as_torch_dataset``
+for training (lazy, label-aware, no on-disk reorganization) plus a thin
+RID-aware wrapper for the test loop so per-image predictions can be recorded
+back to the catalog as ``Image_Classification`` feature values.
 """
 from __future__ import annotations
 
 import csv
-from pathlib import Path
+from typing import Any
 
+import PIL.Image
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
-from torchvision.datasets import ImageFolder
 
 from deriva_ml import DerivaML, MLAsset, ExecAssetType
+from deriva_ml.dataset import DatasetBag
 from deriva_ml.execution import Execution
 
+from models.cifar10_classes import CIFAR10_CLASS_NAMES, CIFAR10_CLASS_TO_IDX
 
-def build_filename_to_rid_map(ml_instance: DerivaML) -> dict[str, str]:
-    """Build a mapping from filenames to RIDs from the Image asset table.
 
-    Queries all Image assets in the catalog to create a lookup table
-    that maps image filenames to their catalog RIDs.
+# CIFAR-10's 32x32 RGB images normalized to [-1, 1].
+_TRANSFORM = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+])
+
+
+def _bag_role(bag: DatasetBag) -> str:
+    """Return ``"training"``, ``"testing"``, ``"split"``, or ``"unknown"``.
+
+    Reads ``bag.dataset_types`` (e.g., ``["Training", "Labeled"]``) and picks
+    the role that matters for loader routing. ``Training``/``Testing`` go
+    straight to a loader; ``Split`` means "descend into children".
+    """
+    types_lower = [t.lower() for t in bag.dataset_types]
+    if "training" in types_lower:
+        return "training"
+    if "testing" in types_lower:
+        return "testing"
+    if "split" in types_lower:
+        return "split"
+    return "unknown"
+
+
+def _flatten_bags(bags: list[DatasetBag]) -> list[DatasetBag]:
+    """Flatten a list of bags by recursively expanding ``Split`` parents.
+
+    The CIFAR-10 dataset configs ship as either a leaf ``Training``/
+    ``Testing`` bag or a ``Split`` parent containing both as children. The
+    train/test loader cares only about the leaves, so descend into any
+    ``Split`` we encounter. Cycles are not possible since the catalog's
+    parent/child graph is a DAG.
+    """
+    flat: list[DatasetBag] = []
+    for bag in bags:
+        if _bag_role(bag) == "split":
+            flat.extend(_flatten_bags(bag.list_dataset_children()))
+        else:
+            flat.append(bag)
+    return flat
+
+
+def _load_image(path: Any, _row: dict[str, Any]) -> PIL.Image.Image:
+    """Sample loader for ``as_torch_dataset``: open an image file as RGB PIL."""
+    return PIL.Image.open(path).convert("RGB")
+
+
+class _RidAwareImageDataset(Dataset):
+    """A test-time wrapper that yields ``(image_tensor, label_idx, rid)``.
+
+    ``DatasetBag.as_torch_dataset`` is the right tool for training (lazy,
+    label-aware, no on-disk reorganization), but its ``__getitem__`` returns
+    just ``(sample, target)`` — recording per-image predictions back to the
+    catalog requires the element RID alongside each sample.
+
+    This wrapper iterates the bag's ``Image`` rows directly, decodes via the
+    same PIL+transform pipeline as training, and resolves each row's
+    classification feature value (or returns ``-1`` if the test bag is
+    unlabeled, in which case the label is unused — only the RID and predicted
+    class matter for downstream feature recording).
 
     Args:
-        ml_instance: DerivaML instance for catalog access.
-
-    Returns:
-        Dictionary mapping filename (without path) to RID.
+        bag: The downloaded dataset bag containing ``Image`` rows.
     """
-    assets = ml_instance.list_assets("Image")
-    return {a.filename: a.asset_rid for a in assets}
+
+    def __init__(self, bag: DatasetBag) -> None:
+        members = bag.list_dataset_members(recurse=True).get("Image", [])
+        # Pre-resolve label per-RID via feature_values; missing → -1 sentinel.
+        # `feature_values` returns FeatureRecords with a target FK column.
+        rid_to_label: dict[str, int] = {}
+        for rec in bag.feature_values("Image", "Image_Classification"):
+            cls = getattr(rec, "Image_Class", None) or getattr(rec, "Name", None)
+            if cls in CIFAR10_CLASS_TO_IDX:
+                # `rec.Image` is the FK pointing back at the asset RID.
+                rid_to_label[rec.Image] = CIFAR10_CLASS_TO_IDX[cls]
+
+        self._rids: list[str] = []
+        self._labels: list[int] = []
+        self._paths: list[Any] = []
+        for row in members:
+            rid = row["RID"]
+            self._rids.append(rid)
+            self._labels.append(rid_to_label.get(rid, -1))
+            # Bag asset path: <bag_path>/data/assets/Image/<rid>/<filename>
+            self._paths.append(bag.path / "data" / "assets" / "Image" / rid / row["Filename"])
+
+    def __len__(self) -> int:
+        return len(self._rids)
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, int, str]:
+        img = PIL.Image.open(self._paths[idx]).convert("RGB")
+        return _TRANSFORM(img), self._labels[idx], self._rids[idx]
+
+
+def _rid_collate(
+    batch: list[tuple[torch.Tensor, int, str]],
+) -> tuple[torch.Tensor, torch.Tensor, list[str]]:
+    """Collate ``(tensor, int, str)`` triples — strings can't be tensorized."""
+    images = torch.stack([b[0] for b in batch])
+    labels = torch.tensor([b[1] for b in batch], dtype=torch.long)
+    rids = [b[2] for b in batch]
+    return images, labels, rids
 
 
 def record_test_predictions(
     model: nn.Module,
     test_loader: DataLoader,
     class_names: list[str],
-    filename_to_rid: dict[str, str],
     execution: Execution,
     ml_instance: DerivaML,
     device: torch.device,
 ) -> int:
     """Record per-image classification predictions to the DerivaML catalog.
 
-    Runs inference on the test set and records each prediction as an
-    Image_Classification feature value, linking the predicted class
-    to the image RID. Also includes the confidence (probability) of the
-    predicted class.
-
-    Additionally saves a CSV file with full probability distributions for
-    all classes, enabling detailed ROC curve analysis.
+    Iterates ``test_loader`` (which yields ``(image, label, rid)`` triples
+    from :class:`_RidAwareImageDataset`), runs inference, and stages one
+    ``Image_Classification`` feature record per image via
+    ``execution.add_features(...)``. Also writes a CSV with the full
+    probability distribution per image as an ``Execution_Asset`` for
+    downstream ROC analysis.
 
     Args:
         model: Trained PyTorch model.
-        test_loader: DataLoader for test data (from ImageFolder).
+        test_loader: Yields ``(image_batch, label_batch, rid_list)``.
         class_names: List of class names in index order.
-        filename_to_rid: Mapping from image filename to RID.
         execution: DerivaML execution context.
         ml_instance: DerivaML instance for catalog access.
         device: PyTorch device for inference.
@@ -98,83 +169,51 @@ def record_test_predictions(
         Number of predictions recorded.
     """
     model.eval()
-
-    # Get the feature record class for Image_Classification
     ImageClassification = ml_instance.feature_record_class("Image", "Image_Classification")
 
-    # Collect all predictions
-    feature_records = []
-
-    # Collect data for CSV output (full probability distributions)
-    csv_rows = []
-
-    # Get the underlying dataset to access file paths
-    test_dataset = test_loader.dataset
+    feature_records: list[Any] = []
+    csv_rows: list[dict[str, Any]] = []
 
     with torch.no_grad():
-        sample_idx = 0
-        for inputs, labels in test_loader:
+        for inputs, _labels, rids in test_loader:
             inputs = inputs.to(device)
-            outputs = model(inputs)
-
-            # Compute softmax probabilities
-            probabilities = F.softmax(outputs, dim=1)
-
-            # Get predicted class and confidence
+            probabilities = F.softmax(model(inputs), dim=1)
             confidences, predicted = probabilities.max(1)
 
-            # Process each sample in the batch
-            for i in range(inputs.size(0)):
-                # Get the file path for this sample
-                img_path, _ = test_dataset.samples[sample_idx]
-                filename = Path(img_path).name
-
-                # Get probability distribution for this sample
+            for i, rid in enumerate(rids):
                 probs = probabilities[i].cpu().numpy()
+                predicted_class = class_names[predicted[i].item()]
+                confidence = confidences[i].item()
 
-                # Look up the RID
-                rid = filename_to_rid.get(filename)
-                if rid:
-                    predicted_class = class_names[predicted[i].item()]
-                    confidence = confidences[i].item()
-
-                    # Record to catalog with confidence
-                    feature_records.append(
-                        ImageClassification(
-                            Image=rid,
-                            Image_Class=predicted_class,
-                            Confidence=confidence,
-                        )
+                feature_records.append(
+                    ImageClassification(
+                        Image=rid,
+                        Image_Class=predicted_class,
+                        Confidence=confidence,
                     )
+                )
 
-                    # Build CSV row with full probability distribution
-                    csv_row = {
-                        "Image_RID": rid,
-                        "Filename": filename,
-                        "Predicted_Class": predicted_class,
-                        "Confidence": confidence,
-                    }
-                    # Add probability for each class
-                    for j, class_name in enumerate(class_names):
-                        csv_row[f"prob_{class_name}"] = probs[j]
-                    csv_rows.append(csv_row)
+                row = {
+                    "Image_RID": rid,
+                    "Predicted_Class": predicted_class,
+                    "Confidence": confidence,
+                }
+                for j, class_name in enumerate(class_names):
+                    row[f"prob_{class_name}"] = probs[j]
+                csv_rows.append(row)
 
-                sample_idx += 1
-
-    # Bulk add all predictions to the execution
     if feature_records:
         execution.add_features(feature_records)
         print(f"  Recorded {len(feature_records)} classification predictions with confidence scores")
     else:
-        print("  WARNING: No predictions could be recorded (no RID matches)")
+        print("  WARNING: No predictions recorded (test loader was empty)")
 
-    # Save full probability distributions to CSV
     if csv_rows:
         csv_file = execution.asset_file_path(
             MLAsset.execution_asset, "prediction_probabilities.csv", ExecAssetType.output_file,
             description="Per-image predicted class and probability distributions over all CIFAR-10 classes",
         )
-        fieldnames = ["Image_RID", "Filename", "Predicted_Class", "Confidence"] + [
+        fieldnames = ["Image_RID", "Predicted_Class", "Confidence"] + [
             f"prob_{c}" for c in class_names
         ]
         with csv_file.open("w", newline="") as f:
@@ -235,116 +274,63 @@ class SimpleCNN(nn.Module):
 def load_cifar10_from_execution(
     execution: Execution,
     batch_size: int,
-) -> tuple[DataLoader | None, DataLoader | None, list[str], Path]:
-    """Load CIFAR-10 data from DerivaML execution datasets.
+) -> tuple[DataLoader | None, DataLoader | None, list[str]]:
+    """Build PyTorch DataLoaders directly from execution dataset bags.
 
-    Uses DerivaML's restructure_assets() method to organize downloaded images
-    into the directory structure expected by torchvision's ImageFolder.
-    Images are grouped by the Image_Classification feature value.
+    Uses :meth:`DatasetBag.as_torch_dataset` for training (lazy adapter, no
+    on-disk reorganization) and a :class:`_RidAwareImageDataset` wrapper for
+    testing (so per-image predictions can be linked back to their RIDs when
+    recording features).
 
-        data_dir/
-            training/          # From dataset with type "Training"
-                airplane/      # From Image_Classification feature value
-                automobile/
-                ...
-            testing/           # From dataset with type "Testing"
-                airplane/
-                ...
+    Bags are routed into train vs test by the dataset type tags
+    (``"Training"`` / ``"Testing"``). Bags with neither tag are skipped.
 
     Args:
-        execution: DerivaML execution containing downloaded datasets.
-        batch_size: Batch size for DataLoader.
+        execution: DerivaML execution containing downloaded ``DatasetBag``s.
+        batch_size: Batch size for both DataLoaders.
 
     Returns:
-        Tuple of (train_loader, test_loader, class_names, data_dir).
-        - train_loader: DataLoader for training data (or None)
-        - test_loader: DataLoader for test data with RID tracking (or None)
-        - class_names: List of class names in index order
-        - data_dir: The restructured directory path
+        Tuple of ``(train_loader, test_loader, class_names)``. Either loader
+        may be ``None`` if the corresponding role isn't present in the
+        execution. ``class_names`` is the canonical CIFAR-10 list — this
+        matches the model's output index ordering and is independent of which
+        labels happen to appear in the bags.
     """
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-    ])
+    train_loader: DataLoader | None = None
+    test_loader: DataLoader | None = None
 
-    # Create output directory for restructured data
-    data_dir = execution.working_dir / "cifar10_data"
-    data_dir.mkdir(parents=True, exist_ok=True)
+    for bag in _flatten_bags(list(execution.datasets)):
+        role = _bag_role(bag)
+        if role == "training":
+            train_dataset = bag.as_torch_dataset(
+                element_type="Image",
+                sample_loader=_load_image,
+                transform=_TRANSFORM,
+                targets=["Image_Classification"],
+                target_transform=lambda rec: CIFAR10_CLASS_TO_IDX[
+                    getattr(rec, "Image_Class", None) or rec.Name
+                ],
+                missing="skip",  # drop unlabeled training images
+            )
+            train_loader = DataLoader(
+                train_dataset,
+                batch_size=batch_size,
+                shuffle=True,
+                num_workers=0,  # macOS fork() + MPS/GPU threads can deadlock
+            )
+            print(f"  Training samples: {len(train_dataset)}")
+        elif role == "testing":
+            test_dataset = _RidAwareImageDataset(bag)
+            test_loader = DataLoader(
+                test_dataset,
+                batch_size=batch_size,
+                shuffle=False,
+                num_workers=0,
+                collate_fn=_rid_collate,
+            )
+            print(f"  Testing samples: {len(test_dataset)}")
 
-    # Restructure assets from each dataset
-    # The type_selector picks which dataset type to use for the directory name
-    def type_selector(types: list[str]) -> str:
-        """Select dataset type for directory structure."""
-        type_lower = [t.lower() for t in types]
-        if "training" in type_lower:
-            return "training"
-        elif "testing" in type_lower:
-            return "testing"
-        elif types:
-            return types[0].lower()
-        return "unknown"
-
-    # Process each dataset in the execution
-    for dataset in execution.datasets:
-        # Restructure images by dataset type and label
-        # This creates: data_dir/<dataset_type>/<label>/image.png
-        dataset.restructure_assets(
-            asset_table="Image",
-            output_dir=data_dir,
-            group_by=["Image_Classification"],  # Group by feature to create class subdirs
-            use_symlinks=True,
-            type_selector=type_selector,
-        )
-
-    # Create DataLoaders
-    train_loader = None
-    test_loader = None
-    class_names: list[str] = []
-
-    # Find training and testing directories (may be nested under dataset type like "split")
-    def find_data_dir(base_dir: Path, target_name: str) -> Path | None:
-        """Find a directory with the given name, searching recursively."""
-        # First check direct path
-        direct_path = base_dir / target_name
-        if direct_path.exists() and any(direct_path.iterdir()):
-            return direct_path
-        # Search recursively for nested datasets
-        for subdir in base_dir.iterdir():
-            if subdir.is_dir():
-                nested_path = subdir / target_name
-                if nested_path.exists() and any(nested_path.iterdir()):
-                    return nested_path
-        return None
-
-    train_dir = find_data_dir(data_dir, "training")
-    if train_dir:
-        train_dataset = ImageFolder(train_dir, transform=transform)
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=batch_size,
-            shuffle=True,
-            num_workers=0,  # macOS fork() + MPS/GPU threads can deadlock with num_workers > 0
-        )
-        class_names = train_dataset.classes
-        print(f"  Training classes: {train_dataset.classes}")
-        print(f"  Training samples: {len(train_dataset)}")
-
-    test_dir = find_data_dir(data_dir, "testing")
-    if test_dir:
-        test_dataset = ImageFolder(test_dir, transform=transform)
-        test_loader = DataLoader(
-            test_dataset,
-            batch_size=batch_size,
-            shuffle=False,
-            num_workers=0,  # macOS fork() + MPS/GPU threads can deadlock with num_workers > 0
-        )
-        # Use test classes if no training data
-        if not class_names:
-            class_names = test_dataset.classes
-        print(f"  Testing classes: {test_dataset.classes}")
-        print(f"  Testing samples: {len(test_dataset)}")
-
-    return train_loader, test_loader, class_names, data_dir
+    return train_loader, test_loader, list(CIFAR10_CLASS_NAMES)
 
 
 def cifar10_cnn(
@@ -418,16 +404,11 @@ def cifar10_cnn(
         dropout_rate=dropout_rate,
     ).to(device)
 
-    # Load data from execution datasets
-    print("\nLoading and restructuring data from execution datasets...")
-    train_loader, test_loader, class_names, data_dir = load_cifar10_from_execution(
+    # Load data directly from execution dataset bags (no restructuring needed)
+    print("\nBuilding DataLoaders from execution datasets...")
+    train_loader, test_loader, class_names = load_cifar10_from_execution(
         execution, batch_size
     )
-    print(f"  Data directory: {data_dir}")
-
-    # Build filename -> RID mapping for recording predictions
-    filename_to_rid = build_filename_to_rid_map(ml_instance)
-    print(f"  Loaded {len(filename_to_rid)} filename-to-RID mappings")
 
     # Test-only mode: load weights and run evaluation
     if test_only:
@@ -437,13 +418,6 @@ def cifar10_cnn(
             return
 
         print(f"  Test batches: {len(test_loader)}")
-
-        # For test-only mode, use standard CIFAR-10 class names since test data may not have labels
-        from scripts.load_cifar10 import CIFAR10_CLASSES
-        cifar10_classes = [name for name, _, _ in CIFAR10_CLASSES]
-        if class_names == ['unknown'] or len(class_names) != 10:
-            print(f"  Using standard CIFAR-10 class names (test data has: {class_names})")
-            class_names = cifar10_classes
 
         # Find weights file in execution assets
         # asset_paths is a dict: {table_name: [AssetFilePath, ...]}
@@ -484,38 +458,48 @@ def cifar10_cnn(
 
         # Run evaluation
         print("\nEvaluating on test set...")
+        # Run evaluation. Test loader yields (image, label, rid) triples;
+        # `label == -1` indicates an unlabeled test image (loss/accuracy
+        # cannot be computed for those — only predictions are recorded).
         model.eval()
-        criterion = nn.CrossEntropyLoss()
+        criterion = nn.CrossEntropyLoss(ignore_index=-1)
         test_correct = 0
-        test_total = 0
-        test_loss = 0.0
+        test_total_labeled = 0
+        test_loss_sum = 0.0
+        test_loss_batches = 0
 
         with torch.no_grad():
-            for inputs, labels in test_loader:
+            for inputs, labels, _rids in test_loader:
                 inputs, labels = inputs.to(device), labels.to(device)
                 outputs = model(inputs)
                 loss = criterion(outputs, labels)
-                test_loss += loss.item()
+                if torch.isfinite(loss):  # skip all-unlabeled batches
+                    test_loss_sum += loss.item()
+                    test_loss_batches += 1
                 _, predicted = outputs.max(1)
-                test_total += labels.size(0)
-                test_correct += predicted.eq(labels).sum().item()
+                labeled_mask = labels != -1
+                test_total_labeled += int(labeled_mask.sum().item())
+                test_correct += int((predicted.eq(labels) & labeled_mask).sum().item())
 
-        test_acc = 100.0 * test_correct / test_total
-        test_loss = test_loss / len(test_loader)
-        print(f"  Test loss: {test_loss:.4f}, Test accuracy: {test_acc:.2f}%")
+        if test_total_labeled > 0:
+            test_acc = 100.0 * test_correct / test_total_labeled
+            test_loss = test_loss_sum / max(test_loss_batches, 1)
+            print(f"  Test loss: {test_loss:.4f}, Test accuracy: {test_acc:.2f}%")
+        else:
+            test_acc = float("nan")
+            test_loss = float("nan")
+            print("  Test set is unlabeled — skipping accuracy/loss reporting.")
 
         # Record predictions to catalog
-        if class_names and filename_to_rid:
-            print("\nRecording test predictions to catalog...")
-            record_test_predictions(
-                model=model,
-                test_loader=test_loader,
-                class_names=class_names,
-                filename_to_rid=filename_to_rid,
-                execution=execution,
-                ml_instance=ml_instance,
-                device=device,
-            )
+        print("\nRecording test predictions to catalog...")
+        record_test_predictions(
+            model=model,
+            test_loader=test_loader,
+            class_names=class_names,
+            execution=execution,
+            ml_instance=ml_instance,
+            device=device,
+        )
 
         # Save evaluation results
         results_file = execution.asset_file_path(
@@ -526,7 +510,7 @@ def cifar10_cnn(
             f.write("CIFAR-10 CNN Evaluation Results\n")
             f.write("=" * 50 + "\n\n")
             f.write(f"Weights file: {weights_filename}\n")
-            f.write(f"Test samples: {test_total}\n")
+            f.write(f"Labeled test samples: {test_total_labeled}\n")
             f.write(f"Test loss: {test_loss:.4f}\n")
             f.write(f"Test accuracy: {test_acc:.2f}%\n")
         print(f"  Saved results to: {results_file}")
@@ -592,31 +576,41 @@ def cifar10_cnn(
             'train_acc': epoch_acc,
         }
 
-        # Evaluate on test set if available
+        # Evaluate on test set if available. Test loader yields
+        # (image, label, rid) triples; label == -1 means unlabeled.
         if test_loader:
             model.eval()
+            test_eval_criterion = nn.CrossEntropyLoss(ignore_index=-1)
             test_correct = 0
-            test_total = 0
-            test_loss = 0.0
+            test_total_labeled = 0
+            test_loss_sum = 0.0
+            test_loss_batches = 0
 
             with torch.no_grad():
-                for inputs, labels in test_loader:
+                for inputs, labels, _rids in test_loader:
                     inputs, labels = inputs.to(device), labels.to(device)
                     outputs = model(inputs)
-                    loss = criterion(outputs, labels)
-                    test_loss += loss.item()
+                    loss = test_eval_criterion(outputs, labels)
+                    if torch.isfinite(loss):
+                        test_loss_sum += loss.item()
+                        test_loss_batches += 1
                     _, predicted = outputs.max(1)
-                    test_total += labels.size(0)
-                    test_correct += predicted.eq(labels).sum().item()
+                    labeled_mask = labels != -1
+                    test_total_labeled += int(labeled_mask.sum().item())
+                    test_correct += int((predicted.eq(labels) & labeled_mask).sum().item())
 
-            test_acc = 100.0 * test_correct / test_total
-            test_loss = test_loss / len(test_loader)
-            log_entry['test_loss'] = test_loss
-            log_entry['test_acc'] = test_acc
-
-            print(f"  Epoch {epoch+1}/{epochs}: "
-                  f"train_loss={epoch_loss:.4f}, train_acc={epoch_acc:.2f}%, "
-                  f"test_loss={test_loss:.4f}, test_acc={test_acc:.2f}%")
+            if test_total_labeled > 0:
+                test_acc = 100.0 * test_correct / test_total_labeled
+                test_loss = test_loss_sum / max(test_loss_batches, 1)
+                log_entry['test_loss'] = test_loss
+                log_entry['test_acc'] = test_acc
+                print(f"  Epoch {epoch+1}/{epochs}: "
+                      f"train_loss={epoch_loss:.4f}, train_acc={epoch_acc:.2f}%, "
+                      f"test_loss={test_loss:.4f}, test_acc={test_acc:.2f}%")
+            else:
+                print(f"  Epoch {epoch+1}/{epochs}: "
+                      f"train_loss={epoch_loss:.4f}, train_acc={epoch_acc:.2f}% "
+                      f"(test set unlabeled — no test metrics)")
         else:
             print(f"  Epoch {epoch+1}/{epochs}: "
                   f"train_loss={epoch_loss:.4f}, train_acc={epoch_acc:.2f}%")
@@ -669,13 +663,12 @@ def cifar10_cnn(
     print(f"  Saved log to: {log_file}")
 
     # Record test predictions to catalog if test data is available
-    if test_loader and class_names and filename_to_rid:
+    if test_loader is not None:
         print("\nRecording test predictions to catalog...")
         record_test_predictions(
             model=model,
             test_loader=test_loader,
             class_names=class_names,
-            filename_to_rid=filename_to_rid,
             execution=execution,
             ml_instance=ml_instance,
             device=device,
