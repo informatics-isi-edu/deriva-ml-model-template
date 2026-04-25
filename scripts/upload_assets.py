@@ -40,7 +40,6 @@ except ModuleNotFoundError:
     import tomli as tomllib  # Python < 3.11 fallback
 
 from deriva_ml import DerivaML
-from deriva_ml.dataset.upload import upload_directory
 from deriva_ml.execution import ExecutionConfiguration
 
 # ---------------------------------------------------------------------------
@@ -141,15 +140,21 @@ def upload_assets(
         ),
     )
 
-    execution = ml.create_execution(config)
-    print(f"\nExecution: {ml.cite(execution.execution_rid)}")
+    # Use the execution as a context manager — exiting transitions it through
+    # Running → Stopped, which is the prerequisite for upload_execution_outputs.
+    with ml.create_execution(config) as execution:
+        print(f"\nExecution: {ml.cite(execution.execution_rid)}")
 
-    # Stage each file for upload
-    for filepath in file_paths:
-        print(f"Staging {filepath.name} ({filepath.stat().st_size / 1e6:.1f} MB)")
-        execution.asset_file_path(table, str(filepath))
+        # Stage each file for upload. asset_file_path registers it in the
+        # execution's manifest; upload_execution_outputs will then transfer
+        # everything in the staging directory.
+        for filepath in file_paths:
+            print(f"Staging {filepath.name} ({filepath.stat().st_size / 1e6:.1f} MB)")
+            execution.asset_file_path(table, str(filepath))
 
-    # Upload with chunked transfers and progress reporting
+    # Upload with chunked transfers and progress reporting. Run after the
+    # context exit (the public API contract — uploading inside the context
+    # would race with the Stopped transition).
     def progress(p):
         print(f"  {p.file_name}: {p.percent_complete:.1f}%", flush=True)
 
@@ -158,17 +163,13 @@ def upload_assets(
         f"{READ_TIMEOUT}s timeout...",
         flush=True,
     )
-    upload_directory(
-        model=execution._model,
-        directory=execution._asset_root,
+    execution.upload_execution_outputs(
+        progress_callback=progress,
         chunk_size=CHUNK_SIZE,
         timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
         max_retries=MAX_RETRIES,
         retry_delay=RETRY_DELAY,
-        progress_callback=progress,
     )
-
-    execution.update_status("Completed", "Upload complete.")
     print("Upload done!", flush=True)
 
     # Set descriptions on the uploaded records.
