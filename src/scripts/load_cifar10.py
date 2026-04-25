@@ -140,7 +140,6 @@ from deriva_ml import DerivaML
 from deriva_ml.catalog import set_catalog_provenance
 from deriva_ml.core.ermrest import ColumnDefinition, UploadProgress
 from deriva_ml.core.enums import BuiltinTypes
-from deriva_ml.dataset import VersionPart
 from deriva_ml.dataset.split import split_dataset
 from deriva_ml.execution import ExecutionConfiguration
 from deriva_ml.schema import create_ml_catalog
@@ -174,19 +173,10 @@ sys.stderr.reconfigure(line_buffering=True)
 # Constants
 # =============================================================================
 
-#: CIFAR-10 class definitions: (name, description, synonyms)
-CIFAR10_CLASSES: list[tuple[str, str, list[str]]] = [
-    ("airplane", "Fixed-wing aircraft", ["plane", "aeroplane"]),
-    ("automobile", "Motor vehicle with four wheels", ["car", "auto"]),
-    ("bird", "Feathered flying vertebrate", []),
-    ("cat", "Small domestic feline", ["kitten"]),
-    ("deer", "Hoofed ruminant mammal", []),
-    ("dog", "Domestic canine", ["puppy"]),
-    ("frog", "Tailless amphibian", ["toad"]),
-    ("horse", "Large domesticated hoofed mammal", ["pony"]),
-    ("ship", "Large watercraft", ["boat", "vessel"]),
-    ("truck", "Motor vehicle for transporting cargo", ["lorry"]),
-]
+# CIFAR-10 class definitions are the single source of truth in
+# `models.cifar10_classes`. Re-exported here so existing call sites
+# (`from scripts.load_cifar10 import CIFAR10_CLASSES`) keep working.
+from models.cifar10_classes import CIFAR10_CLASSES  # noqa: E402, F401
 
 #: Dataset types used for organizing CIFAR-10 data
 DATASET_TYPES: list[tuple[str, str, list[str]]] = [
@@ -1122,55 +1112,29 @@ def load_images(
 # =============================================================================
 
 
-def main(args: argparse.Namespace | None = None) -> int:
-    """Main entry point for the CIFAR-10 loader.
+def connect_or_create_catalog(args: argparse.Namespace) -> tuple[DerivaML, str | int, str]:
+    """Connect to an existing catalog or create a new one.
 
-    Orchestrates the complete loading process: catalog connection/creation,
-    schema setup, data download, and image loading.
+    If ``args.create_catalog`` is set, creates a new catalog (with a fresh
+    domain schema and catalog provenance), otherwise connects to the catalog
+    identified by ``args.catalog_id``.
 
     Args:
-        args: Parsed command-line arguments. If None, arguments are parsed
-            from sys.argv.
+        args: Parsed CLI args. Reads ``hostname``, ``catalog_id``,
+            ``create_catalog``, ``domain_schema``.
 
     Returns:
-        Exit code: 0 for success, 1 for failure.
-
-    Example:
-        Command-line usage::
-
-            load-cifar10 --hostname localhost --create-catalog demo --num-images 100
-
-        Programmatic usage::
-
-            >>> args = argparse.Namespace(
-            ...     hostname='localhost',
-            ...     create_catalog='demo',
-            ...     catalog_id=None,
-            ...     domain_schema=None,
-            ...     num_images=100,
-            ...     batch_size=500,
-            ...     dry_run=False,
-            ...     show_urls=False
-            ... )
-            >>> exit_code = main(args)
+        Tuple of ``(ml, catalog_id, domain_schema)`` — a connected
+        ``DerivaML`` instance, the catalog ID, and the resolved domain
+        schema name.
     """
-    if args is None:
-        args = parse_args()
-        # Verify Kaggle credentials (only if not dry run)
-        if not args.dry_run and not verify_kaggle_credentials():
-            return 1
-
-    # Either create a new catalog or connect to existing one
     if args.create_catalog:
         logger.info(
             f"Creating new catalog on {args.hostname} with project name: {args.create_catalog}"
         )
 
-        # Create the catalog
         catalog = create_ml_catalog(args.hostname, args.create_catalog)
         model = catalog.getCatalogModel()
-
-        # Create domain schema
         model.create_schema(Schema.define(args.create_catalog))
 
         catalog_id = catalog.catalog_id
@@ -1183,7 +1147,6 @@ def main(args: argparse.Namespace | None = None) -> int:
         print(f"  Schema:      {domain_schema}")
         print(f"{'='*60}\n")
 
-        # Connect to the newly created catalog
         ml = DerivaML(
             hostname=args.hostname,
             catalog_id=str(catalog_id),
@@ -1191,7 +1154,6 @@ def main(args: argparse.Namespace | None = None) -> int:
             check_auth=True,
         )
 
-        # Set catalog provenance for traceability
         set_catalog_provenance(
             ml.catalog,
             name=f"CIFAR-10 ({args.create_catalog})",
@@ -1199,60 +1161,126 @@ def main(args: argparse.Namespace | None = None) -> int:
             workflow_url="https://github.com/informatics-isi-edu/deriva-ml-model-template/blob/main/src/scripts/load_cifar10.py",
         )
         logger.info("Set catalog provenance")
-    else:
-        logger.info(f"Connecting to {args.hostname}, catalog {args.catalog_id}")
-        ml = DerivaML(
-            hostname=args.hostname,
-            catalog_id=str(args.catalog_id),
-            domain_schemas={args.domain_schema} if args.domain_schema else None,
-            check_auth=True,
-        )
-        catalog_id = args.catalog_id
-        domain_schema = ml.default_schema
-        logger.info(f"Connected to catalog, domain schema: {domain_schema}")
+        return ml, catalog_id, domain_schema
 
-    # Set up domain model
+    logger.info(f"Connecting to {args.hostname}, catalog {args.catalog_id}")
+    ml = DerivaML(
+        hostname=args.hostname,
+        catalog_id=str(args.catalog_id),
+        domain_schemas={args.domain_schema} if args.domain_schema else None,
+        check_auth=True,
+    )
+    domain_schema = ml.default_schema
+    logger.info(f"Connected to catalog, domain schema: {domain_schema}")
+    return ml, args.catalog_id, domain_schema
+
+
+def run_schema_phase(ml: DerivaML, project_name: str) -> None:
+    """Set up the domain model, catalog annotations, and dataset types.
+
+    Idempotent — safe to re-run on a catalog that already has the schema
+    installed (each ``setup_*`` helper checks before creating).
+    """
     logger.info("Setting up domain model...")
     setup_domain_model(ml)
     logger.info("Domain model setup complete")
 
-    # Table display annotations are configured via set_visible_columns / set_row_name_pattern
-    # in the table setup functions above.
-
-    # Apply catalog annotations for Chaise web interface
     logger.info("Applying catalog annotations...")
-    project_name = args.create_catalog if args.create_catalog else domain_schema
     ml.apply_catalog_annotations(
         navbar_brand_text=f"CIFAR-10 ({project_name})",
         head_title="CIFAR-10 ML Catalog",
     )
 
-    # Setup dataset types
     setup_dataset_types(ml)
 
-    # Load images or dry run
-    datasets = None
-    load_result = None
-    if not args.dry_run:
-        # Download CIFAR-10 from Kaggle
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            data_dir = download_cifar10(temp_path)
-            logger.info(f"Downloaded CIFAR-10 to: {data_dir}")
 
-            # Load images (also creates datasets within execution for provenance)
-            datasets, load_result = load_images(
-                ml, data_dir, args.batch_size, max_images=args.num_images
-            )
-            logger.info(f"Loading complete: {load_result}")
-    else:
-        # In dry run mode, create datasets without images or features
-        logger.info("Dry run mode - creating empty datasets without image upload")
-        datasets = create_dataset_hierarchy(ml)
+def run_images_phase(
+    ml: DerivaML, batch_size: int, num_images: int | None
+) -> tuple[dict[str, str], dict[str, Any]]:
+    """Download images from Kaggle, upload them, and create the dataset hierarchy.
+
+    Wraps ``download_cifar10`` + ``load_images`` (which itself handles dataset
+    creation for provenance). Use this when the schema is already installed
+    and you want to (re)load images.
+
+    Returns:
+        Tuple of ``(datasets, load_result)`` from ``load_images``.
+    """
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        data_dir = download_cifar10(temp_path)
+        logger.info(f"Downloaded CIFAR-10 to: {data_dir}")
+
+        datasets, load_result = load_images(
+            ml, data_dir, batch_size, max_images=num_images
+        )
+        logger.info(f"Loading complete: {load_result}")
+    return datasets, load_result
+
+
+def run_datasets_phase(ml: DerivaML) -> dict[str, str]:
+    """Create the dataset hierarchy without uploading any images.
+
+    Use this for dry-run scenarios or to recreate the dataset structure on
+    a catalog whose images already exist.
+    """
+    logger.info("Creating empty datasets without image upload")
+    return create_dataset_hierarchy(ml)
+
+
+def main(args: argparse.Namespace | None = None) -> int:
+    """Main entry point for the CIFAR-10 loader.
+
+    Orchestrates the loading process. Phases run sequentially by default; use
+    ``--phase`` to run a single phase (useful for resuming after a partial
+    failure). Phases:
+
+    - ``schema`` — install/refresh the domain model, vocabulary, dataset
+      types, and catalog annotations (idempotent).
+    - ``images`` — download from Kaggle, upload images, label them, and
+      create the dataset hierarchy with provenance.
+    - ``datasets`` — create the dataset hierarchy without uploading images
+      (for dry runs).
+    - ``all`` (default) — schema, then either images or datasets depending
+      on ``--dry-run``.
+
+    Args:
+        args: Parsed command-line arguments. If ``None``, arguments are
+            parsed from ``sys.argv``.
+
+    Returns:
+        Exit code: ``0`` for success, ``1`` for failure.
+    """
+    if args is None:
+        args = parse_args()
+        if not args.dry_run and getattr(args, "phase", "all") != "schema" and not verify_kaggle_credentials():
+            return 1
+
+    phase = getattr(args, "phase", "all")
+
+    ml, catalog_id, domain_schema = connect_or_create_catalog(args)
+    project_name = args.create_catalog if args.create_catalog else domain_schema
+
+    datasets: dict[str, str] | None = None
+    load_result: dict[str, Any] | None = None
+
+    if phase in ("all", "schema"):
+        run_schema_phase(ml, project_name)
+        if phase == "schema":
+            print("\n" + "=" * 60)
+            print("  SCHEMA PHASE COMPLETE")
+            print("  Re-run with --phase images (or --phase datasets) to load data.")
+            print("=" * 60 + "\n")
+            return 0
+
+    if phase in ("all", "images") and not args.dry_run:
+        datasets, load_result = run_images_phase(ml, args.batch_size, args.num_images)
+    elif phase == "datasets" or args.dry_run:
+        datasets = run_datasets_phase(ml)
 
     # Get Chaise URLs for datasets if requested
     dataset_urls = {}
-    if args.show_urls:
+    if args.show_urls and datasets:
         logger.info("Fetching Chaise URLs for datasets...")
         for name, rid in datasets.items():
             try:
@@ -1289,14 +1317,15 @@ def main(args: argparse.Namespace | None = None) -> int:
         ("Small_Labeled_Testing", "small_labeled_testing"),
     ]
 
-    for display_name, key in dataset_display:
-        if key in datasets:
-            rid = datasets[key]
-            if args.show_urls and dataset_urls:
-                print(f"    - {display_name}: {rid}")
-                print(f"      URL: {dataset_urls.get(key, 'N/A')}")
-            else:
-                print(f"    - {display_name}: {rid}")
+    if datasets:
+        for display_name, key in dataset_display:
+            if key in datasets:
+                rid = datasets[key]
+                if args.show_urls and dataset_urls:
+                    print(f"    - {display_name}: {rid}")
+                    print(f"      URL: {dataset_urls.get(key, 'N/A')}")
+                else:
+                    print(f"    - {display_name}: {rid}")
     if load_result:
         print("")
         print(f"  Images loaded: {load_result['total_images']}")
@@ -1396,6 +1425,19 @@ For more information, see:
         "--show-urls",
         action="store_true",
         help="Show Chaise web interface URLs for datasets in the summary",
+    )
+
+    parser.add_argument(
+        "--phase",
+        choices=["all", "schema", "images", "datasets"],
+        default="all",
+        help=(
+            "Run a single phase instead of the full pipeline. Use after a "
+            "partial failure to resume without redoing earlier work. "
+            "'schema' is idempotent; 'images' assumes the schema exists; "
+            "'datasets' creates the dataset hierarchy without uploading "
+            "images. Default: 'all'."
+        ),
     )
 
     return parser.parse_args()
