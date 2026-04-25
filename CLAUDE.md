@@ -8,9 +8,18 @@ DerivaML Model Template - a template for creating ML models integrated with Deri
 
 ## Common Commands
 
+See [`../CLAUDE.md`](../CLAUDE.md) for shared `uv`, `pytest`, `ruff`,
+and `bump-version` conventions. Repo-specific commands:
+
+> **CWD:** every command below assumes you are in
+> `/Users/carl/GitHub/DerivaML/deriva-ml-model-template`. The Bash tool's
+> cwd is **not** reliably persistent across turns — always chain `cd` into
+> a single call, e.g.
+> `cd /Users/carl/GitHub/DerivaML/deriva-ml-model-template && uv run deriva-ml-run ...`.
+> See the workspace-level `CLAUDE.md` ("CWD discipline") for the rule.
+
 ```bash
-# Environment setup
-uv sync                                    # Initialize environment
+# Environment setup (extra dependency groups)
 uv sync --group=jupyter                   # Add Jupyter support
 uv sync --group=pytorch                   # Add PyTorch support
 
@@ -25,18 +34,13 @@ uv run deriva-ml-run --info                           # Show available configs
 uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb
 uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb assets=my_assets
 
-# Linting and formatting
-uv run ruff check src/
-uv run ruff format src/
-
-# Testing
-uv run pytest
-
-# Version management (bump-version is provided by deriva-ml)
-uv run bump-version major|minor|patch
+# Tests (config smoke tests; no catalog needed)
+uv run python -m pytest tests/
 
 # Data loading
-uv run load-cifar10 --host <hostname> --catalog_id <id> --num_images 500
+uv run python src/scripts/load_cifar10.py \
+    --hostname <hostname> --catalog-id <id> --num-images 500
+# (or --create-catalog <name> instead of --catalog-id for a fresh catalog)
 ```
 
 ## Models
@@ -90,6 +94,7 @@ Compares model predictions across experiments by generating ROC curves. Configur
   - `experiments.py` — Experiment configs (model + dataset combinations)
   - `multiruns.py` — Multirun sweep configs (parameter combinations)
   - `multirun_descriptions.py` — Rich markdown descriptions for multirun parent executions
+  - `dataset_generation.py` — Dataset-generation script configs
   - `roc_analysis.py` — ROC notebook asset configs
   - `dev/` — Per-environment overrides (deriva, datasets, assets, experiments)
 - `src/models/` — Model implementations
@@ -101,7 +106,8 @@ Compares model predictions across experiments by generating ROC curves. Configur
 
 ## Key Rules
 
-- **Commit before running** — DerivaML tracks git commit hash for provenance
+- **Commit before running** (also in README §8) — DerivaML tracks git commit hash for provenance; dirty-tree warnings appear when bouncing between branches
+- **Update configs for your catalog before running** (also in README §7) — the checked-in dataset RIDs are stale demo RIDs; `Catalog Environments` below has the agent-only details
 - **Use labeled datasets for evaluation** — `cifar10_small_labeled_split` or `cifar10_labeled_split` (unlabeled splits have no test ground truth)
 - **`Execution_Asset`** for model outputs (weights, predictions, plots); `Execution_Metadata` is auto-managed
 - **Test with `dry_run=true`** before production runs
@@ -115,15 +121,30 @@ Compares model predictions across experiments by generating ROC curves. Configur
 
 Production configs use a `*_prod` suffix convention. Add alternate configs in `src/configs/dev/`.
 
+### Pointing the configs at a new catalog
+
+See README §7 ("Update configs for your catalog") for the user-facing
+procedure and the config-name → loader-output RID mapping table.
+
+**Agent-only notes** (not in README):
+
+- Versions are not predictable — `0.21.0`/`0.22.0`/`0.4.0` are typical for a
+  freshly loaded catalog. Get actual values via `ml.find_datasets()` →
+  `current_version` per Dataset.
+- For multi-env setups, the `dev/datasets_<env>.py` pattern registers
+  parallel `<name>_<env>` configs in the same `datasets` group; select at
+  CLI with `datasets=cifar10_small_labeled_split_<env>`. Working example
+  exists at `src/configs/dev/datasets_localhost.py` (catalog 1248).
+
 ## Gotchas
 
 - **Kaggle API key required** for `load-cifar10` — must have `~/.kaggle/kaggle.json` configured
-- **No test suite** — `uv run pytest` is configured but no tests exist yet
+- **Use `uv run python -m pytest`, not `uv run pytest`** — the venv's `pytest` shim has a stale shebang that points at system Python 3.10. `uv sync --reinstall` fixes it.
 - **Two `scripts/` dirs** — `src/scripts/` (Python package, importable) vs `scripts/` (standalone shell/CLI utilities, not a package)
 - **`num_workers=0`** in DataLoaders — required on macOS because `fork()` + MPS/GPU threads deadlock
 
 ## Related Docs
 
 - `CIFAR10.md` — End-to-end guide for CIFAR-10 workflow (catalog setup, data loading, training, analysis)
-- `experiments.md` — Experiment configuration reference
+- `Experiments.md` — Experiment configuration reference
 - `experiment-decisions.md` — Design rationale and decision log

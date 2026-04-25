@@ -51,6 +51,9 @@ uv sync
 uv sync --group=jupyter
 uv run nbstripout --install
 uv run deriva-ml-install-kernel
+
+# For PyTorch (required by the CIFAR-10 example)
+uv sync --group=pytorch
 ```
 
 ### 4. Set Up Claude Code (Optional)
@@ -110,7 +113,64 @@ See the [deriva-mcp README](https://github.com/informatics-isi-edu/deriva-mcp) f
 uv run deriva-globus-auth-utils login --host <hostname>
 ```
 
-### 6. Run
+### 6. Load CIFAR-10 into a catalog
+
+The example model needs CIFAR-10 data and dataset definitions in your catalog.
+
+**Prerequisites:** a Kaggle API key (`~/.kaggle/kaggle.json`) and 7-Zip
+(`brew install p7zip` on macOS, `apt-get install p7zip-full` on Linux).
+
+```bash
+# Create a fresh catalog and load 10K images (good for first-time setup)
+uv run python src/scripts/load_cifar10.py \
+    --hostname <hostname> --create-catalog cifar10_test --num-images 10000
+
+# Or load into an existing catalog
+uv run python src/scripts/load_cifar10.py \
+    --hostname <hostname> --catalog-id <id> --num-images 10000
+```
+
+The loader prints the catalog ID and the RID of every dataset it creates
+(`Complete`, `Training`, `Small_Labeled_Split`, etc.). **Save these RIDs** —
+you need them for the next step.
+
+### 7. Update configs for your catalog
+
+`src/configs/datasets.py` ships with RIDs from a previous demo catalog.
+After running `load-cifar10`, replace each `DatasetSpecConfig(rid=...)` with
+the RID the loader reported, and update each `version=` to the version the
+loader assigned (visible via `ml.find_datasets()` after loading).
+
+| Config name | Loader output |
+|---|---|
+| `cifar10_complete` | `Complete` |
+| `cifar10_split` | `Split` |
+| `cifar10_training` | `Training` |
+| `cifar10_testing` | `Testing` |
+| `cifar10_small_split` | `Small_Split` |
+| `cifar10_small_training` | `Small_Training` |
+| `cifar10_small_testing` | `Small_Testing` |
+| `cifar10_labeled_split` | `Labeled_Split` |
+| `cifar10_labeled_training` | child `Training` of `Labeled_Split` |
+| `cifar10_labeled_testing` | child `Testing` of `Labeled_Split` |
+| `cifar10_small_labeled_split` | `Small_Labeled_Split` |
+| `cifar10_small_labeled_training` | child `Training` of `Small_Labeled_Split` |
+| `cifar10_small_labeled_testing` | child `Testing` of `Small_Labeled_Split` |
+
+For multi-environment setups, register parallel `*_<env>` configs in
+`src/configs/dev/` rather than editing the defaults — the example model in
+this template uses `cifar10_small_labeled_split`, so the corresponding
+`*_<env>` variant is the minimum you need to override.
+
+Also point `src/configs/deriva.py` (or a new entry under `src/configs/dev/`)
+at your hostname and catalog ID, **or** override at the CLI:
+`--host <hostname> --catalog <id>`.
+
+### 8. Run
+
+> **Commit before running.** DerivaML records the git commit hash for
+> provenance. Uncommitted changes raise a warning and pollute the audit
+> trail of any run that uses them.
 
 ```bash
 # Run the example model with defaults
