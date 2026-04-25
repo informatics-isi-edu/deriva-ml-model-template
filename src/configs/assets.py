@@ -1,97 +1,71 @@
-"""Asset Configuration.
+"""Asset Configurations.
 
-This module defines asset configurations for execution (model weights, checkpoints, etc.).
+Configuration Group: ``assets``
 
-Configuration Group: assets
----------------------------
-Assets are additional files needed beyond the dataset. They are specified as
-lists of Resource IDs (RIDs) and automatically downloaded when the execution
-is initialized.
+Asset RIDs are produced *by* prior executions in your catalog (e.g., a
+training run that uploaded a weights file). They cannot be supplied by the
+template — they only exist after you run experiments.
 
-Typical assets include:
-- Pre-trained model weights
-- Model checkpoints
-- Configuration files
-- Reference data files
+The defaults here are empty. After running an experiment, take the asset RIDs
+it printed and either:
 
-REQUIRED: A configuration named "default_asset" must be defined.
-This is used as the default (typically an empty list) when no override is specified.
+1. **Edit this file** — add an ``asset_store(["<rid>", ...], name="...")``
+   entry referencing the RIDs.
+2. **Add a per-environment override** — drop ``src/configs/dev/assets_<env>.py``
+   that registers ``<name>_<env>`` configs in the same ``assets`` group, then
+   select on the CLI: ``deriva-ml-run assets=quick_weights_<env>``.
 
-Example usage:
-    # Use default (no assets)
-    uv run deriva-ml-run
+Pattern for an entry with a description (recommended — descriptions show up
+in ``deriva-ml-run --info`` output):
 
-    # Use specific assets
-    uv run deriva-ml-run assets=roc_quick_vs_extended
-
-Configuration Format:
     asset_store(
         with_description(
-            ["RID1", "RID2"],
-            "Description of what these assets are for",
+            ["3WS2"],
+            "Pre-trained weights from cifar10_quick (3 epochs).",
         ),
-        name="my_asset_config",
+        name="quick_weights",
     )
+
+A plain list also works if you don't want a description:
+
+    asset_store(["3WS6", "3X20"], name="roc_quick_vs_extended")
+
+Both forms compose with notebook configs — ``BaseConfig.assets`` is typed
+``Any = None`` so OmegaConf doesn't type-lock the slot, and
+``with_description`` instantiates to a ``DescribedList`` that behaves like
+a plain list at runtime.
 """
 
 from hydra_zen import store
-from deriva_ml.execution import with_description
+from deriva_ml.execution import with_description  # noqa: F401  (re-exported for users editing this file)
 
-# ---------------------------------------------------------------------------
-# Asset Store
-# ---------------------------------------------------------------------------
 asset_store = store(group="assets")
 
-# REQUIRED: default_asset - used when no assets are specified (typically empty)
-# Note: Using plain list (not with_description) because this is used as a merge base
-# in notebook configs. with_description creates a DictConfig which can't merge with
-# the ListConfig default in BaseConfig.
-asset_store(
-    [],
-    name="default_asset",
-)
+# REQUIRED: ``default_asset`` is used when no ``assets`` override is given.
+asset_store([], name="default_asset")
 
-# Alias for clarity in notebook configs
-asset_store(
-    [],
-    name="no_assets",
-)
-
-# =============================================================================
-# Catalog 6: CIFAR-10 Assets (localhost, schema: cifar10_10k)
-# =============================================================================
+# Alias for clarity in notebook configs.
+asset_store([], name="no_assets")
 
 # -----------------------------------------------------------------------------
-# quick_vs_extended multirun (parent: 3WPT)
+# Add per-experiment asset configs below as you generate them.
+# Examples (commented out — uncomment and replace RIDs after running):
 # -----------------------------------------------------------------------------
-# Compares quick training (3 epochs) vs extended training (50 epochs)
-# on small labeled dataset (500 images)
 
-# Prediction probabilities for ROC analysis
-# 3WS6: cifar10_quick (exec 3WR0), 3X20: cifar10_extended (exec 3X0M)
-# Note: Using plain list (not with_description) because this is used in notebook configs.
-# with_description creates a DictConfig which can't merge with BaseConfig's ListConfig.
-asset_store(
-    ["3WS6", "3X20"],
-    name="roc_quick_vs_extended",
-)
-
-# Pre-trained weights from cifar10_quick (execution 3WR0)
-asset_store(
-    with_description(
-        ["3WS2"],
-        "Pre-trained weights from cifar10_quick (execution 3WR0, 3 epochs). "
-        "Use with cifar10_test_only experiment for inference.",
-    ),
-    name="quick_weights",
-)
-
-# Pre-trained weights from cifar10_extended (execution 3X0M)
-asset_store(
-    with_description(
-        ["3X1W"],
-        "Pre-trained weights from cifar10_extended (execution 3X0M, 50 epochs). "
-        "Use with cifar10_test_only experiment for inference.",
-    ),
-    name="extended_weights",
-)
+# asset_store(["<rid_quick>", "<rid_extended>"], name="roc_quick_vs_extended")
+#
+# asset_store(
+#     with_description(
+#         ["<rid_quick>"],
+#         "Pre-trained weights from cifar10_quick.",
+#     ),
+#     name="quick_weights",
+# )
+#
+# asset_store(
+#     with_description(
+#         ["<rid_extended>"],
+#         "Pre-trained weights from cifar10_extended.",
+#     ),
+#     name="extended_weights",
+# )

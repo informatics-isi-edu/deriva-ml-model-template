@@ -1,44 +1,37 @@
 """DerivaML Connection Configuration.
 
-This module defines connection configurations for the Deriva catalog.
+Configuration Group: ``deriva_ml``
 
-Configuration Group: deriva_ml
-------------------------------
-This group specifies which Deriva catalog to connect to. Each configuration
-provides connection parameters (hostname, catalog_id, credentials).
+This group specifies which Deriva catalog to connect to.
 
-REQUIRED: A configuration named "default_deriva" must be defined.
-This is used as the default connection when no override is specified.
+The shipped ``default_deriva`` is a **placeholder** — it points at no catalog
+in particular. Edit it for your environment, or override at the CLI:
 
-Example usage:
-    # Use default connection
-    uv run src/deriva_run.py
+    deriva-ml-run --host <hostname> --catalog <id> ...
 
-    # Use a specific connection
-    uv run src/deriva_run.py deriva_ml=eye-ai
+For multi-environment work, register additional configs (one per host/catalog)
+in ``src/configs/dev/deriva.py`` and select with
+``deriva_ml=<name>``.
 """
 
 from hydra_zen import store
 from deriva_ml import DerivaMLConfig
 
-# ---------------------------------------------------------------------------
-# DerivaML Connection Configurations
-# ---------------------------------------------------------------------------
-# The group name "deriva_ml" must match the parameter name in BaseConfig.
-
 deriva_store = store(group="deriva_ml")
 
-# REQUIRED: default_deriva - used when no connection is specified
+# REQUIRED: ``default_deriva`` is used when no connection is specified.
+# Replace ``hostname`` and ``catalog_id`` with your catalog before running, or
+# always pass --host/--catalog on the CLI.
 deriva_store(
     DerivaMLConfig,
     name="default_deriva",
     hostname="localhost",
-    catalog_id=6,
+    catalog_id=0,  # placeholder — set to your catalog ID, or override via --catalog
     use_minid=False,
     zen_meta={
         "description": (
-            "Local development catalog (localhost:6) with CIFAR-10 data. "
-            "Schema: cifar10_10k. Use for E2E testing and development."
+            "Placeholder connection. Replace hostname/catalog_id with your "
+            "catalog, or override at the CLI with --host/--catalog."
         )
     },
 )

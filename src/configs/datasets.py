@@ -1,197 +1,78 @@
-"""Dataset Configuration.
+"""Dataset Configurations.
 
-This module defines dataset configurations for model training and evaluation.
+This module declares the *names* of dataset groups the experiments and
+notebooks reference. Each entry is intentionally **empty by default** — the
+checked-in template ships without RIDs because RIDs are catalog-specific and
+would be stale on any fresh clone.
 
-Configuration Group: datasets
------------------------------
-Datasets are specified as lists of DatasetSpecConfig objects, where each object
-identifies a dataset by its RID and optionally a version. Multiple datasets can
-be combined into a single configuration for training on multiple data sources.
+After running ``load-cifar10`` against your own catalog, fill in the RIDs and
+versions printed by the loader (or read them with
+``ml.find_datasets()``). Two recommended patterns:
 
-REQUIRED: A configuration named "default_dataset" must be defined.
-This is used as the default dataset when no override is specified.
+1. **Edit this file in place.** Replace each empty list with a
+   ``DatasetSpecConfig(rid=..., version=...)``. Wrap with
+   ``with_description(..., "...")`` if you want a description that appears in
+   ``deriva-ml-run --info``.
 
-Example usage:
-    # Use default dataset
-    uv run src/deriva_run.py
+2. **Add a per-environment override.** Create
+   ``src/configs/dev/datasets_<env>.py`` registering ``<name>_<env>`` configs
+   in the same ``datasets`` group, then select on the CLI:
+   ``deriva-ml-run datasets=cifar10_small_labeled_split_<env>`` (see
+   ``dev/datasets_localhost.py`` for a worked example).
 
-    # Use a specific dataset
-    uv run src/deriva_run.py datasets=cifar10_training
+The empty defaults pass config validation but will fail at execution time
+("Dataset '' not found") — which is the desired behavior: a fresh clone must
+not silently run against someone else's RIDs.
 
-    # Combine multiple datasets
-    datasets_combined = [
-        DatasetSpecConfig(rid="ABC1", version="1.0.0"),
-        DatasetSpecConfig(rid="ABC2", version="1.0.0"),
-    ]
+Configuration Group: ``datasets``
 """
+
 from hydra_zen import store
-from deriva_ml.dataset import DatasetSpecConfig
-from deriva_ml.execution import with_description
-
-# ---------------------------------------------------------------------------
-# Dataset Configurations
-# ---------------------------------------------------------------------------
-# Configure a list of datasets by specifying the RID and version of each
-# dataset that goes into the collection. The group name "datasets" must
-# match the parameter name in BaseConfig.
-
-# =============================================================================
-# Catalog 6: CIFAR-10 with 10,000 images (localhost, schema: cifar10_10k)
-# =============================================================================
+from deriva_ml.dataset import DatasetSpecConfig  # noqa: F401  (re-exported for users editing this file)
+from deriva_ml.execution import with_description  # noqa: F401
 
 datasets_store = store(group="datasets")
 
-# Special config for notebooks that don't need datasets (e.g., ROC analysis)
-datasets_store(
-    [],
-    name="no_datasets",
-)
+# -----------------------------------------------------------------------------
+# Empty placeholders — fill in for your catalog before running.
+# -----------------------------------------------------------------------------
+# Example (after running load-cifar10):
+#
+#   datasets_store(
+#       with_description(
+#           [DatasetSpecConfig(rid="28FA", version="0.21.0")],
+#           "Complete CIFAR-10 dataset (10,000 images).",
+#       ),
+#       name="cifar10_complete",
+#   )
+
+datasets_store([], name="cifar10_complete")
+datasets_store([], name="cifar10_split")
+datasets_store([], name="cifar10_training")
+datasets_store([], name="cifar10_testing")
+
+datasets_store([], name="cifar10_small_split")
+datasets_store([], name="cifar10_small_training")
+datasets_store([], name="cifar10_small_testing")
+
+datasets_store([], name="cifar10_labeled_split")
+datasets_store([], name="cifar10_labeled_training")
+datasets_store([], name="cifar10_labeled_testing")
+
+datasets_store([], name="cifar10_small_labeled_split")
+datasets_store([], name="cifar10_small_labeled_training")
+datasets_store([], name="cifar10_small_labeled_testing")
 
 # -----------------------------------------------------------------------------
-# Full datasets (10,000 images total in this catalog)
+# Special-case configs (always empty by design)
 # -----------------------------------------------------------------------------
 
-datasets_store(
-    with_description(
-        [DatasetSpecConfig(rid="28DM", version="0.9.0")],
-        "Complete CIFAR-10 dataset with all 10,000 images (5,000 training + 5,000 testing). "
-        "Use for full-scale experiments.",
-    ),
-    name="cifar10_complete",
-)
+# Notebooks (e.g., ROC analysis) that consume asset RIDs, not datasets.
+datasets_store([], name="no_datasets")
 
-datasets_store(
-    with_description(
-        [DatasetSpecConfig(rid="28DY", version="0.9.0")],
-        "Split dataset containing nested training (5,000) and testing (5,000) subsets. "
-        "Testing images are unlabeled. Use for standard train/test workflows.",
-    ),
-    name="cifar10_split",
-)
-
-datasets_store(
-    with_description(
-        [DatasetSpecConfig(rid="28E6", version="0.9.0")],
-        "Training partition with 5,000 labeled CIFAR-10 images. "
-        "All images have ground truth classifications.",
-    ),
-    name="cifar10_training",
-)
-
-datasets_store(
-    with_description(
-        [DatasetSpecConfig(rid="28EG", version="0.9.0")],
-        "Testing partition with 5,000 CIFAR-10 images. "
-        "These images are unlabeled (no ground truth) for blind evaluation.",
-    ),
-    name="cifar10_testing",
-)
-
-# -----------------------------------------------------------------------------
-# Small datasets for quick testing (1,000 images total)
-# -----------------------------------------------------------------------------
-
-datasets_store(
-    with_description(
-        [DatasetSpecConfig(rid="28F4", version="0.4.0")],
-        "Small split dataset with 1,000 images (500 training + 500 testing). "
-        "Use for quick iteration and debugging.",
-    ),
-    name="cifar10_small_split",
-)
-
-datasets_store(
-    with_description(
-        [DatasetSpecConfig(rid="28FC", version="0.4.0")],
-        "Small training set with 500 labeled images. "
-        "Use for rapid prototyping and testing model code.",
-    ),
-    name="cifar10_small_training",
-)
-
-datasets_store(
-    with_description(
-        [DatasetSpecConfig(rid="28FP", version="0.4.0")],
-        "Small testing set with 500 unlabeled images. "
-        "Use for quick inference testing.",
-    ),
-    name="cifar10_small_testing",
-)
-
-# -----------------------------------------------------------------------------
-# Labeled split datasets (for ROC analysis)
-# Created from training images only - ALL have ground truth labels
-# -----------------------------------------------------------------------------
-
-datasets_store(
-    with_description(
-        [DatasetSpecConfig(rid="28GA", version="0.9.0")],
-        "Labeled split dataset (4,000 train + 1,000 test). "
-        "BOTH partitions have ground truth labels, enabling ROC curve analysis "
-        "and proper evaluation metrics on the test set.",
-    ),
-    name="cifar10_labeled_split",
-)
-
-datasets_store(
-    with_description(
-        [DatasetSpecConfig(rid="28GM", version="0.9.0")],
-        "Labeled training partition with 4,000 images. "
-        "All images have ground truth classifications.",
-    ),
-    name="cifar10_labeled_training",
-)
-
-datasets_store(
-    with_description(
-        [DatasetSpecConfig(rid="28GY", version="0.9.0")],
-        "Labeled testing partition with 1,000 images WITH ground truth. "
-        "Use for evaluation when you need metrics like accuracy, ROC curves, etc.",
-    ),
-    name="cifar10_labeled_testing",
-)
-
-# -----------------------------------------------------------------------------
-# Small labeled datasets (500 images total, all labeled)
-# -----------------------------------------------------------------------------
-
-datasets_store(
-    with_description(
-        [DatasetSpecConfig(rid="28HJ", version="0.4.0")],
-        "Small labeled split with 500 images (400 train + 100 test). "
-        "Both partitions have labels. Use for quick testing with evaluation metrics.",
-    ),
-    name="cifar10_small_labeled_split",
-)
-
-datasets_store(
-    with_description(
-        [DatasetSpecConfig(rid="28HW", version="0.4.0")],
-        "Small labeled training set with 400 images. "
-        "For rapid prototyping with labeled data.",
-    ),
-    name="cifar10_small_labeled_training",
-)
-
-datasets_store(
-    with_description(
-        [DatasetSpecConfig(rid="28J6", version="0.4.0")],
-        "Small labeled testing set with 100 images WITH ground truth. "
-        "For quick evaluation testing with metrics.",
-    ),
-    name="cifar10_small_labeled_testing",
-)
-
-# -----------------------------------------------------------------------------
-# REQUIRED: default_dataset - used when no dataset is specified
-# -----------------------------------------------------------------------------
-# Note: Using plain list for notebook config compatibility (with_description creates
-# a DictConfig which can't merge with BaseConfig's ListConfig defaults)
-
-datasets_store(
-    [DatasetSpecConfig(rid="28DY", version="0.9.0")],
-    name="default_dataset",
-)
-
-# Empty dataset list — used by script-only experiments that manage their own data
+# Script-only experiments that manage their own data.
 datasets_store([], name="none")
+
+# REQUIRED: ``default_dataset`` is used when no dataset override is specified.
+# Set this to your most-frequently-used dataset after editing the configs above.
+datasets_store([], name="default_dataset")
