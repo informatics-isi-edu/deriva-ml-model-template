@@ -19,12 +19,27 @@ notebook_config(
     "roc_lr_sweep_localhost",
     config_class=ROCAnalysisConfig,
     defaults={
-        "deriva_ml": "localhost_1337",
+        "deriva_ml": "localhost_1407",
         "assets": "roc_lr_sweep_localhost",
         "datasets": "no_datasets",
     },
     description=(
-        "ROC analysis on localhost 1337: learning-rate sweep "
+        "ROC analysis on localhost 1407: learning-rate sweep "
         "(0.0001, 0.001, 0.01, 0.1) — 4 prediction CSVs from multirun parent 4HKJ."
+    ),
+)
+
+
+notebook_config(
+    "roc_e2e_localhost",
+    config_class=ROCAnalysisConfig,
+    defaults={
+        "deriva_ml": "localhost_1407",
+        "assets": "roc_e2e_localhost",
+        "datasets": "no_datasets",
+    },
+    description=(
+        "ROC analysis on localhost 1407: quick (3 epochs) vs extended (50 epochs) "
+        "from multirun parent 804 — 2 prediction CSVs (836, 87J)."
     ),
 )

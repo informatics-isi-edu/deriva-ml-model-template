@@ -33,3 +33,15 @@ asset_store(
     ["4GFE", "4GRT", "4H26", "4HBJ"],
     name="roc_lr_sweep_localhost",
 )
+
+# -----------------------------------------------------------------------------
+# E2E quick_vs_extended multirun on catalog 1407 (parent 804; 2 children).
+# -----------------------------------------------------------------------------
+# Children:
+#   81M (cifar10_quick)    -> 836
+#   85T (cifar10_extended) -> 87J
+
+asset_store(
+    ["836", "87J"],
+    name="roc_e2e_localhost",
+)
