@@ -106,7 +106,7 @@ Compares model predictions across experiments by generating ROC curves. Configur
 
 ## Key Rules
 
-- **Commit before running** (also in README §8) — DerivaML tracks git commit hash for provenance; dirty-tree warnings appear when bouncing between branches
+- **Commit before running** (also in README §8) — DerivaML tracks git commit hash for provenance; dirty-tree warnings appear when bouncing between branches. Use `DERIVA_ML_ALLOW_DIRTY=true uv run ...` for iterative test runs (see workspace `CLAUDE.md` for the rationale).
 - **Update configs for your catalog before running** (also in README §7) — the checked-in dataset RIDs are stale demo RIDs; `Catalog Environments` below has the agent-only details
 - **Use labeled datasets for evaluation** — `cifar10_small_labeled_split` or `cifar10_labeled_split` (unlabeled splits have no test ground truth)
 - **`Execution_Asset`** for model outputs (weights, predictions, plots); `Execution_Metadata` is auto-managed
