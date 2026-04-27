@@ -31,8 +31,9 @@ uv run deriva-ml-run dry_run=true                     # Dry run (no catalog writ
 uv run deriva-ml-run --info                           # Show available configs
 
 # Notebook execution
-uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb
-uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb assets=my_assets
+uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb deriva_ml=localhost_1407 assets=roc_e2e_localhost
+uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb deriva_ml=localhost_1407 assets=roc_lr_sweep_localhost
+uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb --inspect  # show available papermill parameters
 
 # Tests (config smoke tests; no catalog needed)
 uv run python -m pytest tests/
@@ -112,6 +113,7 @@ Compares model predictions across experiments by generating ROC curves. Configur
 - **`Execution_Asset`** for model outputs (weights, predictions, plots); `Execution_Metadata` is auto-managed
 - **Test with `dry_run=true`** before production runs
 - **`--config` on `deriva-ml-run-notebook` does NOT override `run_notebook()` config name** — use positional Hydra overrides instead (e.g., `assets=my_assets_prod`)
+- **`--host` / `--catalog` on `deriva-ml-run-notebook` are papermill parameters, NOT Hydra overrides** — the notebook connects to whichever `deriva_ml` group the in-notebook `run_notebook(...)` call resolves. To target a non-default catalog, pass `deriva_ml=<config_name>` as a Hydra override (and register the connection in `src/configs/dev/deriva_<env>.py`).
 
 ## Catalog Environments
 
