@@ -903,7 +903,8 @@ tensorflow = [
     { name = "tensorflow-metal", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
 ]
 torch = [
-    { name = "pytorch" },
+    { name = "torch" },
+    { name = "torchvision" },
 ]
 
 [package.metadata]
@@ -940,7 +941,10 @@ tensorflow = [
     { name = "tensorflow-macos", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
     { name = "tensorflow-metal", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
 ]
-torch = [{ name = "pytorch" }]
+torch = [
+    { name = "torch" },
+    { name = "torchvision" },
+]
 
 [[package]]
 name = "entrypoints"
@@ -3516,12 +3520,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/87/c7/5e1547c44e31da50a
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a4/62/02da182e544a51a5c3ccf4b03ab79df279f9c60c5e82d5e8bec7ca26ac11/python_slugify-8.0.4-py2.py3-none-any.whl", hash = "sha256:276540b79961052b66b7d116620b36518847f52d5fd9e3a70164fc8c50faa6b8", size = 10051, upload-time = "2024-02-08T18:32:43.911Z" },
 ]
-
-[[package]]
-name = "pytorch"
-version = "1.0.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/ee/67/f403d4ae6e9cd74b546ee88cccdb29b8415a9c1b3d80aebeb20c9ea91d96/pytorch-1.0.2.tar.gz", hash = "sha256:a6915d372c085a02eceebf59d16cbcc18a2693ac3487a53e3cc8be31fee65079", size = 689, upload-time = "2019-04-24T16:32:54.277Z" }
 
 [[package]]
 name = "pytz"

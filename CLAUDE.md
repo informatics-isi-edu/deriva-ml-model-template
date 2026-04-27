@@ -21,7 +21,7 @@ and `bump-version` conventions. Repo-specific commands:
 ```bash
 # Environment setup (extra dependency groups)
 uv sync --group=jupyter                   # Add Jupyter support
-uv sync --group=pytorch                   # Add PyTorch support
+uv sync --group=torch                     # Add PyTorch support
 
 # Running models
 uv run deriva-ml-run +experiment=cifar10_quick       # Quick training (3 epochs)

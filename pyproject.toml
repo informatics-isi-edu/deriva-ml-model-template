@@ -42,7 +42,7 @@ docker = [
 
 jupyter = ["ipykernel", "jupyter"]  # optional extras for local dev
 docs = ["mkdocs", "mkdocs-material"]  # for building documentation
-torch = ["pytorch"]
+torch = ["torch", "torchvision"]
 tensorflow = [
     # On macOS + ARM64 → TensorFlow-Metal support
     "tensorflow-macos; platform_system == 'Darwin' and platform_machine == 'arm64'",
