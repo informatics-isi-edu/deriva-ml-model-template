@@ -789,6 +789,207 @@ git add README.md CLAUDE.md CIFAR10.md
 git commit -m "docs: drop Kaggle/7-Zip prerequisites; note Toronto mirror"
 ```
 
+## Task A6.5: Rewrite CLAUDE.md for template users (not maintainer)
+
+**Why:** The current `CLAUDE.md` is a maintainer's notebook —
+references a workspace-level `../CLAUDE.md`, includes
+laptop-specific paths (`/Users/carl/...`), maintainer-only catalog
+RIDs (1248), and "agent-only notes" specific to your localhost
+setup. A user cloning this template needs an agent-instruction
+file that points at the README for usage and only carries
+agent-specific guidance (conventions, gotchas, source layout).
+
+**Audience split rule:**
+- **README.md** = human-facing usage, setup, configuration. Already
+  comprehensive — see file for current state.
+- **CLAUDE.md** = AI agent instructions when working *in* this
+  template. Short. References README for usage. Carries only what
+  the agent specifically needs to know.
+
+**Files:**
+- Modify: `CLAUDE.md` (full rewrite)
+- Possibly modify: `README.md` (only if rewrite reveals a backfill gap)
+
+- [ ] **Step 1: Rewrite `CLAUDE.md`**
+
+Replace the entire content of `CLAUDE.md` with:
+
+````markdown
+# CLAUDE.md
+
+Agent instructions for working in this DerivaML model template.
+
+**For usage** (setup, running models, loading data, configuring
+catalogs, project layout): see [README.md](README.md). Don't
+duplicate that material here.
+
+This file covers what an AI agent needs to know to work *in* the
+template — conventions, gotchas, where things live.
+
+## Project context
+
+This is a template for ML models integrated with DerivaML. As
+shipped it contains a CIFAR-10 CNN example with 7 model variants.
+Users typically clone it, replace the example with their own model
+and data, and ship.
+
+The platform underneath:
+- **deriva-ml** — core Python library for reproducible ML on
+  Deriva catalogs.
+- **Hydra-zen** — Python-first configuration (no YAML).
+- **uv** — dependency management, script execution.
+
+## Source layout
+
+- `src/configs/` — Hydra-zen configuration (Python, no YAML).
+  - `base.py` — `BaseConfig` dataclass.
+  - `cifar10_cnn.py` — model configs (architectures,
+    hyperparameters).
+  - `datasets.py` — `DatasetSpecConfig` per dataset.
+  - `deriva.py` — Deriva connection configs.
+  - `workflow.py` — Workflow definitions.
+  - `assets.py` — Asset RID configs for model weights and
+    predictions.
+  - `experiments.py` — model + dataset combinations.
+  - `multiruns.py` — parameter sweep configs.
+  - `multirun_descriptions.py` — rich markdown for multirun parent
+    executions.
+  - `roc_analysis.py` — ROC notebook asset configs.
+  - `dev/` — per-environment overrides
+    (`deriva_<env>.py`, `datasets_<env>.py`, etc.).
+- `src/models/` — model implementations.
+  - `cifar10_cnn.py` — CNN model, training loop, prediction
+    recording.
+  - `model_protocol.py` — Protocol/interface model functions
+    implement.
+- `src/scripts/` — data loading scripts (importable Python
+  package).
+- `scripts/` — standalone shell/CLI utilities (not a Python
+  package).
+- `notebooks/` — analysis notebooks.
+- `tests/` — pytest smoke tests for configs.
+
+## Conventions
+
+- **Use `uv` for everything.** Always `uv run <cmd>` — never
+  invoke `pytest`, `ruff`, `python`, or `bump-version` directly.
+- **Google-style docstrings** on every function, method, and class.
+  Include `Args:`, `Returns:`, `Raises:`, and a runnable `Example:`
+  block.
+- **No backwards-compat shims.** If something is unused, delete it.
+  No "removed" comment placeholders, no dead exports.
+- **No over-engineering.** Only add what the current task requires.
+- **TDD when adding new code.** Write a failing test, make it pass,
+  refactor. Existing tests in `tests/test_configs_load.py` are
+  configuration smoke tests — add a similar file when introducing
+  a new module.
+
+## Standard commands
+
+See [README.md](README.md) §6–8 for the user-facing command list.
+The agent should reach for these:
+
+```bash
+uv sync                                  # install/update deps
+uv sync --group=jupyter                  # + Jupyter
+uv sync --group=torch                    # + PyTorch
+
+uv run python -m pytest tests/ -v        # run tests (see gotcha below)
+uv run ruff check src tests              # lint
+uv run ruff format src tests             # format
+uv run bump-version patch|minor|major    # release (clean tree required)
+
+uv run deriva-ml-run --info              # list configs
+uv run deriva-ml-run dry_run=true        # dry run (no catalog writes)
+```
+
+## Gotchas
+
+- **Use `uv run python -m pytest`, not `uv run pytest`.** The venv's
+  `pytest` shim has a stale shebang pointing at system Python 3.10.
+  `uv sync --reinstall` fixes it if you hit this.
+- **Two `scripts/` dirs:** `src/scripts/` is an importable Python
+  package; `scripts/` is for standalone shell/CLI utilities (not a
+  package). When adding new code, pick the right one.
+- **`num_workers=0` in DataLoaders on macOS.** `fork()` + MPS/GPU
+  threads deadlock. Keep DataLoaders single-worker on macOS.
+- **Commit before running.** DerivaML records the git commit hash
+  for provenance; dirty-tree warnings appear when running with
+  uncommitted changes. For fast iteration during development:
+  `DERIVA_ML_ALLOW_DIRTY=true uv run <command>`. Don't set this in
+  production runs — provenance is what it protects.
+
+## Key rules when modifying configs
+
+- **The defaults in `src/configs/datasets.py` ship with RIDs from a
+  previous demo catalog and will not work in a fresh checkout
+  until the user runs `load-cifar10` and updates them.** README §7
+  documents the update procedure for users; the agent should
+  follow the same procedure when configuring a new environment.
+- **Use labeled datasets for evaluation.** `cifar10_small_labeled_split`
+  or `cifar10_labeled_split` have ground truth on both train and
+  test partitions. (Future: see Task A7 result; the `*_split` vs
+  `*_labeled_split` distinction may have been consolidated.)
+- **`Execution_Asset`** is for model outputs (weights, predictions,
+  plots). `Execution_Metadata` is auto-managed; don't write to it
+  directly.
+- **Test with `dry_run=true`** before any catalog-writing run.
+
+## Notebook runner specifics
+
+- **`--config` on `deriva-ml-run-notebook` does NOT override the
+  `run_notebook()` config name.** Use positional Hydra overrides
+  (e.g., `assets=my_assets_prod`).
+- **`--host` / `--catalog` are papermill parameters, NOT Hydra
+  overrides.** They set the notebook's connection target but
+  don't change which `deriva_ml=` config is resolved. To target a
+  non-default catalog, pass `deriva_ml=<config_name>` as a Hydra
+  override AND register the connection in
+  `src/configs/dev/deriva_<env>.py`.
+
+## Related docs
+
+- [README.md](README.md) — user-facing setup and usage.
+- [CIFAR10.md](CIFAR10.md) — end-to-end CIFAR-10 walkthrough.
+- [Experiments.md](Experiments.md) — experiment configuration
+  reference.
+- [experiment-decisions.md](experiment-decisions.md) — design
+  rationale and decision log for the example model.
+````
+
+- [ ] **Step 2: Backfill README only if rewrite revealed a gap**
+
+After rewriting CLAUDE.md, re-read README.md. Identify any
+user-relevant content that was in the old CLAUDE.md but isn't
+covered in the README (model config tables, etc.). Most should
+already be in README §3–8 or in CIFAR10.md (linked from README).
+
+If a real gap exists: add a brief mention to README pointing at
+the right reference doc. If not: skip this step.
+
+- [ ] **Step 3: Run tests + lint**
+
+```bash
+cd /Users/carl/GitHub/DerivaML/deriva-ml-model-template
+uv run python -m pytest tests/ -v
+uv run ruff check src tests
+```
+Expected: PASS, clean.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add CLAUDE.md README.md
+git commit -m "docs: rewrite CLAUDE.md as template-user agent guide
+
+The old CLAUDE.md was a maintainer's notebook with workspace-specific
+paths, catalog RIDs (1248), and references to a parent workspace
+CLAUDE.md that template users don't have. This rewrite makes
+CLAUDE.md a focused agent-instruction file that references README.md
+for user-facing material and carries only what an AI agent needs to
+work in the template: conventions, gotchas, and source layout."
+```
+
 ## Task A7: Phase 0c — investigate labeled-test-set downstream impact
 
 **Files:**
