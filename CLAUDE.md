@@ -1,152 +1,141 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Agent instructions for working in this DerivaML model template.
 
-## Project Overview
+**For usage** (setup, running models, loading data, configuring
+catalogs, project layout): see [README.md](README.md). Don't
+duplicate that material here.
 
-DerivaML Model Template - a template for creating ML models integrated with DerivaML. This specific instance implements a CIFAR-10 CNN classifier with 7 model variants and an ROC analysis notebook.
+This file covers what an AI agent needs to know to work *in* the
+template — conventions, gotchas, where things live.
 
-## Common Commands
+## Project context
 
-See [`../CLAUDE.md`](../CLAUDE.md) for shared `uv`, `pytest`, `ruff`,
-and `bump-version` conventions. Repo-specific commands:
+This is a template for ML models integrated with DerivaML. As
+shipped it contains a CIFAR-10 CNN example with 7 model variants.
+Users typically clone it, replace the example with their own model
+and data, and ship.
 
-> **CWD:** every command below assumes you are in
-> `/Users/carl/GitHub/DerivaML/deriva-ml-model-template`. The Bash tool's
-> cwd is **not** reliably persistent across turns — always chain `cd` into
-> a single call, e.g.
-> `cd /Users/carl/GitHub/DerivaML/deriva-ml-model-template && uv run deriva-ml-run ...`.
-> See the workspace-level `CLAUDE.md` ("CWD discipline") for the rule.
+The platform underneath:
+- **deriva-ml** — core Python library for reproducible ML on
+  Deriva catalogs.
+- **Hydra-zen** — Python-first configuration (no YAML).
+- **uv** — dependency management, script execution.
+
+## Source layout
+
+- `src/configs/` — Hydra-zen configuration (Python, no YAML).
+  - `base.py` — `BaseConfig` dataclass.
+  - `cifar10_cnn.py` — model configs (architectures,
+    hyperparameters).
+  - `datasets.py` — `DatasetSpecConfig` per dataset.
+  - `deriva.py` — Deriva connection configs.
+  - `workflow.py` — Workflow definitions.
+  - `assets.py` — Asset RID configs for model weights and
+    predictions.
+  - `experiments.py` — model + dataset combinations.
+  - `multiruns.py` — parameter sweep configs.
+  - `multirun_descriptions.py` — rich markdown for multirun parent
+    executions.
+  - `roc_analysis.py` — ROC notebook asset configs.
+  - `dev/` — per-environment overrides
+    (`deriva_<env>.py`, `datasets_<env>.py`, etc.).
+- `src/models/` — model implementations.
+  - `cifar10_cnn.py` — CNN model, training loop, prediction
+    recording.
+  - `model_protocol.py` — Protocol/interface model functions
+    implement.
+- `src/scripts/` — data loading scripts (importable Python
+  package).
+- `scripts/` — standalone shell/CLI utilities (not a Python
+  package).
+- `notebooks/` — analysis notebooks.
+- `tests/` — pytest smoke tests for configs.
+
+## Conventions
+
+- **Use `uv` for everything.** Always `uv run <cmd>` — never
+  invoke `pytest`, `ruff`, `python`, or `bump-version` directly.
+- **Google-style docstrings** on every function, method, and class.
+  Include `Args:`, `Returns:`, `Raises:`, and a runnable `Example:`
+  block.
+- **No backwards-compat shims.** If something is unused, delete it.
+  No "removed" comment placeholders, no dead exports.
+- **No over-engineering.** Only add what the current task requires.
+- **TDD when adding new code.** Write a failing test, make it pass,
+  refactor. Existing tests in `tests/test_configs_load.py` are
+  configuration smoke tests — add a similar file when introducing
+  a new module.
+
+## Standard commands
+
+See [README.md](README.md) §3–8 for the user-facing command list.
+The agent should reach for these:
 
 ```bash
-# Environment setup (extra dependency groups)
-uv sync --group=jupyter                   # Add Jupyter support
-uv sync --group=torch                     # Add PyTorch support
+uv sync                                  # install/update deps
+uv sync --group=jupyter                  # + Jupyter
+uv sync --group=torch                    # + PyTorch
 
-# Running models
-uv run deriva-ml-run +experiment=cifar10_quick       # Quick training (3 epochs)
-uv run deriva-ml-run +experiment=cifar10_extended     # Extended training (50 epochs)
-uv run deriva-ml-run +multirun=quick_vs_extended      # Compare quick vs extended
-uv run deriva-ml-run dry_run=true                     # Dry run (no catalog writes)
-uv run deriva-ml-run --info                           # Show available configs
+uv run python -m pytest tests/ -v        # run tests (see gotcha below)
+uv run ruff check src tests              # lint
+uv run ruff format src tests             # format
+uv run bump-version patch|minor|major    # release (clean tree required)
 
-# Notebook execution
-uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb deriva_ml=localhost_1407 assets=roc_e2e_localhost
-uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb deriva_ml=localhost_1407 assets=roc_lr_sweep_localhost
-uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb --inspect  # show available papermill parameters
-
-# Tests (config smoke tests; no catalog needed)
-uv run python -m pytest tests/
-
-# Data loading
-uv run python src/scripts/load_cifar10.py \
-    --hostname <hostname> --catalog-id <id> --num-images 500
-# (or --create-catalog <name> instead of --catalog-id for a fresh catalog)
+uv run deriva-ml-run --info              # list configs
+uv run deriva-ml-run dry_run=true        # dry run (no catalog writes)
 ```
-
-## Models
-
-### CIFAR-10 2-Layer CNN (`src/models/cifar10_cnn.py`)
-
-A PyTorch convolutional neural network for CIFAR-10 image classification.
-
-**Architecture:** Conv2d(3, C1) → ReLU → MaxPool → Conv2d(C1, C2) → ReLU → MaxPool → Linear(C2×8×8, hidden) → ReLU → Linear(hidden, 10)
-
-**Model configs** (in `src/configs/cifar10_cnn.py`):
-
-| Config | Channels | Hidden | Epochs | LR | Notes |
-|--------|----------|--------|--------|------|-------|
-| `default_model` | 32→64 | 128 | 10 | 1e-3 | Standard training |
-| `cifar10_quick` | 32→64 | 128 | 3 | 1e-3 | Fast validation |
-| `cifar10_large` | 64→128 | 256 | 20 | 1e-3 | More capacity |
-| `cifar10_regularized` | 32→64 | 128 | 20 | 1e-3 | Dropout 0.25, weight decay 1e-4 |
-| `cifar10_fast_lr` | 32→64 | 128 | 15 | 1e-2 | Fast convergence |
-| `cifar10_slow_lr` | 32→64 | 128 | 30 | 1e-4 | Stable convergence |
-| `cifar10_extended` | 64→128 | 256 | 50 | 1e-3 | Best accuracy, full regularization |
-| `cifar10_test_only` | 32→64 | 128 | — | — | Load weights, evaluate only |
-
-**Experiments** (in `src/configs/experiments.py`):
-
-| Experiment | Model Config | Dataset | Purpose |
-|-----------|-------------|---------|---------|
-| `cifar10_quick` | quick | small labeled split | Fast pipeline validation |
-| `cifar10_default` | default | small training | Standard training |
-| `cifar10_extended` | extended | small labeled split | Best accuracy on small set |
-| `cifar10_quick_full` | quick | full labeled split | Baseline on full data |
-| `cifar10_extended_full` | extended | full labeled split | Production run |
-| `cifar10_test_only` | test_only | small labeled testing | Evaluate pretrained weights |
-
-**Data flow:** Downloads dataset as BDBag → `restructure_assets()` creates ImageFolder layout → torchvision DataLoader → training/evaluation → saves weights + prediction CSV as execution assets.
-
-### ROC Analysis Notebook (`notebooks/roc_analysis.ipynb`)
-
-Compares model predictions across experiments by generating ROC curves. Configured via `src/configs/roc_analysis.py`. Takes asset RIDs (prediction CSVs) as input.
-
-## Source Layout
-
-- `src/configs/` — Hydra-zen configuration (Python, no YAML)
-  - `__init__.py` — Re-exports `load_configs`; has deprecated `load_all_configs` alias
-  - `base.py` — `BaseConfig` dataclass (shared config fields)
-  - `cifar10_cnn.py` — Model configs (architectures, hyperparameters)
-  - `datasets.py` — `DatasetSpecConfig` entries for each dataset
-  - `deriva.py` — Deriva connection configs (`default_deriva`)
-  - `workflow.py` — Workflow definitions
-  - `assets.py` — Asset RID configs for model weights and predictions
-  - `experiments.py` — Experiment configs (model + dataset combinations)
-  - `multiruns.py` — Multirun sweep configs (parameter combinations)
-  - `multirun_descriptions.py` — Rich markdown descriptions for multirun parent executions
-  - `dataset_generation.py` — Dataset-generation script configs
-  - `roc_analysis.py` — ROC notebook asset configs
-  - `dev/` — Per-environment overrides (deriva, datasets, assets, experiments)
-- `src/models/` — Model implementations
-  - `cifar10_cnn.py` — CNN model, training loop, prediction recording
-  - `model_protocol.py` — Protocol/interface for model functions
-- `src/scripts/` — Data loading
-  - `load_cifar10.py` — Downloads CIFAR-10 from Kaggle, sets up catalog schema, loads images
-- `notebooks/` — Analysis notebooks (roc_analysis.ipynb)
-
-## Key Rules
-
-- **Commit before running** (also in README §8) — DerivaML tracks git commit hash for provenance; dirty-tree warnings appear when bouncing between branches. Use `DERIVA_ML_ALLOW_DIRTY=true uv run ...` for iterative test runs (see workspace `CLAUDE.md` for the rationale).
-- **Update configs for your catalog before running** (also in README §7) — the checked-in dataset RIDs are stale demo RIDs; `Catalog Environments` below has the agent-only details
-- **Use labeled datasets for evaluation** — `cifar10_small_labeled_split` or `cifar10_labeled_split` (unlabeled splits have no test ground truth)
-- **`Execution_Asset`** for model outputs (weights, predictions, plots); `Execution_Metadata` is auto-managed
-- **Test with `dry_run=true`** before production runs
-- **`--config` on `deriva-ml-run-notebook` does NOT override `run_notebook()` config name** — use positional Hydra overrides instead (e.g., `assets=my_assets_prod`)
-- **`--host` / `--catalog` on `deriva-ml-run-notebook` are papermill parameters, NOT Hydra overrides** — the notebook connects to whichever `deriva_ml` group the in-notebook `run_notebook(...)` call resolves. To target a non-default catalog, pass `deriva_ml=<config_name>` as a Hydra override (and register the connection in `src/configs/dev/deriva_<env>.py`).
-
-## Catalog Environments
-
-| Config Name | Hostname | Usage |
-|------------|----------|-------|
-| `default_deriva` | localhost | Local development and testing |
-
-Production configs use a `*_prod` suffix convention. Add alternate configs in `src/configs/dev/`.
-
-### Pointing the configs at a new catalog
-
-See README §7 ("Update configs for your catalog") for the user-facing
-procedure and the config-name → loader-output RID mapping table.
-
-**Agent-only notes** (not in README):
-
-- Versions are not predictable — `0.21.0`/`0.22.0`/`0.4.0` are typical for a
-  freshly loaded catalog. Get actual values via `ml.find_datasets()` →
-  `current_version` per Dataset.
-- For multi-env setups, the `dev/datasets_<env>.py` pattern registers
-  parallel `<name>_<env>` configs in the same `datasets` group; select at
-  CLI with `datasets=cifar10_small_labeled_split_<env>`. Working example
-  exists at `src/configs/dev/datasets_localhost.py` (catalog 1248).
 
 ## Gotchas
 
-- **Kaggle API key required** for `load-cifar10` — must have `~/.kaggle/kaggle.json` configured
-- **Use `uv run python -m pytest`, not `uv run pytest`** — the venv's `pytest` shim has a stale shebang that points at system Python 3.10. `uv sync --reinstall` fixes it.
-- **Two `scripts/` dirs** — `src/scripts/` (Python package, importable) vs `scripts/` (standalone shell/CLI utilities, not a package)
-- **`num_workers=0`** in DataLoaders — required on macOS because `fork()` + MPS/GPU threads deadlock
+- **Use `uv run python -m pytest`, not `uv run pytest`.** The venv's
+  `pytest` shim has a stale shebang pointing at system Python 3.10.
+  `uv sync --reinstall` fixes it if you hit this.
+- **Two `scripts/` dirs:** `src/scripts/` is an importable Python
+  package; `scripts/` is for standalone shell/CLI utilities (not a
+  package). When adding new code, pick the right one.
+- **`num_workers=0` in DataLoaders on macOS.** `fork()` + MPS/GPU
+  threads deadlock. Keep DataLoaders single-worker on macOS.
+- **Commit before running.** DerivaML records the git commit hash
+  for provenance; dirty-tree warnings appear when running with
+  uncommitted changes. For fast iteration during development:
+  `DERIVA_ML_ALLOW_DIRTY=true uv run <command>`. Don't set this in
+  production runs — provenance is what it protects.
 
-## Related Docs
+## Key rules when modifying configs
 
-- `CIFAR10.md` — End-to-end guide for CIFAR-10 workflow (catalog setup, data loading, training, analysis)
-- `Experiments.md` — Experiment configuration reference
-- `experiment-decisions.md` — Design rationale and decision log
+- **The defaults in `src/configs/datasets.py` ship with RIDs from a
+  previous demo catalog and will not work in a fresh checkout
+  until the user runs `load-cifar10` and updates them.** README §7
+  documents the update procedure for users; the agent should
+  follow the same procedure when configuring a new environment.
+- **Use labeled datasets for evaluation.** `cifar10_small_labeled_split`
+  or `cifar10_labeled_split` carry ground truth on both train and
+  test partitions and are the right choice for ROC analysis,
+  accuracy metrics, or any evaluation work. The `*_split` configs
+  (without `_labeled`) are for training-only flows.
+- **`Execution_Asset`** is for model outputs (weights, predictions,
+  plots). `Execution_Metadata` is auto-managed; don't write to it
+  directly.
+- **Test with `dry_run=true`** before any catalog-writing run.
+
+## Notebook runner specifics
+
+- **`--config` on `deriva-ml-run-notebook` does NOT override the
+  `run_notebook()` config name.** Use positional Hydra overrides
+  (e.g., `assets=my_assets_prod`).
+- **`--host` / `--catalog` are papermill parameters, NOT Hydra
+  overrides.** They set the notebook's connection target but
+  don't change which `deriva_ml=` config is resolved. To target a
+  non-default catalog, pass `deriva_ml=<config_name>` as a Hydra
+  override AND register the connection in
+  `src/configs/dev/deriva_<env>.py`.
+
+## Related docs
+
+- [README.md](README.md) — user-facing setup and usage.
+- [CIFAR10.md](CIFAR10.md) — end-to-end CIFAR-10 walkthrough.
+- [Experiments.md](Experiments.md) — experiment configuration
+  reference.
+- [experiment-decisions.md](experiment-decisions.md) — design
+  rationale and decision log for the example model.
