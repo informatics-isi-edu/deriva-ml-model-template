@@ -3,18 +3,13 @@
 from __future__ import annotations
 
 import pickle
-import tarfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
-import pytest
 
 from scripts._cifar10_source import (
     download_cifar10_archive,
-    extract_cifar10_to_png,
     load_batch,
-    CIFAR10_URL,
 )
 
 
