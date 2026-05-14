@@ -22,14 +22,17 @@ uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb
 
 The CIFAR-10 example includes multiple dataset configurations:
 
-| Type | Use Case |
-|------|----------|
-| `cifar10_small_labeled_split` | Quick experiments with evaluation (recommended) |
-| `cifar10_labeled_split` | Full experiments with evaluation |
-| `cifar10_small_split` | Quick training without evaluation |
-| `cifar10_split` | Full training without evaluation |
+| Type | Source of test partition | Use Case |
+|------|--------------------------|----------|
+| `cifar10_small_labeled_split` | 20% holdout of training images | Quick experiments, ROC analysis (recommended) |
+| `cifar10_labeled_split` | 20% holdout of training images | Full experiments, ROC analysis |
+| `cifar10_small_split` | Toronto test_batch (official) | Quick experiments on official 50K/10K split |
+| `cifar10_split` | Toronto test_batch (official) | Full training on official 50K/10K split |
 
-**Important:** For ROC analysis or accuracy metrics, use the **labeled** datasets. Both training and testing images in the Toronto distribution carry ground truth labels; the labeled/unlabeled distinction refers to how the dataset was classified in the catalog.
+Both families carry ground-truth labels in the Toronto distribution. The distinction is *which images* form the test partition:
+
+- **`*_labeled_split`** — test partition is a held-out 20% of the 50K training images (created by `split_dataset()`). Use for ROC analysis, cross-validation, or when you want the official test_batch reserved for final evaluation.
+- **`*_split`** — test partition is the official Toronto test_batch (10K images from a separate source). Use when you want results comparable to the standard CIFAR-10 benchmark.
 
 ## Model
 

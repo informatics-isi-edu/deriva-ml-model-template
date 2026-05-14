@@ -47,6 +47,15 @@ datasets_store = store(group="datasets")
 #   )
 
 datasets_store([], name="cifar10_complete")
+
+# -----------------------------------------------------------------------------
+# Original Toronto split — 50K training / 10K test_batch
+#
+# Training images and test images come from *different* Toronto source batches.
+# Use this family when you want to train on the full 50K training set and
+# evaluate against the official 10K test_batch (the "standard" CIFAR-10 split).
+# Both halves carry ground-truth labels in the Toronto distribution.
+# -----------------------------------------------------------------------------
 datasets_store([], name="cifar10_split")
 datasets_store([], name="cifar10_training")
 datasets_store([], name="cifar10_testing")
@@ -55,6 +64,15 @@ datasets_store([], name="cifar10_small_split")
 datasets_store([], name="cifar10_small_training")
 datasets_store([], name="cifar10_small_testing")
 
+# -----------------------------------------------------------------------------
+# Training-derived holdout split — 80/20 (or 400/100) of training images only
+#
+# Both the training and testing partitions are drawn from the 50K Toronto
+# training images; the test_batch images are *not* used here. Created by
+# split_dataset() with a fixed seed (42). Use this family for cross-validation
+# workflows, ROC analysis, or experiments where the test_batch must stay
+# unseen for final evaluation.
+# -----------------------------------------------------------------------------
 datasets_store([], name="cifar10_labeled_split")
 datasets_store([], name="cifar10_labeled_training")
 datasets_store([], name="cifar10_labeled_testing")
