@@ -122,3 +122,13 @@ def test_extract_writes_pngs_and_returns_labels(tmp_path):
     for png in train_pngs + test_pngs:
         assert png.stem in labels
         assert labels[png.stem] in valid_classes
+
+    # Pin specific label assignments (catches class-index off-by-one bugs).
+    # _fake_batch assigns labels [i + label_offset] % 10 for i in range(num_images),
+    # and our build loop passes label_offset = idx * 2:
+    #   batch 1 (idx=0, num=2) → labels [0, 1] → classes [airplane, automobile]
+    #   batch 2 (idx=1, num=2) → labels [2, 3] → classes [bird, cat]
+    #   test_batch (idx=2, num=2) → labels [4, 5] → classes [deer, dog]
+    assert labels["img_0"] == "airplane"
+    assert labels["img_2"] == "bird"
+    assert labels["img_4"] == "deer"

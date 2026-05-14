@@ -101,7 +101,10 @@ def extract_cifar10_to_png(
     Args:
         archive_path: Path to ``cifar-10-python.tar.gz``.
         output_dir: Directory to write ``train/`` and ``test/`` into.
-            Created if it doesn't exist.
+            Created if it doesn't exist. A ``_extract/`` scratch
+            subdirectory is created inside ``output_dir`` during
+            processing and removed at the end; any pre-existing
+            ``_extract/`` inside ``output_dir`` is deleted on entry.
 
     Returns:
         Tuple of ``(train_dir, test_dir, labels)`` where ``labels`` is
