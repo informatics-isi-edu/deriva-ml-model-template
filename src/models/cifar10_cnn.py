@@ -16,6 +16,7 @@ for training (lazy, label-aware, no on-disk reorganization) plus a thin
 RID-aware wrapper for the test loop so per-image predictions can be recorded
 back to the catalog as ``Image_Classification`` feature values.
 """
+
 from __future__ import annotations
 
 import csv
@@ -37,10 +38,12 @@ from models.cifar10_classes import CIFAR10_CLASS_NAMES, CIFAR10_CLASS_TO_IDX
 
 
 # CIFAR-10's 32x32 RGB images normalized to [-1, 1].
-_TRANSFORM = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-])
+_TRANSFORM = transforms.Compose(
+    [
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+    ]
+)
 
 
 def _bag_role(bag: DatasetBag) -> str:
@@ -120,7 +123,9 @@ class _RidAwareImageDataset(Dataset):
             self._rids.append(rid)
             self._labels.append(rid_to_label.get(rid, -1))
             # Bag asset path: <bag_path>/data/assets/Image/<rid>/<filename>
-            self._paths.append(bag.path / "data" / "assets" / "Image" / rid / row["Filename"])
+            self._paths.append(
+                bag.path / "data" / "assets" / "Image" / rid / row["Filename"]
+            )
 
     def __len__(self) -> int:
         return len(self._rids)
@@ -169,7 +174,9 @@ def record_test_predictions(
         Number of predictions recorded.
     """
     model.eval()
-    ImageClassification = ml_instance.feature_record_class("Image", "Image_Classification")
+    ImageClassification = ml_instance.feature_record_class(
+        "Image", "Image_Classification"
+    )
 
     feature_records: list[Any] = []
     csv_rows: list[dict[str, Any]] = []
@@ -204,13 +211,17 @@ def record_test_predictions(
 
     if feature_records:
         execution.add_features(feature_records)
-        print(f"  Recorded {len(feature_records)} classification predictions with confidence scores")
+        print(
+            f"  Recorded {len(feature_records)} classification predictions with confidence scores"
+        )
     else:
         print("  WARNING: No predictions recorded (test loader was empty)")
 
     if csv_rows:
         csv_file = execution.asset_file_path(
-            MLAsset.execution_asset, "prediction_probabilities.csv", ExecAssetType.output_file,
+            MLAsset.execution_asset,
+            "prediction_probabilities.csv",
+            ExecAssetType.output_file,
             description="Per-image predicted class and probability distributions over all CIFAR-10 classes",
         )
         fieldnames = ["Image_RID", "Predicted_Class", "Confidence"] + [
@@ -388,9 +399,13 @@ def cifar10_cnn(
     mode = "Test-only" if test_only else "Training"
     print(f"CIFAR-10 CNN {mode}")
     print(f"  Host: {ml_instance.host_name}, Catalog: {ml_instance.catalog_id}")
-    print(f"  Architecture: conv1={conv1_channels}, conv2={conv2_channels}, hidden={hidden_size}")
+    print(
+        f"  Architecture: conv1={conv1_channels}, conv2={conv2_channels}, hidden={hidden_size}"
+    )
     if not test_only:
-        print(f"  Training: lr={learning_rate}, epochs={epochs}, batch_size={batch_size}")
+        print(
+            f"  Training: lr={learning_rate}, epochs={epochs}, batch_size={batch_size}"
+        )
 
     # Determine device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -433,8 +448,12 @@ def cifar10_cnn(
                 break
 
         if weights_path is None:
-            print(f"ERROR: Weights file '{weights_filename}' not found in execution assets.")
-            print("  Make sure to include the weights asset in your assets configuration.")
+            print(
+                f"ERROR: Weights file '{weights_filename}' not found in execution assets."
+            )
+            print(
+                "  Make sure to include the weights asset in your assets configuration."
+            )
             print(f"  Available assets: {[p.name for p in all_assets]}")
             return
 
@@ -442,18 +461,18 @@ def cifar10_cnn(
         checkpoint = torch.load(weights_path, map_location=device, weights_only=False)
 
         # Load model config from checkpoint if available
-        if 'config' in checkpoint:
-            config = checkpoint['config']
+        if "config" in checkpoint:
+            config = checkpoint["config"]
             print(f"  Checkpoint config: {config}")
             # Recreate model with saved config
             model = SimpleCNN(
-                conv1_channels=config.get('conv1_channels', conv1_channels),
-                conv2_channels=config.get('conv2_channels', conv2_channels),
-                hidden_size=config.get('hidden_size', hidden_size),
-                dropout_rate=config.get('dropout_rate', dropout_rate),
+                conv1_channels=config.get("conv1_channels", conv1_channels),
+                conv2_channels=config.get("conv2_channels", conv2_channels),
+                hidden_size=config.get("hidden_size", hidden_size),
+                dropout_rate=config.get("dropout_rate", dropout_rate),
             ).to(device)
 
-        model.load_state_dict(checkpoint['model_state_dict'])
+        model.load_state_dict(checkpoint["model_state_dict"])
         print("  Weights loaded successfully")
 
         # Run evaluation
@@ -503,7 +522,9 @@ def cifar10_cnn(
 
         # Save evaluation results
         results_file = execution.asset_file_path(
-            MLAsset.execution_asset, "evaluation_results.txt", ExecAssetType.output_file,
+            MLAsset.execution_asset,
+            "evaluation_results.txt",
+            ExecAssetType.output_file,
             description="Test set evaluation summary: loss, accuracy, and configuration",
         )
         with results_file.open("w") as f:
@@ -524,7 +545,9 @@ def cifar10_cnn(
         print("  Make sure your execution configuration includes CIFAR-10 datasets.")
         # Write a status file indicating no data
         status_file = execution.asset_file_path(
-            MLAsset.execution_asset, "training_status.txt", ExecAssetType.output_file,
+            MLAsset.execution_asset,
+            "training_status.txt",
+            ExecAssetType.output_file,
             description="Training status: indicates no training data was available",
         )
         with status_file.open("w") as f:
@@ -538,9 +561,7 @@ def cifar10_cnn(
     # Loss and optimizer
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(
-        model.parameters(),
-        lr=learning_rate,
-        weight_decay=weight_decay
+        model.parameters(), lr=learning_rate, weight_decay=weight_decay
     )
 
     # Training loop
@@ -571,9 +592,9 @@ def cifar10_cnn(
         epoch_acc = 100.0 * correct / total
 
         log_entry = {
-            'epoch': epoch + 1,
-            'train_loss': epoch_loss,
-            'train_acc': epoch_acc,
+            "epoch": epoch + 1,
+            "train_loss": epoch_loss,
+            "train_acc": epoch_acc,
         }
 
         # Evaluate on test set if available. Test loader yields
@@ -597,48 +618,63 @@ def cifar10_cnn(
                     _, predicted = outputs.max(1)
                     labeled_mask = labels != -1
                     test_total_labeled += int(labeled_mask.sum().item())
-                    test_correct += int((predicted.eq(labels) & labeled_mask).sum().item())
+                    test_correct += int(
+                        (predicted.eq(labels) & labeled_mask).sum().item()
+                    )
 
             if test_total_labeled > 0:
                 test_acc = 100.0 * test_correct / test_total_labeled
                 test_loss = test_loss_sum / max(test_loss_batches, 1)
-                log_entry['test_loss'] = test_loss
-                log_entry['test_acc'] = test_acc
-                print(f"  Epoch {epoch+1}/{epochs}: "
-                      f"train_loss={epoch_loss:.4f}, train_acc={epoch_acc:.2f}%, "
-                      f"test_loss={test_loss:.4f}, test_acc={test_acc:.2f}%")
+                log_entry["test_loss"] = test_loss
+                log_entry["test_acc"] = test_acc
+                print(
+                    f"  Epoch {epoch + 1}/{epochs}: "
+                    f"train_loss={epoch_loss:.4f}, train_acc={epoch_acc:.2f}%, "
+                    f"test_loss={test_loss:.4f}, test_acc={test_acc:.2f}%"
+                )
             else:
-                print(f"  Epoch {epoch+1}/{epochs}: "
-                      f"train_loss={epoch_loss:.4f}, train_acc={epoch_acc:.2f}% "
-                      f"(test set unlabeled — no test metrics)")
+                print(
+                    f"  Epoch {epoch + 1}/{epochs}: "
+                    f"train_loss={epoch_loss:.4f}, train_acc={epoch_acc:.2f}% "
+                    f"(test set unlabeled — no test metrics)"
+                )
         else:
-            print(f"  Epoch {epoch+1}/{epochs}: "
-                  f"train_loss={epoch_loss:.4f}, train_acc={epoch_acc:.2f}%")
+            print(
+                f"  Epoch {epoch + 1}/{epochs}: "
+                f"train_loss={epoch_loss:.4f}, train_acc={epoch_acc:.2f}%"
+            )
 
         training_log.append(log_entry)
 
     # Save model weights
     print("\nSaving model...")
     weights_file = execution.asset_file_path(
-        MLAsset.execution_asset, "cifar10_cnn_weights.pt", ExecAssetType.model_file,
+        MLAsset.execution_asset,
+        "cifar10_cnn_weights.pt",
+        ExecAssetType.model_file,
         description="Trained CNN model weights, optimizer state, and training log",
     )
-    torch.save({
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'config': {
-            'conv1_channels': conv1_channels,
-            'conv2_channels': conv2_channels,
-            'hidden_size': hidden_size,
-            'dropout_rate': dropout_rate,
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "config": {
+                "conv1_channels": conv1_channels,
+                "conv2_channels": conv2_channels,
+                "hidden_size": hidden_size,
+                "dropout_rate": dropout_rate,
+            },
+            "training_log": training_log,
         },
-        'training_log': training_log,
-    }, weights_file)
+        weights_file,
+    )
     print(f"  Saved weights to: {weights_file}")
 
     # Save training log as text
     log_file = execution.asset_file_path(
-        MLAsset.execution_asset, "training_log.txt", ExecAssetType.output_file,
+        MLAsset.execution_asset,
+        "training_log.txt",
+        ExecAssetType.output_file,
         description="Per-epoch training log: loss, accuracy, and architecture details",
     )
     with log_file.open("w") as f:
@@ -657,7 +693,7 @@ def cifar10_cnn(
         f.write("Training Progress:\n")
         for entry in training_log:
             line = f"  Epoch {entry['epoch']}: train_loss={entry['train_loss']:.4f}, train_acc={entry['train_acc']:.2f}%"
-            if 'test_acc' in entry:
+            if "test_acc" in entry:
                 line += f", test_acc={entry['test_acc']:.2f}%"
             f.write(line + "\n")
     print(f"  Saved log to: {log_file}")

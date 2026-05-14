@@ -10,7 +10,12 @@ Usage:
 from hydra_zen import store
 
 from deriva_ml import DerivaML
-from deriva_ml.execution import BaseConfig, DerivaBaseConfig, base_defaults, create_model_config
+from deriva_ml.execution import (
+    BaseConfig,
+    DerivaBaseConfig,
+    base_defaults,
+    create_model_config,
+)
 
 # Create the main configuration schema for the model runner.
 # This is a builds() of run_model with the standard hydra defaults.

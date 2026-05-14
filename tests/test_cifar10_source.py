@@ -20,7 +20,9 @@ def _fake_batch(num_images: int, label_offset: int = 0) -> dict:
     return {
         b"data": np.zeros((num_images, 3072), dtype=np.uint8),
         b"labels": [(i + label_offset) % 10 for i in range(num_images)],
-        b"filenames": [f"img_{i + label_offset}.png".encode() for i in range(num_images)],
+        b"filenames": [
+            f"img_{i + label_offset}.png".encode() for i in range(num_images)
+        ],
         b"batch_label": b"testing batch",
     }
 
@@ -57,7 +59,7 @@ def test_load_batch_preserves_channel_order(tmp_path):
     image at HWC index (h, w, c) must come from the c-th 1024-block."""
     # Build one image where R=10, G=20, B=30 at every pixel.
     flat = np.empty((1, 3072), dtype=np.uint8)
-    flat[0, 0:1024] = 10   # R block
+    flat[0, 0:1024] = 10  # R block
     flat[0, 1024:2048] = 20  # G block
     flat[0, 2048:3072] = 30  # B block
 
@@ -96,8 +98,16 @@ def test_extract_writes_pngs_and_returns_labels(tmp_path):
     # meta file with class names (decoded against b"label_names").
     meta = {
         b"label_names": [
-            b"airplane", b"automobile", b"bird", b"cat", b"deer",
-            b"dog", b"frog", b"horse", b"ship", b"truck",
+            b"airplane",
+            b"automobile",
+            b"bird",
+            b"cat",
+            b"deer",
+            b"dog",
+            b"frog",
+            b"horse",
+            b"ship",
+            b"truck",
         ],
     }
     with (cifar_dir / "batches.meta").open("wb") as fh:
@@ -113,12 +123,22 @@ def test_extract_writes_pngs_and_returns_labels(tmp_path):
     assert test_dir == out / "test"
     train_pngs = sorted(train_dir.glob("*.png"))
     test_pngs = sorted(test_dir.glob("*.png"))
-    assert len(train_pngs) == 4   # 2 batches × 2 images
+    assert len(train_pngs) == 4  # 2 batches × 2 images
     assert len(test_pngs) == 2
 
     # Every PNG has a labels entry, and labels are class names (not ints).
-    valid_classes = {"airplane", "automobile", "bird", "cat", "deer",
-                     "dog", "frog", "horse", "ship", "truck"}
+    valid_classes = {
+        "airplane",
+        "automobile",
+        "bird",
+        "cat",
+        "deer",
+        "dog",
+        "frog",
+        "horse",
+        "ship",
+        "truck",
+    }
     for png in train_pngs + test_pngs:
         assert png.stem in labels
         assert labels[png.stem] in valid_classes
