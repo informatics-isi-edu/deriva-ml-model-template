@@ -117,8 +117,10 @@ uv run deriva-globus-auth-utils login --host <hostname>
 
 The example model needs CIFAR-10 data and dataset definitions in your catalog.
 
-**Prerequisites:** a Kaggle API key (`~/.kaggle/kaggle.json`) and 7-Zip
-(`brew install p7zip` on macOS, `apt-get install p7zip-full` on Linux).
+**Prerequisites:** none beyond `uv` and a Deriva localhost instance.
+The CIFAR-10 archive (~170 MB) is downloaded automatically from the
+Toronto open mirror on first run and cached at
+`~/.cache/deriva-ml-model-template/`.
 
 ```bash
 # Create a fresh catalog and load 10K images (good for first-time setup)

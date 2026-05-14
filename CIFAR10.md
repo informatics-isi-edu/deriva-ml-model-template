@@ -29,7 +29,7 @@ The CIFAR-10 example includes multiple dataset configurations:
 | `cifar10_small_split` | Quick training without evaluation |
 | `cifar10_split` | Full training without evaluation |
 
-**Important:** For ROC analysis or accuracy metrics, use the **labeled** datasets. The unlabeled datasets have test images without ground truth labels.
+**Important:** For ROC analysis or accuracy metrics, use the **labeled** datasets. Both training and testing images in the Toronto distribution carry ground truth labels; the labeled/unlabeled distinction refers to how the dataset was classified in the catalog.
 
 ## Model
 
