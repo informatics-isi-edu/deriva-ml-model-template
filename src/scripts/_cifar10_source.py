@@ -14,8 +14,11 @@ on both train and test, unlike the Kaggle competition format.
 from __future__ import annotations
 
 import logging
+import pickle
 import urllib.request
 from pathlib import Path
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -53,9 +56,33 @@ def download_cifar10_archive(cache_path: Path | None = None) -> Path:
     return cache_path
 
 
-def load_batch(*args, **kwargs):
-    """Placeholder — implemented in Task A3."""
-    raise NotImplementedError("Task A3")
+def load_batch(batch_path: Path) -> tuple[np.ndarray, list[int], list[str]]:
+    """Load one CIFAR-10 pickle batch into image array + labels.
+
+    Args:
+        batch_path: Path to a CIFAR-10 batch pickle (``data_batch_N``
+            or ``test_batch``).
+
+    Returns:
+        Tuple of ``(images, labels, filenames)``:
+          - images: ``np.ndarray`` of shape ``(N, 32, 32, 3)``, ``uint8``,
+            HWC, RGB.
+          - labels: list of int class indices (0-9).
+          - filenames: list of original filenames (str, decoded from bytes).
+
+    Example:
+        >>> imgs, labels, names = load_batch(Path("data_batch_1"))
+        >>> imgs.shape
+        (10000, 32, 32, 3)
+    """
+    with batch_path.open("rb") as fh:
+        batch = pickle.load(fh, encoding="bytes")
+
+    raw = batch[b"data"]
+    images = raw.reshape(-1, 3, 32, 32).transpose(0, 2, 3, 1)
+    labels = list(batch[b"labels"])
+    filenames = [fn.decode("utf-8") for fn in batch[b"filenames"]]
+    return images, labels, filenames
 
 
 def extract_cifar10_to_png(*args, **kwargs):

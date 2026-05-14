@@ -38,3 +38,16 @@ def test_download_uses_cache_when_present(tmp_path):
 
     assert result == cache
     mock_retrieve.assert_not_called()
+
+
+def test_load_batch_returns_images_labels_filenames(tmp_path):
+    batch_path = tmp_path / "data_batch_1"
+    with batch_path.open("wb") as fh:
+        pickle.dump(_fake_batch(num_images=4), fh)
+
+    images, labels, filenames = load_batch(batch_path)
+
+    assert images.shape == (4, 32, 32, 3)
+    assert images.dtype == np.uint8
+    assert labels == [0, 1, 2, 3]
+    assert filenames == ["img_0.png", "img_1.png", "img_2.png", "img_3.png"]
