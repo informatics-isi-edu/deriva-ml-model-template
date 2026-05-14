@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """CIFAR-10 Dataset Loader for DerivaML.
 
-This script downloads the CIFAR-10 image classification dataset from Kaggle
-and loads it into a Deriva catalog using the DerivaML library. It demonstrates
-how to set up a complete ML data pipeline with proper provenance tracking.
+This script downloads the CIFAR-10 image classification dataset from the
+Toronto open mirror and loads it into a Deriva catalog using the DerivaML
+library. It demonstrates how to set up a complete ML data pipeline with
+proper provenance tracking.
 
 CIFAR-10 is a widely-used benchmark dataset containing 60,000 32x32 color images
 in 10 classes (airplane, automobile, bird, cat, deer, dog, frog, horse, ship, truck).
@@ -19,10 +20,10 @@ What This Script Creates:
         - ``Complete``: All images (training + testing)
         - ``Split``: Parent dataset containing Training and Testing as children
         - ``Training``: 50,000 labeled training images
-        - ``Testing``: 10,000 unlabeled test images
+        - ``Testing``: 10,000 labeled test images
         - ``Small_Split``: Parent dataset for small train/test split (1,000 images)
         - ``Small_Training``: 500 labeled training images (subset)
-        - ``Small_Testing``: 500 test images (subset)
+        - ``Small_Testing``: 500 labeled test images (subset)
         - ``Labeled_Split``: 80/20 split of training images (created via ``split_dataset()``)
         - ``Small_Labeled_Split``: 400/100 split of training images (created via ``split_dataset()``)
 
@@ -32,21 +33,7 @@ What This Script Creates:
         - Each Execution has a unique RID for reproducibility
 
 Prerequisites:
-    1. **Kaggle CLI**: Install and configure with your API credentials::
-
-           pip install kaggle
-           # Create ~/.kaggle/kaggle.json with your API key
-           # See: https://www.kaggle.com/docs/api#authentication
-
-    2. **7-Zip**: Required to extract CIFAR-10 archives::
-
-           # macOS
-           brew install p7zip
-
-           # Ubuntu/Debian
-           sudo apt-get install p7zip-full
-
-    3. **Deriva Authentication**: Login to your Deriva server::
+    1. **Deriva Authentication**: Login to your Deriva server::
 
            deriva-globus-auth-utils login --host <hostname>
 
@@ -107,8 +94,7 @@ Example:
         main(args)
 
 Note:
-    - The Kaggle CIFAR-10 test set does not include labels, so only training
-      images receive ``Image_Classification`` feature values.
+    - Both training and testing images are labeled (Toronto distribution).
     - Large uploads (50,000+ images) may take 30+ minutes depending on network speed.
     - The script uses DerivaML's execution system for provenance tracking,
       creating separate executions for data loading and labeling.
@@ -116,21 +102,17 @@ Note:
 See Also:
     - DerivaML documentation: https://github.com/informatics-isi-edu/deriva-ml
     - CIFAR-10 dataset: https://www.cs.toronto.edu/~kriz/cifar.html
-    - Kaggle CIFAR-10: https://www.kaggle.com/c/cifar-10
 """
 
 from __future__ import annotations
 
 import argparse
-import csv
 import logging
 import random
 import re
 import shutil
-import subprocess
 import sys
 import tempfile
-import zipfile
 from pathlib import Path
 from collections.abc import Iterator
 from typing import Any, Callable
@@ -143,6 +125,7 @@ from deriva_ml.core.enums import BuiltinTypes
 from deriva_ml.dataset.split import split_dataset
 from deriva_ml.execution import ExecutionConfiguration
 from deriva_ml.schema import create_ml_catalog
+from scripts._cifar10_source import download_cifar10_archive, extract_cifar10_to_png
 
 # =============================================================================
 # Logging Configuration
@@ -181,145 +164,29 @@ from models.cifar10_classes import CIFAR10_CLASSES  # noqa: E402, F401
 #: Dataset types used for organizing CIFAR-10 data
 DATASET_TYPES: list[tuple[str, str, list[str]]] = [
     ("Complete", "A complete dataset containing all data", ["complete", "entire"]),
-    ("Training", "A dataset subset used for model training", ["training", "train", "Train"]),
+    (
+        "Training",
+        "A dataset subset used for model training",
+        ["training", "train", "Train"],
+    ),
     ("Testing", "A dataset subset used for model testing/evaluation", ["test", "Test"]),
     ("Split", "A dataset that contains nested dataset splits", ["split"]),
-    ("Labeled", "A dataset containing records with ground truth labels", ["labeled", "annotated"]),
-    ("Unlabeled", "A dataset containing records without ground truth labels", ["unlabeled", "unannotated"]),
+    (
+        "Labeled",
+        "A dataset containing records with ground truth labels",
+        ["labeled", "annotated"],
+    ),
+    (
+        "Unlabeled",
+        "A dataset containing records without ground truth labels",
+        ["unlabeled", "unannotated"],
+    ),
 ]
 
 
 # =============================================================================
-# Credential and Download Functions
+# Image Iteration
 # =============================================================================
-
-
-def verify_kaggle_credentials() -> bool:
-    """Verify that Kaggle API credentials are configured.
-
-    Checks for the existence of ~/.kaggle/kaggle.json which contains
-    the API key required for downloading datasets from Kaggle.
-
-    Returns:
-        True if credentials file exists, False otherwise.
-
-    Note:
-        To configure Kaggle credentials:
-        1. Create a Kaggle account at https://www.kaggle.com
-        2. Go to Account settings and click "Create New API Token"
-        3. Save the downloaded kaggle.json to ~/.kaggle/
-        4. Set permissions: chmod 600 ~/.kaggle/kaggle.json
-    """
-    kaggle_json = Path.home() / ".kaggle" / "kaggle.json"
-    if not kaggle_json.exists():
-        logger.error(
-            "Kaggle credentials not found. Please configure ~/.kaggle/kaggle.json\n"
-            "See: https://www.kaggle.com/docs/api#authentication"
-        )
-        return False
-    return True
-
-
-def download_cifar10(temp_dir: Path) -> Path:
-    """Download and extract CIFAR-10 dataset from Kaggle.
-
-    Downloads the CIFAR-10 competition data using the Kaggle CLI,
-    then extracts the nested archives (zip and 7z formats).
-
-    Args:
-        temp_dir: Temporary directory to download and extract files into.
-
-    Returns:
-        Path to the extracted dataset directory containing train/ and test/
-        subdirectories with PNG images.
-
-    Raises:
-        RuntimeError: If Kaggle download fails or 7z extraction fails.
-
-    Note:
-        The CIFAR-10 Kaggle dataset structure:
-        - cifar-10.zip (outer archive)
-          - train.7z -> train/*.png (50,000 images)
-          - test.7z -> test/*.png (10,000 images)
-          - trainLabels.csv (image_id -> class mappings)
-
-        Requires 7-zip (p7zip) to be installed for extracting .7z archives.
-    """
-    download_dir = temp_dir / "cifar10"
-    download_dir.mkdir(parents=True, exist_ok=True)
-
-    logger.info("Downloading CIFAR-10 from Kaggle...")
-    result = subprocess.run(
-        ["kaggle", "competitions", "download", "-c", "cifar-10", "-p", str(download_dir)],
-        capture_output=True,
-        text=True,
-    )
-
-    if result.returncode != 0:
-        logger.error(f"Kaggle download failed: {result.stderr}")
-        raise RuntimeError(f"Failed to download CIFAR-10: {result.stderr}")
-
-    # Extract the outer zip file
-    zip_files = list(download_dir.glob("*.zip"))
-    if zip_files:
-        logger.info("Extracting outer zip archive...")
-        for zip_file in zip_files:
-            with zipfile.ZipFile(zip_file, "r") as zf:
-                zf.extractall(download_dir)
-
-    # CIFAR-10 from Kaggle uses 7z archives for train/test data
-    seven_z_files = list(download_dir.glob("*.7z"))
-    if seven_z_files:
-        logger.info("Extracting 7z archives (train.7z, test.7z)...")
-        for seven_z_file in seven_z_files:
-            # Try '7z' command first, fall back to '7za'
-            result = subprocess.run(
-                ["7z", "x", str(seven_z_file), f"-o{download_dir}", "-y"],
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode != 0:
-                result = subprocess.run(
-                    ["7za", "x", str(seven_z_file), f"-o{download_dir}", "-y"],
-                    capture_output=True,
-                    text=True,
-                )
-                if result.returncode != 0:
-                    raise RuntimeError(
-                        f"Failed to extract {seven_z_file.name}. "
-                        "Please install 7-zip: brew install p7zip (macOS) or "
-                        "apt-get install p7zip-full (Ubuntu)"
-                    )
-
-    return download_dir
-
-
-def load_train_labels(data_dir: Path) -> dict[str, str]:
-    """Load training image labels from trainLabels.csv.
-
-    Args:
-        data_dir: Directory containing the extracted CIFAR-10 data.
-
-    Returns:
-        Mapping of image ID (filename without extension) to class name.
-        Example: {"1": "frog", "2": "truck", ...}
-
-    Note:
-        The trainLabels.csv file has two columns: 'id' and 'label'.
-        Test images do not have labels in the Kaggle version of CIFAR-10.
-    """
-    labels = {}
-    labels_file = data_dir / "trainLabels.csv"
-
-    if labels_file.exists():
-        with open(labels_file, newline="") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                labels[row["id"]] = row["label"]
-    else:
-        logger.warning("trainLabels.csv not found")
-
-    return labels
 
 
 def iter_images(
@@ -327,38 +194,28 @@ def iter_images(
 ) -> Iterator[tuple[Path, str | None, str]]:
     """Iterate over images in a dataset split.
 
-    Generator that yields image paths with their class labels and IDs.
-
     Args:
         data_dir: Directory containing train/ and test/ subdirectories.
         split: Either "train" or "test".
-        labels: Mapping of image IDs to class names (from trainLabels.csv).
+        labels: Mapping of image-id (filename stem) to class name. The
+            Toronto CIFAR-10 distribution labels both splits, so every
+            image should have an entry.
 
     Yields:
-        Tuple of (image_path, class_name, image_id).
-        class_name is None for test images (no labels available).
-
-    Example:
-        >>> labels = load_train_labels(data_dir)
-        >>> for path, class_name, img_id in iter_images(data_dir, "train", labels):
-        ...     print(f"{img_id}: {class_name}")
-        1: frog
-        2: truck
+        Tuple of (image_path, class_name, image_id). class_name should
+        always be non-None for the Toronto distribution; if it ever is
+        None, the image is skipped with a warning.
     """
-    if split == "train":
-        train_dir = data_dir / "train"
-        if train_dir.exists():
-            for img_path in sorted(train_dir.glob("*.png")):
-                image_id = img_path.stem
-                class_name = labels.get(image_id)
-                if class_name:
-                    yield img_path, class_name, image_id
-    else:
-        test_dir = data_dir / "test"
-        if test_dir.exists():
-            for img_path in sorted(test_dir.glob("*.png")):
-                image_id = img_path.stem
-                yield img_path, None, image_id
+    subdir = data_dir / split
+    if not subdir.exists():
+        return
+    for img_path in sorted(subdir.glob("*.png")):
+        image_id = img_path.stem
+        class_name = labels.get(image_id)
+        if class_name is None:
+            logger.warning(f"No label for {image_id}, skipping")
+            continue
+        yield img_path, class_name, image_id
 
 
 # =============================================================================
@@ -469,11 +326,17 @@ def setup_domain_model(ml: DerivaML) -> dict[str, Any]:
             metadata=[confidence_column],
             optional=["Confidence"],
         )
-        results["feature"] = {"status": "created", "feature_name": "Image_Classification"}
+        results["feature"] = {
+            "status": "created",
+            "feature_name": "Image_Classification",
+        }
     except Exception as e:
         if "already exists" in str(e).lower():
             logger.info("Image_Classification feature already exists")
-            results["feature"] = {"status": "exists", "feature_name": "Image_Classification"}
+            results["feature"] = {
+                "status": "exists",
+                "feature_name": "Image_Classification",
+            }
         else:
             raise
 
@@ -553,13 +416,13 @@ def create_dataset_hierarchy(ml: DerivaML, exe: Any = None) -> dict[str, str]:
     """Create the CIFAR-10 dataset hierarchy.
 
     Creates datasets organized in a hierarchy:
-    - Complete: Contains all images (Labeled type since training images have labels)
+    - Complete: Contains all images (Labeled type since all images have labels)
     - Split: Parent dataset for train/test split
       - Training: Child of Split, contains training images (Labeled)
-      - Testing: Child of Split, contains test images (Unlabeled - no ground truth)
+      - Testing: Child of Split, contains test images (Labeled — Toronto distribution)
     - Small_Split: Parent dataset for small train/test split (1,000 images)
       - Small_Training: Child of Small_Split, 500 randomly selected training images (Labeled)
-      - Small_Testing: Child of Small_Split, 500 randomly selected test images (Unlabeled)
+      - Small_Testing: Child of Small_Split, 500 randomly selected test images (Labeled)
 
     Note:
         Labeled split datasets (Labeled_Split, Small_Labeled_Split) are created
@@ -606,9 +469,9 @@ def create_dataset_hierarchy(ml: DerivaML, exe: Any = None) -> dict[str, str]:
     datasets["training"] = training_ds.dataset_rid
     logger.info(f"  Created Training dataset: {training_ds.dataset_rid}")
 
-    # Create Testing dataset (Unlabeled - Kaggle test set has no ground truth)
+    # Create Testing dataset (Labeled — Toronto distribution has ground truth)
     testing_ds = create_ds(
-        "CIFAR-10 testing set (unlabeled)", ["Testing", "Unlabeled"]
+        "CIFAR-10 testing set with 10,000 labeled images", ["Testing", "Labeled"]
     )
     datasets["testing"] = testing_ds.dataset_rid
     logger.info(f"  Created Testing dataset: {testing_ds.dataset_rid}")
@@ -635,10 +498,10 @@ def create_dataset_hierarchy(ml: DerivaML, exe: Any = None) -> dict[str, str]:
     datasets["small_training"] = small_training_ds.dataset_rid
     logger.info(f"  Created Small_Training dataset: {small_training_ds.dataset_rid}")
 
-    # Create Small_Testing dataset (500 images, Unlabeled)
+    # Create Small_Testing dataset (500 images, Labeled)
     small_testing_ds = create_ds(
-        "Small CIFAR-10 testing set with 500 randomly selected images for quick testing and development",
-        ["Testing", "Unlabeled"],
+        "Small CIFAR-10 testing set with 500 randomly selected labeled images for quick testing and development",
+        ["Testing", "Labeled"],
     )
     datasets["small_testing"] = small_testing_ds.dataset_rid
     logger.info(f"  Created Small_Testing dataset: {small_testing_ds.dataset_rid}")
@@ -736,6 +599,7 @@ def load_images(
     data_dir: Path,
     batch_size: int = 500,
     max_images: int | None = None,
+    labels: dict[str, str] | None = None,
 ) -> tuple[dict[str, str], dict[str, Any]]:
     """Load CIFAR-10 images into the catalog with full provenance tracking.
 
@@ -759,6 +623,9 @@ def load_images(
         max_images: Maximum total images to upload. If specified, the limit
             is split evenly between training and testing images. Useful for
             testing.
+        labels: Mapping of filename stem to class name for all images (train
+            and test). Must be provided; obtain from
+            ``extract_cifar10_to_png``.
 
     Returns:
         Tuple of (datasets, load_result):
@@ -778,8 +645,7 @@ def load_images(
         Datasets are created in the labeling execution so they include images
         with features already attached.
 
-        Training images are labeled with their class from trainLabels.csv.
-        Test images have no labels (Kaggle CIFAR-10 format).
+        Both training and test images are labeled (Toronto CIFAR-10 distribution).
     """
     # Ensure CIFAR_Data_Load workflow type exists
     setup_workflow_type(ml)
@@ -823,17 +689,14 @@ def load_images(
                     item.unlink()
             logger.info(f"  Cleared working directory: {working_dir}")
 
-        # Load training labels
-        labels = load_train_labels(data_dir)
-        logger.info(f"Loaded {len(labels)} training labels")
+        if labels is None:
+            raise ValueError("labels mapping is required (from extract_cifar10_to_png)")
+        logger.info(f"Received {len(labels)} labels (train + test)")
 
         # Process training images
         logger.info("Registering training images for upload...")
         train_count = 0
         for img_path, class_name, image_id in iter_images(data_dir, "train", labels):
-            if class_name is None:
-                continue
-
             if train_limit and train_count >= train_limit:
                 break
 
@@ -858,14 +721,14 @@ def load_images(
 
         logger.info(f"  Total training images registered: {train_count}")
 
-        # Process test images (no labels in Kaggle CIFAR-10)
+        # Process test images (Toronto distribution labels both splits)
         logger.info("Registering test images for upload...")
         test_count = 0
-        for img_path, _, image_id in iter_images(data_dir, "test", labels):
+        for img_path, class_name, image_id in iter_images(data_dir, "test", labels):
             if test_limit and test_count >= test_limit:
                 break
 
-            new_filename = f"test_{image_id}.png"
+            new_filename = f"test_{class_name}_{image_id}.png"  # include class in name
 
             exe.asset_file_path(
                 asset_name="Image",
@@ -876,8 +739,10 @@ def load_images(
             )
 
             test_filenames.append(new_filename)
+            filename_to_class[new_filename] = (
+                class_name  # NEW: now we label test images too
+            )
             test_count += 1
-
             if test_count % 1000 == 0:
                 logger.info(f"  Registered {test_count} test images...")
 
@@ -893,7 +758,9 @@ def load_images(
     )
 
     logger.info("  [Upload] 100% complete")
-    logger.debug(f"  [Upload] Callback invoked {callback_state['callback_count']} times")
+    logger.debug(
+        f"  [Upload] Callback invoked {callback_state['callback_count']} times"
+    )
 
     uploaded_count = sum(len(files) for files in upload_result.values())
     logger.info(f"  Upload complete: {uploaded_count} files uploaded")
@@ -1010,25 +877,35 @@ def load_images(
     if train_rids and len(train_rids) >= small_train_size:
         small_train_rids = random.sample(train_rids, small_train_size)
         small_training_ds = ml.lookup_dataset(datasets["small_training"])
-        logger.info(f"  Adding {small_train_size} randomly selected images to Small_Training dataset...")
-        small_training_ds.add_dataset_members({"Image": small_train_rids}, validate=False)
+        logger.info(
+            f"  Adding {small_train_size} randomly selected images to Small_Training dataset..."
+        )
+        small_training_ds.add_dataset_members(
+            {"Image": small_train_rids}, validate=False
+        )
         logger.info(f"    Added {len(small_train_rids)} images")
     elif train_rids:
         # If we have fewer than 500 training images, use all of them
         small_training_ds = ml.lookup_dataset(datasets["small_training"])
-        logger.info(f"  Adding {len(train_rids)} images to Small_Training dataset (all available)...")
+        logger.info(
+            f"  Adding {len(train_rids)} images to Small_Training dataset (all available)..."
+        )
         small_training_ds.add_dataset_members({"Image": train_rids}, validate=False)
 
     if test_rids and len(test_rids) >= small_test_size:
         small_test_rids = random.sample(test_rids, small_test_size)
         small_testing_ds = ml.lookup_dataset(datasets["small_testing"])
-        logger.info(f"  Adding {small_test_size} randomly selected images to Small_Testing dataset...")
+        logger.info(
+            f"  Adding {small_test_size} randomly selected images to Small_Testing dataset..."
+        )
         small_testing_ds.add_dataset_members({"Image": small_test_rids}, validate=False)
         logger.info(f"    Added {len(small_test_rids)} images")
     elif test_rids:
         # If we have fewer than 500 test images, use all of them
         small_testing_ds = ml.lookup_dataset(datasets["small_testing"])
-        logger.info(f"  Adding {len(test_rids)} images to Small_Testing dataset (all available)...")
+        logger.info(
+            f"  Adding {len(test_rids)} images to Small_Testing dataset (all available)..."
+        )
         small_testing_ds.add_dataset_members({"Image": test_rids}, validate=False)
 
     # Create labeled split datasets from the Training dataset using split_dataset().
@@ -1057,7 +934,9 @@ def load_images(
 
         # Small labeled split: 400 train / 100 test from training images
         if len(train_rids) >= 500:
-            logger.info("  Creating Small_Labeled_Split (400/100 of training images)...")
+            logger.info(
+                "  Creating Small_Labeled_Split (400/100 of training images)..."
+            )
             small_labeled_result = split_dataset(
                 ml,
                 datasets["training"],
@@ -1079,7 +958,9 @@ def load_images(
             )
         else:
             # If fewer than 500 training images, use 80/20 split of what we have
-            logger.info("  Creating Small_Labeled_Split (80/20 of available training images)...")
+            logger.info(
+                "  Creating Small_Labeled_Split (80/20 of available training images)..."
+            )
             small_labeled_result = split_dataset(
                 ml,
                 datasets["training"],
@@ -1112,7 +993,9 @@ def load_images(
 # =============================================================================
 
 
-def connect_or_create_catalog(args: argparse.Namespace) -> tuple[DerivaML, str | int, str]:
+def connect_or_create_catalog(
+    args: argparse.Namespace,
+) -> tuple[DerivaML, str | int, str]:
     """Connect to an existing catalog or create a new one.
 
     If ``args.create_catalog`` is set, creates a new catalog (with a fresh
@@ -1140,12 +1023,12 @@ def connect_or_create_catalog(args: argparse.Namespace) -> tuple[DerivaML, str |
         catalog_id = catalog.catalog_id
         domain_schema = args.create_catalog
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("  CREATED NEW CATALOG")
         print(f"  Hostname:    {args.hostname}")
         print(f"  Catalog ID:  {catalog_id}")
         print(f"  Schema:      {domain_schema}")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
 
         ml = DerivaML(
             hostname=args.hostname,
@@ -1197,22 +1080,22 @@ def run_schema_phase(ml: DerivaML, project_name: str) -> None:
 def run_images_phase(
     ml: DerivaML, batch_size: int, num_images: int | None
 ) -> tuple[dict[str, str], dict[str, Any]]:
-    """Download images from Kaggle, upload them, and create the dataset hierarchy.
+    """Download images from the Toronto open mirror, upload them, and
+    create the dataset hierarchy.
 
-    Wraps ``download_cifar10`` + ``load_images`` (which itself handles dataset
-    creation for provenance). Use this when the schema is already installed
-    and you want to (re)load images.
+    Wraps ``download_cifar10_archive`` + ``extract_cifar10_to_png`` +
+    ``load_images``.
 
     Returns:
         Tuple of ``(datasets, load_result)`` from ``load_images``.
     """
+    archive = download_cifar10_archive()
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
-        data_dir = download_cifar10(temp_path)
-        logger.info(f"Downloaded CIFAR-10 to: {data_dir}")
-
+        train_dir, test_dir, labels = extract_cifar10_to_png(archive, temp_path)
+        logger.info(f"Extracted CIFAR-10 to: {temp_path}")
         datasets, load_result = load_images(
-            ml, data_dir, batch_size, max_images=num_images
+            ml, temp_path, batch_size, max_images=num_images, labels=labels
         )
         logger.info(f"Loading complete: {load_result}")
     return datasets, load_result
@@ -1253,8 +1136,6 @@ def main(args: argparse.Namespace | None = None) -> int:
     """
     if args is None:
         args = parse_args()
-        if not args.dry_run and getattr(args, "phase", "all") != "schema" and not verify_kaggle_credentials():
-            return 1
 
     phase = getattr(args, "phase", "all")
 
@@ -1305,10 +1186,10 @@ def main(args: argparse.Namespace | None = None) -> int:
         ("Complete (Labeled)", "complete"),
         ("Split", "split"),
         ("Training (Labeled)", "training"),
-        ("Testing (Unlabeled)", "testing"),
+        ("Testing (Labeled)", "testing"),
         ("Small_Split", "small_split"),
         ("Small_Training (Labeled)", "small_training"),
-        ("Small_Testing (Unlabeled)", "small_testing"),
+        ("Small_Testing (Labeled)", "small_testing"),
         ("Labeled_Split", "labeled_split"),
         ("Labeled_Training", "labeled_training"),
         ("Labeled_Testing", "labeled_testing"),
@@ -1449,9 +1330,4 @@ For more information, see:
 
 if __name__ == "__main__":
     args = parse_args()
-
-    # Verify Kaggle credentials (skip for dry run)
-    if not args.dry_run and not verify_kaggle_credentials():
-        sys.exit(1)
-
     sys.exit(main(args))
