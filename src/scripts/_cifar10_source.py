@@ -14,8 +14,6 @@ on both train and test, unlike the Kaggle competition format.
 from __future__ import annotations
 
 import logging
-import pickle
-import tarfile
 import urllib.request
 from pathlib import Path
 
