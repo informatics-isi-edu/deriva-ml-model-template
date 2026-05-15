@@ -34,6 +34,60 @@ Both families carry ground-truth labels in the Toronto distribution. The distinc
 - **`*_labeled_split`** — test partition is a held-out 20% of the 50K training images (created by `split_dataset()`). Use for ROC analysis, cross-validation, or when you want the official test_batch reserved for final evaluation.
 - **`*_split`** — test partition is the official Toronto test_batch (10K images from a separate source). Use when you want results comparable to the standard CIFAR-10 benchmark.
 
+## Loader Walkthrough
+
+The CIFAR-10 loader (`src/scripts/load_cifar10.py`) is structured as
+a thin orchestrator that composes three single-purpose stage modules.
+Each module demonstrates one DerivaML pattern you would reuse when
+building a loader for your own data.
+
+| Stage | Module | Pattern demonstrated |
+|---|---|---|
+| 1 | [`_cifar10_schema.py`](src/scripts/_cifar10_schema.py) | Catalog + schema setup: create or connect, register the domain model (asset table, vocabulary, feature), declare workflow and dataset types |
+| 2 | [`_cifar10_assets.py`](src/scripts/_cifar10_assets.py) | Asset upload + feature labeling: upload binary files in one Execution, re-query the catalog and add feature values in a separate Execution |
+| 3 | [`_cifar10_datasets.py`](src/scripts/_cifar10_datasets.py) | Dataset hierarchy: query existing assets, partition by attribute, assemble nested datasets with derived holdout splits |
+
+### Key design choices
+
+**Stages are independent.** Each stage reads back from the catalog
+rather than relying on in-memory state from earlier stages. Stage 2
+queries `Image` rows to label them; Stage 3 queries `Image` rows + their
+features to assign dataset membership. This means each stage works
+standalone — you can run them via `load-cifar10 --phase <stage>`
+against any catalog where the prior stages have completed, even from
+a different process invocation.
+
+**One Execution per logical step.** Stage 2 uses two Executions
+(one for upload, one for labeling) because they are logically
+distinct steps with different provenance. Stage 3 uses one
+Execution because creating the entire dataset hierarchy is one
+logical step.
+
+**Class encoded in filename.** Stage 2a names uploaded files
+`train_<class>_<id>.png` or `test_<class>_<id>.png`. This is what
+lets Stage 2b recover the class without needing in-memory state
+from Stage 2a, and what lets Stage 3 partition by train/test
+prefix without needing in-memory state from either earlier
+stage.
+
+### Reusing for your own data
+
+When adapting this template for your own data:
+
+1. Replace `_cifar10_source.py` (the data-source layer — downloads
+   the archive, extracts to a PNG layout) with your own source code.
+2. Tweak `_cifar10_schema.py` to declare your domain model
+   (asset table for your data type, vocabulary for your categories,
+   feature for whatever labels apply).
+3. Tweak `_cifar10_assets.py` to upload your data with whatever
+   naming convention lets your features and datasets be derived
+   from the catalog state.
+4. Tweak `_cifar10_datasets.py` to assemble the dataset
+   hierarchy that matches your experimental design.
+
+The orchestrator (`load_cifar10.py`) stays as a thin CLI shim —
+you only edit it to update imports and the summary banner labels.
+
 ## Model
 
 The CIFAR-10 example uses a 2-layer CNN (`src/models/cifar10_cnn.py`) for image classification.

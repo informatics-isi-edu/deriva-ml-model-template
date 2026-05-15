@@ -1,5 +1,13 @@
 """CIFAR-10 Stage 2: upload images, add classification features.
 
+This module demonstrates the **asset-upload + feature-labeling
+pattern**: how to upload binary files as ``Image`` assets inside
+one Execution, then re-query the catalog and add feature values
+inside a separate Execution for clean provenance.  The two-step
+structure (2a upload, 2b label) is the key pattern to copy when
+you need separate provenance records for data ingestion vs.
+annotation.
+
 This module is the assets layer. It downloads + extracts the
 CIFAR-10 archive (via ``_cifar10_source``), uploads each image
 as an ``Image`` asset inside one Execution, then adds an

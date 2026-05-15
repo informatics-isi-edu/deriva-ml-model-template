@@ -1,6 +1,13 @@
 """CIFAR-10 Stage 1: catalog + schema setup.
 
-This module handles the schema-installation concern for the
+This module demonstrates the **schema-installation pattern** for
+DerivaML: how to open or create a catalog, register a domain
+model (asset table, vocabulary, feature), and declare the
+workflow + dataset types your loader will use.  Copy this module
+as the starting point when building a loader for your own data —
+everything here is idempotent and re-runnable.
+
+It handles the schema-installation concern for the
 CIFAR-10 example: creating or connecting to a catalog and
 installing the domain model (Image asset table, Image_Class
 vocabulary with 10 terms, Image_Classification feature),

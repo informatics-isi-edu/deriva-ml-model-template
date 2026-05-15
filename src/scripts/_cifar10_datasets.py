@@ -1,5 +1,12 @@
 """CIFAR-10 Stage 3: create the dataset hierarchy.
 
+This module demonstrates the **dataset-hierarchy pattern**: how
+to query the catalog for existing assets, partition them by some
+attribute (here: filename prefix), and assemble a nested dataset
+structure with derived holdout splits — all inside one Execution.
+Copy this module when you need to turn a set of uploaded assets
+into a structured dataset hierarchy with train/test splits.
+
 This module is the datasets layer. Given a catalog with the
 schema set up and some Image asset rows uploaded (Stages 1 and
 2 complete), it creates:
