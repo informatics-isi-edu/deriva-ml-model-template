@@ -1052,6 +1052,1330 @@ git commit -m "<one of>:
 "
 ```
 
+## Task A9: Restructure `load_cifar10.py` into three single-purpose stages
+
+**Why:** The post-A5 `load_cifar10.py` works, but it's organized
+around a single `load_images()` function (~370 lines) that does
+three concerns at once: registers + uploads image assets, adds
+`Image_Classification` features in a second execution, and
+creates the dataset hierarchy in a third execution — with state
+threaded through internal dicts (`filename_to_class`,
+`filename_to_rid`, `train_filenames`, `test_filenames`).
+
+A template user reading the file to learn "how do I build my own
+loader for my own data?" sees the mechanics mixed with the
+DerivaML calls and has to disentangle them. The fix: pull the
+three stages into separate single-purpose modules, each
+demonstrating one DerivaML pattern using only standard routines.
+
+**Design choices (locked in with the user):**
+
+- **Architecture B — stages are independent.** Each stage
+  re-queries the catalog for any state it needs; no in-memory
+  dicts threaded between stages. Stage 2 reads back `Image`
+  rows from the catalog to populate features; Stage 3 reads
+  back `Image` rows and `Image_Classification` feature values
+  to assign dataset members.
+- **Filename-encoded class is load-bearing.** Train images are
+  named `train_<class>_<id>.png`, test images `test_<class>_<id>.png`.
+  Stage 2 recovers the class by splitting on `_` and taking
+  index 1.
+- **Stage 2 re-extracts the archive.** Fully self-contained.
+  The on-disk cache (from `download_cifar10_archive`) makes
+  re-download free; the tarfile extract is ~5 seconds.
+- **The existing `--phase` CLI arg drives which stage(s) run.**
+  Mapping: `schema` → Stage 1; `images` → Stages 2 + 3
+  (default for an end-to-end run); `datasets` → Stage 3
+  alone. (`all` runs Stage 1 + 2 + 3.)
+
+**New file structure:**
+
+```
+src/scripts/
+  _cifar10_source.py       (unchanged from A1-A4)
+  _cifar10_schema.py       (NEW — Stage 1: schema/vocab/types)
+  _cifar10_assets.py       (NEW — Stage 2: upload images + add features)
+  _cifar10_datasets.py     (NEW — Stage 3: create dataset hierarchy)
+  load_cifar10.py          (refactored — orchestrator + CLI only)
+```
+
+**Files:**
+- Create: `src/scripts/_cifar10_schema.py`
+- Create: `src/scripts/_cifar10_assets.py`
+- Create: `src/scripts/_cifar10_datasets.py`
+- Create: `tests/test_cifar10_schema.py`
+- Create: `tests/test_cifar10_assets.py` (sparse — most of stage 2 needs a live catalog)
+- Create: `tests/test_cifar10_datasets.py` (sparse — most of stage 3 needs a live catalog)
+- Modify: `src/scripts/load_cifar10.py` (shrink to ~150-line orchestrator)
+
+This is a coordinated restructure. I'm laying it out as Tasks
+A10-A12 (one per stage), and a final A13 that wraps with the
+end-to-end smoke test and commit.
+
+## Task A10: Stage 1 — `_cifar10_schema.py`
+
+Extract the schema-setup concern from `load_cifar10.py` into
+its own module. This stage creates or connects to a catalog
+and installs the domain model (Image asset table, Image_Class
+vocabulary with 10 terms, Image_Classification feature),
+workflow types, and dataset types. Idempotent.
+
+**Files:**
+- Create: `src/scripts/_cifar10_schema.py`
+- Create: `tests/test_cifar10_schema.py` (smoke test — just verifies module structure / imports work; live behavior tested in A13)
+- Read (don't modify yet): `src/scripts/load_cifar10.py` to lift the existing functions
+
+- [ ] **Step 1: Write a smoke test for the new module**
+
+Create `tests/test_cifar10_schema.py`:
+
+```python
+"""Smoke tests for src/scripts/_cifar10_schema.py.
+
+Most of stage 1's behavior requires a live Deriva catalog, so this
+test file is intentionally sparse — it verifies the module's
+public API exists and is importable. The end-to-end behavior is
+exercised in the load-cifar10 smoke test in Task A13 and in
+Part B of the broader test plan.
+"""
+
+from __future__ import annotations
+
+
+def test_module_exposes_expected_api():
+    from scripts._cifar10_schema import (
+        create_or_connect_catalog,
+        setup_domain_model,
+        setup_workflow_types,
+        setup_dataset_types,
+        apply_annotations,
+        run_schema_phase,
+    )
+
+    # Sanity: each is callable.
+    for fn in (
+        create_or_connect_catalog,
+        setup_domain_model,
+        setup_workflow_types,
+        setup_dataset_types,
+        apply_annotations,
+        run_schema_phase,
+    ):
+        assert callable(fn)
+```
+
+- [ ] **Step 2: Verify the test fails**
+
+```bash
+cd /Users/carl/GitHub/DerivaML/deriva-ml-model-template && uv run python -m pytest tests/test_cifar10_schema.py -v
+```
+Expected: `ModuleNotFoundError: No module named 'scripts._cifar10_schema'`.
+
+- [ ] **Step 3: Create `_cifar10_schema.py` by lifting from `load_cifar10.py`**
+
+Lift these functions from `load_cifar10.py` into the new
+`src/scripts/_cifar10_schema.py`:
+
+- `connect_or_create_catalog` → rename to `create_or_connect_catalog` (it's lifted as-is, just renamed for clarity).
+- `setup_domain_model` (creates Image_Class vocab, Image asset table, Image_Classification feature, registers Image as dataset element type).
+- `setup_workflow_type` → rename to `setup_workflow_types` (plural, more accurate — it creates three types).
+- `setup_dataset_types`.
+
+Plus a new top-level orchestrator:
+
+```python
+def apply_annotations(ml: DerivaML, project_name: str) -> None:
+    """Apply catalog Chaise annotations (navbar branding, page title).
+
+    Args:
+        ml: Connected DerivaML instance.
+        project_name: Used in the navbar brand and head title.
+
+    Example:
+        >>> apply_annotations(ml, "cifar10_demo")
+    """
+    ml.apply_catalog_annotations(
+        navbar_brand_text=f"CIFAR-10 ({project_name})",
+        head_title="CIFAR-10 ML Catalog",
+    )
+
+
+def run_schema_phase(ml: DerivaML, project_name: str) -> None:
+    """Run Stage 1 end-to-end against a connected catalog.
+
+    Sets up the domain model, workflow types, dataset types, and
+    applies Chaise annotations. Idempotent — safe to re-run on a
+    catalog that already has the schema installed.
+
+    Args:
+        ml: Connected DerivaML instance.
+        project_name: Used for catalog annotations.
+
+    Example:
+        >>> ml, _, _ = create_or_connect_catalog(args)
+        >>> run_schema_phase(ml, project_name="cifar10_demo")
+    """
+    logger.info("Setting up domain model...")
+    setup_domain_model(ml)
+    logger.info("Domain model setup complete")
+
+    logger.info("Applying catalog annotations...")
+    apply_annotations(ml, project_name)
+
+    setup_workflow_types(ml)
+    setup_dataset_types(ml)
+```
+
+The module's imports should be exactly what the lifted functions
+need:
+
+```python
+from __future__ import annotations
+
+import argparse
+import logging
+import sys
+from typing import Any
+
+from deriva.core.ermrest_model import Schema
+from deriva_ml import DerivaML
+from deriva_ml.catalog import set_catalog_provenance
+from deriva_ml.core.ermrest import ColumnDefinition
+from deriva_ml.core.enums import BuiltinTypes
+from deriva_ml.schema import create_ml_catalog
+
+from models.cifar10_classes import CIFAR10_CLASSES
+```
+
+(`argparse` is needed because `create_or_connect_catalog` takes
+an `args: argparse.Namespace`. We could refactor to take typed
+args instead, but for this task we lift verbatim and keep the
+existing signature.)
+
+Module-level logger:
+```python
+logger = logging.getLogger(__name__)
+```
+
+Also lift the `DATASET_TYPES` constant from `load_cifar10.py`
+(it's needed by `setup_dataset_types`).
+
+**Don't yet modify `load_cifar10.py`** — keep the existing
+functions there for now. A13 will rewire the orchestrator.
+
+- [ ] **Step 4: Run smoke test**
+
+```bash
+cd /Users/carl/GitHub/DerivaML/deriva-ml-model-template && uv run python -m pytest tests/test_cifar10_schema.py -v
+```
+Expected: PASS.
+
+- [ ] **Step 5: Verify lint and format**
+
+```bash
+cd /Users/carl/GitHub/DerivaML/deriva-ml-model-template && uv run ruff check src/scripts/_cifar10_schema.py tests/test_cifar10_schema.py && uv run ruff format src/scripts/_cifar10_schema.py tests/test_cifar10_schema.py
+```
+Expected: clean.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/scripts/_cifar10_schema.py tests/test_cifar10_schema.py
+git commit -m "feat(scripts): extract CIFAR-10 schema setup into _cifar10_schema
+
+Pulls catalog-creation, domain-model setup, workflow-type setup,
+and dataset-type setup out of load_cifar10.py into a focused
+module. load_cifar10.py will switch to importing from here in
+Task A13."
+```
+
+## Task A11: Stage 2 — `_cifar10_assets.py`
+
+Extract the asset-upload-and-feature-labeling concern into its
+own module. This stage downloads + extracts the CIFAR-10 archive,
+uploads each image as an `Image` asset (inside one Execution
+for provenance), then queries the catalog for the uploaded
+`Image` rows and adds an `Image_Classification` feature row
+for each one (inside a second Execution).
+
+**Critical design point:** Stage 2 must work standalone — it
+must not depend on any in-memory state from a hypothetical
+prior call. Concretely: the labeling sub-stage queries the
+catalog for `Image` rows whose filename starts with `train_` or
+`test_`, decodes the class from the filename (`train_frog_42.png`
+→ `frog`), and adds the feature. This means stage 2 could be
+re-run against any catalog where the schema is set up and at
+least some images exist.
+
+**Files:**
+- Create: `src/scripts/_cifar10_assets.py`
+- Create: `tests/test_cifar10_assets.py` (smoke test — module structure only; behavior tested live in A13)
+
+- [ ] **Step 1: Write a smoke test**
+
+Create `tests/test_cifar10_assets.py`:
+
+```python
+"""Smoke tests for src/scripts/_cifar10_assets.py.
+
+Stage 2 needs a live Deriva catalog for its actual work, so
+this test file is intentionally sparse — it verifies module
+structure. End-to-end behavior is exercised in the
+load-cifar10 smoke test in Task A13.
+"""
+
+from __future__ import annotations
+
+
+def test_module_exposes_expected_api():
+    from scripts._cifar10_assets import (
+        upload_images,
+        add_classification_features,
+        run_assets_phase,
+        class_from_filename,
+    )
+
+    for fn in (
+        upload_images,
+        add_classification_features,
+        run_assets_phase,
+        class_from_filename,
+    ):
+        assert callable(fn)
+
+
+def test_class_from_filename_decodes_train():
+    from scripts._cifar10_assets import class_from_filename
+    assert class_from_filename("train_frog_42.png") == "frog"
+
+
+def test_class_from_filename_decodes_test():
+    from scripts._cifar10_assets import class_from_filename
+    assert class_from_filename("test_cat_19.png") == "cat"
+
+
+def test_class_from_filename_returns_none_for_unknown():
+    from scripts._cifar10_assets import class_from_filename
+    assert class_from_filename("random_image.png") is None
+    assert class_from_filename("train.png") is None
+```
+
+- [ ] **Step 2: Verify the smoke tests fail**
+
+```bash
+cd /Users/carl/GitHub/DerivaML/deriva-ml-model-template && uv run python -m pytest tests/test_cifar10_assets.py -v
+```
+Expected: `ModuleNotFoundError: No module named 'scripts._cifar10_assets'`.
+
+- [ ] **Step 3: Create `_cifar10_assets.py`**
+
+Create `src/scripts/_cifar10_assets.py`:
+
+```python
+"""CIFAR-10 Stage 2: upload images, add classification features.
+
+This module is the assets layer. It downloads + extracts the
+CIFAR-10 archive (via ``_cifar10_source``), uploads each image
+as an ``Image`` asset inside one Execution, then adds an
+``Image_Classification`` feature row for each image inside a
+separate Execution.
+
+Stage 2 is fully self-contained: it does not depend on
+in-memory state from any earlier step. The feature-labeling
+sub-stage recovers each image's class from its filename
+(format: ``train_<class>_<id>.png`` or ``test_<class>_<id>.png``)
+by reading the catalog, so it can be re-run against any
+catalog where stage 1 is complete and some images exist.
+
+Public API:
+    - ``upload_images(ml, archive_path=None, max_images=None,
+        batch_size=500)`` — Stage 2a.
+    - ``add_classification_features(ml)`` — Stage 2b. Reads
+      back uploaded Image rows from the catalog.
+    - ``class_from_filename(filename)`` — pure helper that
+      decodes the class from a CIFAR-10 image filename.
+    - ``run_assets_phase(ml, max_images=None, batch_size=500)``
+      — orchestrator that runs 2a then 2b.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+import shutil
+import tempfile
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+from deriva_ml import DerivaML
+from deriva_ml.core.ermrest import UploadProgress
+from deriva_ml.execution import ExecutionConfiguration
+
+from scripts._cifar10_source import download_cifar10_archive, extract_cifar10_to_png
+
+logger = logging.getLogger(__name__)
+
+CIFAR10_CLASSES_FROZEN = frozenset(
+    {"airplane", "automobile", "bird", "cat", "deer",
+     "dog", "frog", "horse", "ship", "truck"}
+)
+
+
+def class_from_filename(filename: str) -> str | None:
+    """Decode the CIFAR-10 class from an image filename.
+
+    Image filenames produced by Stage 2a have the shape
+    ``train_<class>_<id>.png`` or ``test_<class>_<id>.png``,
+    where ``<class>`` is one of the ten CIFAR-10 class names.
+    This helper extracts the class name; returns ``None`` if
+    the filename doesn't follow the expected pattern or the
+    decoded class isn't a known CIFAR-10 class.
+
+    Args:
+        filename: Image filename (with or without leading path).
+
+    Returns:
+        The class name if the filename decodes cleanly,
+        otherwise ``None``.
+
+    Example:
+        >>> class_from_filename("train_frog_42.png")
+        'frog'
+        >>> class_from_filename("test_cat_19.png")
+        'cat'
+        >>> class_from_filename("random.png") is None
+        True
+    """
+    stem = Path(filename).name
+    parts = stem.split("_")
+    if len(parts) < 3:
+        return None
+    if parts[0] not in ("train", "test"):
+        return None
+    candidate = parts[1]
+    if candidate not in CIFAR10_CLASSES_FROZEN:
+        return None
+    return candidate
+
+
+def _create_upload_progress_callback(
+    total_files: int,
+) -> tuple[Callable[[UploadProgress], None], dict[str, Any]]:
+    """Create a progress callback for upload monitoring.
+
+    Lifted from the previous load_cifar10.py with no behavior change.
+    """
+    state = {"last_reported_percent": -1, "started": False, "callback_count": 0}
+
+    if total_files < 20:
+        report_every_percent = max(1, 100 // total_files) if total_files > 0 else 10
+    elif total_files <= 100:
+        report_every_percent = 10
+    else:
+        report_every_percent = 5
+
+    def progress_callback(progress: UploadProgress) -> None:
+        state["callback_count"] += 1
+        if not state["started"]:
+            state["started"] = True
+            logger.info(
+                f"  [Upload] Starting upload (reporting every ~{report_every_percent}%)..."
+            )
+        match = re.search(r"Uploading file (\d+) of (\d+)", progress.message)
+        if match:
+            current = int(match.group(1))
+            total = int(match.group(2))
+            percent = progress.percent_complete
+            report_percent = int(percent // report_every_percent) * report_every_percent
+            if report_percent > state["last_reported_percent"]:
+                state["last_reported_percent"] = report_percent
+                logger.info(f"  [Upload] {percent:.0f}% ({current}/{total} files)")
+
+    return progress_callback, state
+
+
+def upload_images(
+    ml: DerivaML,
+    archive_path: Path | None = None,
+    max_images: int | None = None,
+    batch_size: int = 500,  # currently unused but reserved for future batching
+) -> dict[str, Any]:
+    """Stage 2a — upload CIFAR-10 images as Image assets.
+
+    Downloads the CIFAR-10 archive (cached after first call),
+    extracts to a temporary directory, and registers + uploads
+    every PNG as an ``Image`` asset inside one Execution. Train
+    images get filenames ``train_<class>_<id>.png``; test images
+    get ``test_<class>_<id>.png``. The class is encoded in the
+    filename so Stage 2b can recover it.
+
+    Args:
+        ml: Connected DerivaML instance with the schema set up.
+        archive_path: Optional path to a pre-downloaded archive.
+            If ``None``, ``download_cifar10_archive()`` is called.
+        max_images: Optional total cap (split evenly between train
+            and test). ``None`` means upload everything (~60K).
+        batch_size: Reserved for future use; currently unused.
+
+    Returns:
+        Stats dict with keys ``total_images``, ``training_images``,
+        ``testing_images``, ``execution_rid``.
+
+    Example:
+        >>> ml = DerivaML(hostname="localhost", catalog_id="42")
+        >>> stats = upload_images(ml, max_images=100)
+        >>> stats["total_images"]
+        100
+    """
+    if archive_path is None:
+        archive_path = download_cifar10_archive()
+
+    workflow = ml.create_workflow(
+        name="CIFAR-10 Asset Upload",
+        workflow_type="CIFAR_Data_Load",
+        description="Upload CIFAR-10 images to the Image asset table",
+    )
+    config = ExecutionConfiguration(workflow=workflow)
+
+    if max_images:
+        train_limit = max_images // 2
+        test_limit = max_images - train_limit
+        logger.info(f"Loading {train_limit} train + {test_limit} test images")
+    else:
+        train_limit = None
+        test_limit = None
+
+    train_count = 0
+    test_count = 0
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        train_dir, test_dir, labels = extract_cifar10_to_png(archive_path, temp_path)
+        logger.info(f"Extracted CIFAR-10 to: {temp_path}")
+
+        with ml.create_execution(config) as exe:
+            logger.info(f"  Upload execution RID: {exe.execution_rid}")
+            execution_rid = exe.execution_rid
+
+            # Clear working dir
+            working_dir = exe.working_dir
+            if working_dir.exists():
+                for item in working_dir.iterdir():
+                    if item.is_dir():
+                        shutil.rmtree(item)
+                    else:
+                        item.unlink()
+
+            # Register train images
+            for img_path in sorted(train_dir.glob("*.png")):
+                image_id = img_path.stem
+                class_name = labels.get(image_id)
+                if class_name is None:
+                    logger.warning(f"No label for {image_id}, skipping")
+                    continue
+                if train_limit and train_count >= train_limit:
+                    break
+                new_filename = f"train_{class_name}_{image_id}.png"
+                exe.asset_file_path(
+                    asset_name="Image",
+                    file_name=str(img_path),
+                    asset_types=["Image"],
+                    copy_file=True,
+                    rename_file=new_filename,
+                )
+                train_count += 1
+                if train_count % 1000 == 0:
+                    logger.info(f"  Registered {train_count} train images...")
+
+            # Register test images
+            for img_path in sorted(test_dir.glob("*.png")):
+                image_id = img_path.stem
+                class_name = labels.get(image_id)
+                if class_name is None:
+                    logger.warning(f"No label for {image_id}, skipping")
+                    continue
+                if test_limit and test_count >= test_limit:
+                    break
+                new_filename = f"test_{class_name}_{image_id}.png"
+                exe.asset_file_path(
+                    asset_name="Image",
+                    file_name=str(img_path),
+                    asset_types=["Image"],
+                    copy_file=True,
+                    rename_file=new_filename,
+                )
+                test_count += 1
+                if test_count % 1000 == 0:
+                    logger.info(f"  Registered {test_count} test images...")
+
+            logger.info(f"  Total: {train_count} train + {test_count} test = {train_count + test_count}")
+
+        # Upload after context exits (matches previous behavior)
+        total_count = train_count + test_count
+        progress_callback, _ = _create_upload_progress_callback(total_count)
+        upload_result = exe.upload_execution_outputs(
+            clean_folder=True, progress_callback=progress_callback
+        )
+
+        logger.info("  [Upload] 100% complete")
+        uploaded_count = sum(len(files) for files in upload_result.values())
+        logger.info(f"  Upload complete: {uploaded_count} files uploaded")
+
+    return {
+        "total_images": train_count + test_count,
+        "training_images": train_count,
+        "testing_images": test_count,
+        "execution_rid": execution_rid,
+    }
+
+
+def add_classification_features(ml: DerivaML) -> dict[str, Any]:
+    """Stage 2b — add Image_Classification feature for every uploaded image.
+
+    Queries the catalog for all ``Image`` asset rows, decodes the
+    class from each filename via :func:`class_from_filename`, and
+    adds an ``Image_Classification`` feature row inside one
+    Execution. Images whose filenames don't decode are logged and
+    skipped.
+
+    This sub-stage is fully self-contained — it reads back from
+    the catalog rather than depending on any in-memory state from
+    Stage 2a. It can be re-run safely against a catalog where the
+    schema is set up and some images have already been uploaded.
+
+    Args:
+        ml: Connected DerivaML instance.
+
+    Returns:
+        Stats dict with keys ``features_added``, ``images_skipped``,
+        ``execution_rid``.
+
+    Example:
+        >>> stats = add_classification_features(ml)
+        >>> stats["features_added"]
+        100
+    """
+    assets = ml.list_assets("Image")
+    logger.info(f"Found {len(assets)} Image assets in catalog")
+
+    workflow = ml.create_workflow(
+        name="CIFAR-10 Classification Labeling",
+        workflow_type="CIFAR_Data_Load",
+        description="Add Image_Classification feature for each Image asset",
+    )
+    config = ExecutionConfiguration(workflow=workflow)
+
+    ImageClassification = ml.feature_record_class("Image", "Image_Classification")
+
+    feature_records = []
+    skipped = 0
+    for asset in assets:
+        class_name = class_from_filename(asset.filename)
+        if class_name is None:
+            logger.warning(f"Skipping {asset.filename}: cannot decode class")
+            skipped += 1
+            continue
+        feature_records.append(
+            ImageClassification(
+                Image=asset.asset_rid,
+                Image_Class=class_name,
+            )
+        )
+
+    with ml.create_execution(config) as exe:
+        logger.info(f"  Labeling execution RID: {exe.execution_rid}")
+        execution_rid = exe.execution_rid
+        logger.info(f"  Adding {len(feature_records)} classification labels...")
+        exe.add_features(feature_records)
+
+    exe.upload_execution_outputs(clean_folder=True)
+    logger.info(f"  Added {len(feature_records)} Image_Classification features")
+
+    return {
+        "features_added": len(feature_records),
+        "images_skipped": skipped,
+        "execution_rid": execution_rid,
+    }
+
+
+def run_assets_phase(
+    ml: DerivaML,
+    archive_path: Path | None = None,
+    max_images: int | None = None,
+    batch_size: int = 500,
+) -> dict[str, Any]:
+    """Stage 2 orchestrator — upload images then add features.
+
+    Args:
+        ml: Connected DerivaML instance.
+        archive_path: Optional pre-downloaded archive.
+        max_images: Optional total image cap.
+        batch_size: Reserved.
+
+    Returns:
+        Merged stats dict from upload_images + add_classification_features.
+
+    Example:
+        >>> stats = run_assets_phase(ml, max_images=100)
+        >>> stats["features_added"] == stats["total_images"]
+        True
+    """
+    upload_stats = upload_images(
+        ml, archive_path=archive_path, max_images=max_images, batch_size=batch_size
+    )
+    feature_stats = add_classification_features(ml)
+    return {**upload_stats, **feature_stats}
+```
+
+- [ ] **Step 4: Run smoke tests**
+
+```bash
+cd /Users/carl/GitHub/DerivaML/deriva-ml-model-template && uv run python -m pytest tests/test_cifar10_assets.py -v
+```
+Expected: 4/4 pass.
+
+- [ ] **Step 5: Verify lint + format**
+
+```bash
+cd /Users/carl/GitHub/DerivaML/deriva-ml-model-template && uv run ruff check src/scripts/_cifar10_assets.py tests/test_cifar10_assets.py && uv run ruff format src/scripts/_cifar10_assets.py tests/test_cifar10_assets.py
+```
+Expected: clean.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/scripts/_cifar10_assets.py tests/test_cifar10_assets.py
+git commit -m "feat(scripts): extract CIFAR-10 asset upload + labeling into _cifar10_assets
+
+Stage 2 is self-contained: upload_images writes Image rows in one
+Execution; add_classification_features re-queries the catalog and
+writes Image_Classification feature values in a second Execution.
+No in-memory state crosses the sub-stage boundary."
+```
+
+## Task A12: Stage 3 — `_cifar10_datasets.py`
+
+Extract the dataset-hierarchy creation into its own module.
+This stage queries the catalog for all `Image` rows + their
+`Image_Classification` feature values, then creates the full
+dataset hierarchy (`Complete`, `Split`, `Training`, `Testing`,
+`Small_Split`, `Small_Training`, `Small_Testing`, plus the
+labeled splits via `split_dataset()`).
+
+Stage 3 is fully self-contained — like stage 2, it reads back
+from the catalog rather than receiving in-memory state.
+
+**Files:**
+- Create: `src/scripts/_cifar10_datasets.py`
+- Create: `tests/test_cifar10_datasets.py` (smoke test)
+
+- [ ] **Step 1: Write a smoke test**
+
+Create `tests/test_cifar10_datasets.py`:
+
+```python
+"""Smoke tests for src/scripts/_cifar10_datasets.py.
+
+Stage 3 needs a live Deriva catalog for its actual work, so
+this test file is intentionally sparse — it verifies module
+structure. End-to-end behavior is exercised in the
+load-cifar10 smoke test in Task A13.
+"""
+
+from __future__ import annotations
+
+
+def test_module_exposes_expected_api():
+    from scripts._cifar10_datasets import (
+        create_dataset_hierarchy,
+        run_datasets_phase,
+    )
+
+    for fn in (create_dataset_hierarchy, run_datasets_phase):
+        assert callable(fn)
+```
+
+- [ ] **Step 2: Verify the smoke test fails**
+
+```bash
+cd /Users/carl/GitHub/DerivaML/deriva-ml-model-template && uv run python -m pytest tests/test_cifar10_datasets.py -v
+```
+Expected: `ModuleNotFoundError`.
+
+- [ ] **Step 3: Create `_cifar10_datasets.py`**
+
+Create `src/scripts/_cifar10_datasets.py`:
+
+```python
+"""CIFAR-10 Stage 3: create the dataset hierarchy.
+
+This module is the datasets layer. Given a catalog with the
+schema set up and some Image asset rows uploaded (Stages 1 and
+2 complete), it creates:
+
+    - ``Complete`` (Labeled) — all images.
+    - ``Split`` — parent of Training and Testing.
+    - ``Training`` (Labeled) — train-prefix images.
+    - ``Testing`` (Labeled) — test-prefix images.
+    - ``Small_Split`` — parent of Small_Training and Small_Testing.
+    - ``Small_Training`` (Labeled) — 500 random train-prefix images.
+    - ``Small_Testing`` (Labeled) — 500 random test-prefix images.
+    - ``Labeled_Split`` (and Training/Testing children) — 80/20
+      split of training images via ``split_dataset()``.
+    - ``Small_Labeled_Split`` (and Training/Testing children) —
+      400/100 split for small-scale work.
+
+Stage 3 reads back ``Image`` rows from the catalog and uses
+each filename's ``train_`` or ``test_`` prefix to decide which
+dataset each image belongs to. No in-memory state from Stage 2
+is needed.
+
+Public API:
+    - ``create_dataset_hierarchy(ml, batch_size=500)`` — does
+      all the work in one Execution.
+    - ``run_datasets_phase(ml, batch_size=500)`` — orchestrator
+      alias for symmetry with run_schema_phase / run_assets_phase.
+"""
+
+from __future__ import annotations
+
+import logging
+import random
+from typing import Any
+
+from deriva_ml import DerivaML
+from deriva_ml.dataset.split import split_dataset
+from deriva_ml.execution import ExecutionConfiguration
+
+logger = logging.getLogger(__name__)
+
+SMALL_TRAIN_SIZE = 500
+SMALL_TEST_SIZE = 500
+
+
+def create_dataset_hierarchy(
+    ml: DerivaML, batch_size: int = 500
+) -> dict[str, str]:
+    """Create the full CIFAR-10 dataset hierarchy.
+
+    Queries the catalog for all ``Image`` asset rows, splits them
+    by filename prefix (``train_`` vs ``test_``), creates the
+    parent and child dataset rows, assigns members in batches,
+    and finally creates the labeled-split families via
+    ``split_dataset()``.
+
+    All work happens inside one Execution for clean provenance.
+
+    Args:
+        ml: Connected DerivaML instance.
+        batch_size: Batch size for ``add_dataset_members`` calls.
+
+    Returns:
+        Mapping of dataset name to its RID. Keys include
+        ``complete``, ``split``, ``training``, ``testing``,
+        ``small_split``, ``small_training``, ``small_testing``,
+        ``labeled_split``, ``labeled_training``,
+        ``labeled_testing``, ``small_labeled_split``,
+        ``small_labeled_training``, ``small_labeled_testing``.
+
+    Example:
+        >>> datasets = create_dataset_hierarchy(ml)
+        >>> datasets["training"]
+        'X-12345-NXYZ'
+    """
+    assets = ml.list_assets("Image")
+    logger.info(f"Found {len(assets)} Image assets to organize")
+
+    train_rids = [a.asset_rid for a in assets if a.filename.startswith("train_")]
+    test_rids = [a.asset_rid for a in assets if a.filename.startswith("test_")]
+    all_rids = train_rids + test_rids
+    logger.info(f"  Train: {len(train_rids)}, Test: {len(test_rids)}")
+
+    workflow = ml.create_workflow(
+        name="CIFAR-10 Dataset Hierarchy",
+        workflow_type="CIFAR_Data_Load",
+        description="Create CIFAR-10 dataset hierarchy from uploaded images",
+    )
+    config = ExecutionConfiguration(workflow=workflow)
+
+    datasets: dict[str, str] = {}
+
+    with ml.create_execution(config) as exe:
+        logger.info(f"  Datasets execution RID: {exe.execution_rid}")
+
+        # Parent + child datasets
+        complete = exe.create_dataset(
+            description="Complete CIFAR-10 dataset with all labeled images",
+            dataset_types=["Complete", "Labeled"],
+        )
+        datasets["complete"] = complete.dataset_rid
+
+        split = exe.create_dataset(
+            description="CIFAR-10 dataset split into training and testing subsets",
+            dataset_types=["Split"],
+        )
+        datasets["split"] = split.dataset_rid
+
+        training = exe.create_dataset(
+            description="CIFAR-10 training set with 50,000 labeled images",
+            dataset_types=["Training", "Labeled"],
+        )
+        datasets["training"] = training.dataset_rid
+
+        testing = exe.create_dataset(
+            description="CIFAR-10 testing set with 10,000 labeled images",
+            dataset_types=["Testing", "Labeled"],
+        )
+        datasets["testing"] = testing.dataset_rid
+
+        split.add_dataset_members(
+            [training.dataset_rid, testing.dataset_rid], validate=False
+        )
+
+        small_split = exe.create_dataset(
+            description="Small CIFAR-10 dataset split with 1,000 randomly selected images for testing",
+            dataset_types=["Split"],
+        )
+        datasets["small_split"] = small_split.dataset_rid
+
+        small_training = exe.create_dataset(
+            description="Small CIFAR-10 training set with 500 labeled images for quick testing",
+            dataset_types=["Training", "Labeled"],
+        )
+        datasets["small_training"] = small_training.dataset_rid
+
+        small_testing = exe.create_dataset(
+            description="Small CIFAR-10 testing set with 500 labeled images for quick testing",
+            dataset_types=["Testing", "Labeled"],
+        )
+        datasets["small_testing"] = small_testing.dataset_rid
+
+        small_split.add_dataset_members(
+            [small_training.dataset_rid, small_testing.dataset_rid], validate=False
+        )
+
+    exe.upload_execution_outputs(clean_folder=True)
+
+    # Member assignment runs against the catalog directly
+    # (the Execution above has already been committed)
+    logger.info("Assigning Image RIDs to datasets...")
+
+    def _batched_add(ds_rid: str, rids: list[str], label: str) -> None:
+        ds = ml.lookup_dataset(ds_rid)
+        added = 0
+        for i in range(0, len(rids), batch_size):
+            batch = rids[i : i + batch_size]
+            ds.add_dataset_members({"Image": batch}, validate=False)
+            added += len(batch)
+        logger.info(f"  {label}: added {added}/{len(rids)} images")
+
+    if all_rids:
+        _batched_add(datasets["complete"], all_rids, "Complete")
+    if train_rids:
+        _batched_add(datasets["training"], train_rids, "Training")
+    if test_rids:
+        _batched_add(datasets["testing"], test_rids, "Testing")
+
+    # Small splits — random sample if enough; else use all
+    if train_rids:
+        sample = (
+            random.sample(train_rids, SMALL_TRAIN_SIZE)
+            if len(train_rids) >= SMALL_TRAIN_SIZE
+            else train_rids
+        )
+        _batched_add(datasets["small_training"], sample, "Small_Training")
+    if test_rids:
+        sample = (
+            random.sample(test_rids, SMALL_TEST_SIZE)
+            if len(test_rids) >= SMALL_TEST_SIZE
+            else test_rids
+        )
+        _batched_add(datasets["small_testing"], sample, "Small_Testing")
+
+    # Labeled splits derived from Training
+    if train_rids:
+        logger.info("Creating Labeled_Split (80/20 of training)...")
+        labeled = split_dataset(
+            ml,
+            datasets["training"],
+            test_size=0.2,
+            seed=42,
+            training_types=["Labeled"],
+            testing_types=["Labeled"],
+            element_table="Image",
+            split_description="CIFAR-10 labeled split: 80/20 from training images",
+        )
+        datasets["labeled_split"] = labeled.split.rid
+        datasets["labeled_training"] = labeled.training.rid
+        datasets["labeled_testing"] = labeled.testing.rid
+
+        logger.info("Creating Small_Labeled_Split...")
+        if len(train_rids) >= 500:
+            small_labeled = split_dataset(
+                ml,
+                datasets["training"],
+                test_size=100,
+                train_size=400,
+                seed=42,
+                training_types=["Labeled"],
+                testing_types=["Labeled"],
+                element_table="Image",
+                split_description="Small CIFAR-10 labeled split: 400/100 from training",
+            )
+        else:
+            small_labeled = split_dataset(
+                ml,
+                datasets["training"],
+                test_size=0.2,
+                seed=123,
+                training_types=["Labeled"],
+                testing_types=["Labeled"],
+                element_table="Image",
+                split_description="Small CIFAR-10 labeled split from training",
+            )
+        datasets["small_labeled_split"] = small_labeled.split.rid
+        datasets["small_labeled_training"] = small_labeled.training.rid
+        datasets["small_labeled_testing"] = small_labeled.testing.rid
+
+    return datasets
+
+
+def run_datasets_phase(ml: DerivaML, batch_size: int = 500) -> dict[str, str]:
+    """Stage 3 orchestrator alias.
+
+    Args:
+        ml: Connected DerivaML instance.
+        batch_size: Batch size for dataset-member additions.
+
+    Returns:
+        Mapping of dataset name to RID (see create_dataset_hierarchy).
+    """
+    return create_dataset_hierarchy(ml, batch_size=batch_size)
+```
+
+- [ ] **Step 4: Run smoke test**
+
+```bash
+cd /Users/carl/GitHub/DerivaML/deriva-ml-model-template && uv run python -m pytest tests/test_cifar10_datasets.py -v
+```
+Expected: PASS.
+
+- [ ] **Step 5: Verify lint + format**
+
+```bash
+cd /Users/carl/GitHub/DerivaML/deriva-ml-model-template && uv run ruff check src/scripts/_cifar10_datasets.py tests/test_cifar10_datasets.py && uv run ruff format src/scripts/_cifar10_datasets.py tests/test_cifar10_datasets.py
+```
+Expected: clean.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/scripts/_cifar10_datasets.py tests/test_cifar10_datasets.py
+git commit -m "feat(scripts): extract CIFAR-10 dataset hierarchy into _cifar10_datasets
+
+Stage 3 reads back Image rows from the catalog and uses each
+filename's prefix to assign membership. No in-memory state from
+Stage 2 is needed. Labeled splits are derived via
+deriva-ml's split_dataset()."
+```
+
+## Task A13: Refactor `load_cifar10.py` into a thin orchestrator + live smoke
+
+Now that Stages 1, 2, 3 each live in their own module, shrink
+`load_cifar10.py` into a CLI + orchestrator that imports from
+them. Run the live end-to-end smoke test against localhost to
+confirm the refactor preserves behavior.
+
+**Files:**
+- Modify: `src/scripts/load_cifar10.py`
+
+- [ ] **Step 1: Replace `load_cifar10.py` with a thin orchestrator**
+
+Replace the entire content of `src/scripts/load_cifar10.py`
+with the orchestrator below (about 150 lines including
+docstrings and CLI). This deletes all the lifted functions
+(they live in the new modules now).
+
+```python
+#!/usr/bin/env python3
+"""CIFAR-10 Dataset Loader for DerivaML.
+
+Orchestrator + CLI for the three-stage CIFAR-10 loader. The
+actual work lives in three single-purpose modules:
+
+    - ``_cifar10_schema``: create catalog + install schema.
+    - ``_cifar10_assets``: upload images + add classification
+      features.
+    - ``_cifar10_datasets``: create the dataset hierarchy.
+
+This script wires them together for the common end-to-end case
+and exposes the same ``--phase`` CLI for running a single
+stage when resuming a partial load.
+
+Prerequisites:
+    Deriva Authentication: ``deriva-globus-auth-utils login --host <hostname>``
+
+Usage:
+    Full end-to-end run::
+
+        load-cifar10 --hostname localhost --create-catalog cifar10_demo --num-images 500
+
+    Load into an existing catalog::
+
+        load-cifar10 --hostname ml.derivacloud.org --catalog-id 99
+
+    Run a single stage (resume after partial failure)::
+
+        load-cifar10 --hostname localhost --catalog-id 99 --phase schema
+        load-cifar10 --hostname localhost --catalog-id 99 --phase images
+        load-cifar10 --hostname localhost --catalog-id 99 --phase datasets
+
+    Dry run (schema only, no image download)::
+
+        load-cifar10 --hostname localhost --create-catalog test --dry-run
+
+    Show Chaise URLs in the summary::
+
+        load-cifar10 --hostname localhost --create-catalog demo --show-urls
+"""
+
+from __future__ import annotations
+
+import argparse
+import logging
+import sys
+from typing import Any
+
+from scripts._cifar10_schema import (
+    create_or_connect_catalog,
+    run_schema_phase,
+)
+from scripts._cifar10_assets import run_assets_phase
+from scripts._cifar10_datasets import run_datasets_phase
+
+# Logging configuration -------------------------------------------------
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+_handler = logging.StreamHandler(sys.stderr)
+_handler.setLevel(logging.INFO)
+_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+logger.addHandler(_handler)
+logger.propagate = False
+
+_deriva_ml_logger = logging.getLogger("deriva_ml")
+_deriva_ml_logger.setLevel(logging.INFO)
+_deriva_ml_logger.addHandler(_handler)
+_deriva_ml_logger.propagate = False
+
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments.
+
+    Returns:
+        Parsed arguments. See ``--help`` for the full list.
+    """
+    parser = argparse.ArgumentParser(
+        description="Load CIFAR-10 dataset into a DerivaML catalog",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--hostname", required=True)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--catalog-id")
+    group.add_argument("--create-catalog", metavar="PROJECT_NAME")
+    parser.add_argument("--domain-schema")
+    parser.add_argument("--batch-size", type=int, default=500)
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--num-images", type=int, default=None, metavar="N")
+    parser.add_argument("--show-urls", action="store_true")
+    parser.add_argument(
+        "--phase",
+        choices=["all", "schema", "images", "datasets"],
+        default="all",
+        help=(
+            "Run a single phase. 'schema' is idempotent; 'images' uploads + "
+            "features; 'datasets' creates the hierarchy. Default: 'all'."
+        ),
+    )
+    return parser.parse_args()
+
+
+def main(args: argparse.Namespace | None = None) -> int:
+    """Entry point. Routes to one or more stages based on ``--phase``."""
+    if args is None:
+        args = parse_args()
+
+    phase = getattr(args, "phase", "all")
+    ml, catalog_id, domain_schema = create_or_connect_catalog(args)
+    project_name = args.create_catalog if args.create_catalog else domain_schema
+
+    asset_stats: dict[str, Any] = {}
+    datasets: dict[str, str] = {}
+
+    if phase in ("all", "schema"):
+        run_schema_phase(ml, project_name)
+        if phase == "schema":
+            _print_done("SCHEMA PHASE COMPLETE",
+                        "Re-run with --phase images or --phase datasets.")
+            return 0
+
+    if phase in ("all", "images") and not args.dry_run:
+        asset_stats = run_assets_phase(
+            ml, max_images=args.num_images, batch_size=args.batch_size
+        )
+
+    if phase in ("all", "images", "datasets") and not args.dry_run:
+        datasets = run_datasets_phase(ml, batch_size=args.batch_size)
+
+    _print_summary(args, catalog_id, domain_schema, datasets, asset_stats, ml)
+    return 0
+
+
+def _print_done(title: str, hint: str) -> None:
+    print("\n" + "=" * 60)
+    print(f"  {title}")
+    print(f"  {hint}")
+    print("=" * 60 + "\n")
+
+
+def _print_summary(
+    args: argparse.Namespace,
+    catalog_id: str | int,
+    domain_schema: str,
+    datasets: dict[str, str],
+    asset_stats: dict[str, Any],
+    ml,
+) -> None:
+    """Print the final summary banner."""
+    dataset_urls: dict[str, str] = {}
+    if args.show_urls and datasets:
+        logger.info("Fetching Chaise URLs for datasets...")
+        for name, rid in datasets.items():
+            try:
+                dataset_urls[name] = ml.cite(rid, current=True)
+                logger.info(f"  {name}: {dataset_urls[name]}")
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"  Failed to get URL for {name}: {e}")
+                dataset_urls[name] = ""
+
+    print("\n" + "=" * 60)
+    print("  CIFAR-10 LOADING COMPLETE")
+    print("=" * 60)
+    print(f"  Hostname:      {args.hostname}")
+    print(f"  Catalog ID:    {catalog_id}")
+    print(f"  Schema:        {domain_schema}")
+    print("")
+    if datasets:
+        print("  Datasets created:")
+        dataset_display = [
+            ("Complete (Labeled)", "complete"),
+            ("Split", "split"),
+            ("Training (Labeled)", "training"),
+            ("Testing (Labeled)", "testing"),
+            ("Small_Split", "small_split"),
+            ("Small_Training (Labeled)", "small_training"),
+            ("Small_Testing (Labeled)", "small_testing"),
+            ("Labeled_Split", "labeled_split"),
+            ("Labeled_Training", "labeled_training"),
+            ("Labeled_Testing", "labeled_testing"),
+            ("Small_Labeled_Split", "small_labeled_split"),
+            ("Small_Labeled_Training", "small_labeled_training"),
+            ("Small_Labeled_Testing", "small_labeled_testing"),
+        ]
+        for display_name, key in dataset_display:
+            if key in datasets:
+                rid = datasets[key]
+                if args.show_urls and dataset_urls:
+                    print(f"    - {display_name}: {rid}")
+                    print(f"      URL: {dataset_urls.get(key, 'N/A')}")
+                else:
+                    print(f"    - {display_name}: {rid}")
+    if asset_stats:
+        print("")
+        print(f"  Images loaded: {asset_stats.get('total_images', 'n/a')}")
+        print(f"    - Training: {asset_stats.get('training_images', 'n/a')}")
+        print(f"    - Testing:  {asset_stats.get('testing_images', 'n/a')}")
+        print(f"  Features added: {asset_stats.get('features_added', 'n/a')}")
+    if not args.show_urls:
+        print("")
+        print("  Tip: Use --show-urls to display Chaise URLs for each dataset")
+    print("=" * 60 + "\n")
+
+
+if __name__ == "__main__":
+    sys.exit(main(parse_args()))
+```
+
+- [ ] **Step 2: Run all tests + lint**
+
+```bash
+cd /Users/carl/GitHub/DerivaML/deriva-ml-model-template && uv run python -m pytest tests/ -v && uv run ruff check src tests && uv run ruff format src tests
+```
+Expected: all tests pass (8/8: 4 cifar10_source, 1 cifar10_schema, 4 cifar10_assets, 1 cifar10_datasets, 1 configs_load); lint clean.
+
+- [ ] **Step 3: Live end-to-end smoke test**
+
+```bash
+cd /Users/carl/GitHub/DerivaML/deriva-ml-model-template && uv run load-cifar10 --hostname localhost --create-catalog e2e-precheck-restructure --num-images 50 --show-urls
+```
+
+Expected:
+- Cached archive used (`Using cached CIFAR-10 archive at ...`).
+- Stage 1: schema + vocabulary + workflow types + dataset types installed (idempotent — all "created" the first time).
+- Stage 2a: 25 train + 25 test images uploaded.
+- Stage 2b: 50 Image_Classification features added.
+- Stage 3: dataset hierarchy created with labeled splits.
+- Summary shows non-zero counts, Chaise URLs present.
+
+If anything fails: capture full output and report BLOCKED.
+
+- [ ] **Step 4: Phase-specific smoke (sanity check the --phase routing)**
+
+Pick a different catalog name and run each phase individually to
+prove the orchestrator wiring works:
+
+```bash
+cd /Users/carl/GitHub/DerivaML/deriva-ml-model-template && uv run load-cifar10 --hostname localhost --create-catalog e2e-precheck-phases --phase schema
+```
+Expected: only schema runs; clean exit; "SCHEMA PHASE COMPLETE" banner.
+
+Get the catalog_id printed in the banner, then:
+
+```bash
+cd /Users/carl/GitHub/DerivaML/deriva-ml-model-template && uv run load-cifar10 --hostname localhost --catalog-id <id> --phase images --num-images 30
+```
+Expected: stages 2a + 2b run; 15 train + 15 test uploaded; 30 features added.
+
+Then:
+
+```bash
+cd /Users/carl/GitHub/DerivaML/deriva-ml-model-template && uv run load-cifar10 --hostname localhost --catalog-id <id> --phase datasets
+```
+Expected: stage 3 runs; dataset hierarchy created from the 30 images already in catalog.
+
+Each `--phase` boundary demonstrates the stages working independently against shared catalog state, which is the architecture's whole point.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/scripts/load_cifar10.py
+git commit -m "refactor(scripts): load_cifar10.py becomes a thin orchestrator
+
+Three single-purpose modules (_cifar10_schema, _cifar10_assets,
+_cifar10_datasets) now own one DerivaML pattern each. The
+orchestrator wires them together for the common end-to-end case
+and exposes --phase for resuming individual stages.
+
+Stages are fully independent: each one reads back state from the
+catalog rather than relying on in-memory dicts. This makes the
+code work as a template — a user copying the structure for their
+own data only needs to study one stage at a time."
+```
+
 ## Task A8: Phase 0 wrap — push to origin (with user confirmation)
 
 - [ ] **Step 1: Show summary of Phase 0 commits**
