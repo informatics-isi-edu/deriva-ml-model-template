@@ -131,7 +131,7 @@ def main(args: argparse.Namespace | None = None) -> int:
             ml, max_images=args.num_images, batch_size=args.batch_size
         )
 
-    if phase in ("all", "images", "datasets") and not args.dry_run:
+    if phase in ("all", "datasets") and not args.dry_run:
         datasets = run_datasets_phase(ml, batch_size=args.batch_size)
 
     _print_summary(args, catalog_id, domain_schema, datasets, asset_stats, ml)
