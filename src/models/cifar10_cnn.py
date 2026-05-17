@@ -221,7 +221,6 @@ def record_test_predictions(
         csv_file = execution.asset_file_path(
             MLAsset.execution_asset,
             "prediction_probabilities.csv",
-            ExecAssetType.output_file,
             description="Per-image predicted class and probability distributions over all CIFAR-10 classes",
         )
         fieldnames = ["Image_RID", "Predicted_Class", "Confidence"] + [
@@ -524,7 +523,6 @@ def cifar10_cnn(
         results_file = execution.asset_file_path(
             MLAsset.execution_asset,
             "evaluation_results.txt",
-            ExecAssetType.output_file,
             description="Test set evaluation summary: loss, accuracy, and configuration",
         )
         with results_file.open("w") as f:
@@ -547,7 +545,6 @@ def cifar10_cnn(
         status_file = execution.asset_file_path(
             MLAsset.execution_asset,
             "training_status.txt",
-            ExecAssetType.output_file,
             description="Training status: indicates no training data was available",
         )
         with status_file.open("w") as f:
@@ -674,7 +671,6 @@ def cifar10_cnn(
     log_file = execution.asset_file_path(
         MLAsset.execution_asset,
         "training_log.txt",
-        ExecAssetType.output_file,
         description="Per-epoch training log: loss, accuracy, and architecture details",
     )
     with log_file.open("w") as f:
