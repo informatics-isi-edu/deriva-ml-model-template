@@ -388,6 +388,26 @@ something that signals lazy iteration (`iter_feature_values`,
 
 ### E4. Schema-mutating methods don't invalidate the path-builder cache
 
+> **Status: NOT NEEDED NOW — closed without code change.** Closed
+> 2026-05-17 after auditing every ``getPathBuilder()`` consumer
+> in ``deriva-ml/src/``. The load-bearing failure (fresh-catalog
+> upload flow) was fixed upstream in deriva-py's
+> ``BagCatalogLoader._ensure_path_builder()`` (calls
+> ``getPathBuilder(refresh=True)`` on first build). Verified by
+> deriva-ml PR #161, pinned by the unit tests in
+> ``tests/execution/test_bag_loader_path_builder_refresh.py``.
+> Every remaining ``getPathBuilder()`` consumer in deriva-ml
+> reads from tables that exist at catalog creation time
+> (``deriva-ml`` schema, ``public.ERMrest_RID_Lease``) — none of
+> them are vulnerable to in-process schema mutations because the
+> tables they touch don't change after ``create_ml_schema``. An
+> invalidation hook on ``create_asset`` / ``create_vocabulary`` /
+> etc. would be defensive code with no demonstrable consumer.
+> **If a future deriva-ml caller is added that mutates the
+> catalog schema and then queries the path-builder for the
+> newly-added table in the same process, E4 should be revisited
+> at that point.**
+
 The bag-loader stale-path-builder bug (filed separately as
 `docs/bugs/2026-05-16-bag-loader-stale-path-builder.md`,
 fix landed in deriva-py `de19aaf1`) has its **root cause** in
@@ -411,7 +431,58 @@ def create_asset(self, ...):
 With that in place, the deriva-py defensive `refresh=True` would
 still be correct but redundant.
 
+**Audit conclusion (2026-05-17):** Of the 9
+``getPathBuilder()`` call sites in ``deriva_ml/src/``:
+
+- 3 are in ``catalog/clone_via_bag.py`` /
+  ``catalog/localize.py`` / ``schema/create_schema.py`` —
+  these run on freshly-connected catalogs (no prior schema
+  mutations in the same process to be stale relative to).
+- 3 are in ``execution/state_machine.py`` — they write to
+  the ``Execution`` table (a ``deriva-ml`` schema table
+  created at ``create_ml_schema`` time, never mutated after).
+- 1 is in ``execution/rid_lease.py`` — reads from
+  ``public.ERMrest_RID_Lease`` (system table, present from
+  catalog creation).
+- 1 is in ``dataset/bag_builder.py`` — reads from
+  ``Dataset_Dataset`` (deriva-ml schema, present from
+  ``create_ml_schema``).
+- 1 is in ``core/mixins/path_builder.py`` — the public
+  ``pathBuilder()`` accessor; the user is responsible for
+  freshness here, and ``DerivaML.refresh_schema()`` is the
+  documented escape hatch.
+
+The bag-loader path was the only load-bearing consumer that
+hit the stale-cache scenario, and that's fixed upstream.
+
 ### E5. Bootstrapping ships an opinionated vocab term set
+
+> **Status: FIXED.** Resolved by deriva-ml PR #164 (released in
+> v1.36.5, 2026-05-17). Four domain-specific terms removed from
+> the ``Workflow_Type`` seeds in ``initialize_ml_schema``:
+> ``VGG19``, ``RETFound``, ``Multimodal`` (specific architectures /
+> model / research-area), plus ``Embedding`` (its description
+> named "foundation models" — also project-orientation).
+>
+> The remaining 9 ``Workflow_Type`` seeds describe genuine
+> cross-domain workflow shapes: ``Training``, ``Testing``,
+> ``Prediction``, ``Feature_Creation``, ``Visualization``,
+> ``Analysis``, ``Ingest``, ``Data_Cleaning``,
+> ``Dataset_Management``.
+>
+> ``initialize_ml_schema``'s docstring now records a
+> "Term-selection principle" that future contributors land on
+> before proposing a new term: every seeded term must describe a
+> platform-level concept, not a domain-specific one. The new
+> regression test ``tests/schema/test_seeded_vocab_terms.py``
+> (8 tests) pins both what stays seeded and what must not be.
+> A future PR that re-adds ``VGG19``/``RETFound``/``Multimodal``
+> fails the regression test and gets forced to either
+> demonstrate platform-level relevance or move the term to a
+> per-project initializer.
+>
+> Existing-catalog impact: none. ``_ensure_terms`` is
+> skip-if-exists; already-initialized catalogs keep their terms.
 
 A fresh catalog gets:
 - 17 `Workflow_Type` terms including `RETFound`, `VGG19`,
