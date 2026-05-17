@@ -1079,6 +1079,27 @@ are usable."
 
 ### B4. New skill: `clone-catalog-slice` (deferred)
 
+> **Status: FIXED — closed 2026-05-17.** Addressed by the
+> [`setup-ml-catalog` skill](https://github.com/informatics-isi-edu/deriva-ml-skills/blob/main/skills/setup-ml-catalog/SKILL.md)
+> in `deriva-ml-skills`, merged as
+> [PR #16](https://github.com/informatics-isi-edu/deriva-ml-skills/pull/16).
+> The skill covers the same workflow this finding requested (clone
+> a slice of an existing catalog into a fresh destination) plus the
+> sibling "create from scratch via `create_ml_catalog` + a phased
+> loader" path. Branch 2 of the new skill walks the three-step
+> sequencing the finding flagged: create the destination catalog,
+> install the deriva-ml schema, then call `clone_via_bag` with
+> anchors that define the slice. The skill teaches anchor assembly
+> as its own decision point (pick your roots — Dataset, Subject,
+> Experiment, Workflow) and explains why the upstream
+> `clone_via_bag` defaults produce a working ML catalog with
+> bounded scope (the `terminal_tables` asymmetry follows outbound
+> FKs for full provenance, blocks inbound FKs to prevent cross-
+> anchor over-fetch). Naming chose `setup-ml-catalog` over
+> `clone-catalog-slice` so the skill could cover both bootstrap
+> paths (from-scratch and from-slice) under one user-facing entry
+> point.
+
 This was flagged in the journal but not yet captured in this
 findings doc.
 
