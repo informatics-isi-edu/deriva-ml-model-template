@@ -58,54 +58,58 @@ uv sync --group=pytorch
 
 ### 4. Set Up Claude Code (Optional)
 
-If using [Claude Code](https://claude.ai/code), install the DerivaML MCP server and skills plugin for catalog tools and guided workflows.
+If using [Claude Code](https://claude.ai/code), connect to a DerivaML MCP server and install the two skills plugins (`deriva` for generic catalog operations, `deriva-ml` for ML workflows).
 
-**Install the MCP server** (provides catalog tools, dataset management, execution tracking):
+**Connect the MCP server.** The MCP server stack is split into two pieces: [`deriva-mcp-core`](https://github.com/informatics-isi-edu/deriva-mcp-core) (catalog/schema/vocabulary tools) plus the [`deriva-ml-mcp`](https://github.com/informatics-isi-edu/deriva-ml-mcp) plugin (DerivaML domain tools — datasets, executions, features, assets). When you stand up a [deriva-docker](https://github.com/informatics-isi-edu/deriva-docker) localhost stack, both ship together as the `deriva-mcp-test` service at `https://localhost/mcp` over HTTP with OAuth.
+
+Register the connection with Claude Code:
 
 ```bash
-# Using Docker (recommended)
-docker pull ghcr.io/informatics-isi-edu/deriva-mcp:latest
+claude mcp add -t http dev-localhost https://localhost/mcp \
+    --client-id deriva-mcp --callback-port 8080
 ```
 
-Add to `~/.mcp.json`:
+Verify with `claude mcp list` — the entry should show `dev-localhost: https://localhost/mcp (HTTP) - ✓ Connected`. The `deriva-mcp` client-id is pre-registered with the Credenza auth service in the deriva-docker deployment; `--callback-port 8080` is where Claude listens for the OAuth callback.
+
+**Trust the dev-localhost CA.** Claude Code's MCP HTTP transport runs in Node.js, which has its own CA bundle and won't trust the deriva-docker self-signed cert by default. Without this step, the connection fails with a TLS error:
+
+```bash
+# Extract the CA from the running container
+mkdir -p ~/.config/deriva
+docker cp deriva-mcp-test:/usr/local/share/ca-certificates/deriva-dev-ca.crt \
+    ~/.config/deriva/deriva-dev-ca.crt
+```
+
+Then add to your workspace's `.claude/settings.local.json`:
 
 ```json
 {
-  "mcpServers": {
-    "deriva": {
-      "type": "stdio",
-      "command": "/bin/sh",
-      "args": [
-        "-c",
-        "docker run -i --rm --add-host localhost:host-gateway -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-mcp:latest"
-      ]
-    }
+  "env": {
+    "NODE_EXTRA_CA_CERTS": "/Users/<you>/.config/deriva/deriva-dev-ca.crt"
   }
 }
 ```
 
-**Install the skills plugin** (provides workflow guidance and auto-invoked best practices):
+The first MCP call after this opens an OAuth consent page in your browser; approve once and the bearer token is cached.
+
+For non-dockerized setups (native install, production HTTP, or stdio with a local credential), see the [`deriva-mcp-core` deployment guide](https://github.com/informatics-isi-edu/deriva-mcp-core/blob/main/docs/deployment-guide.md).
+
+**Install the skills plugins.** Both plugins share one marketplace:
 
 ```
-/plugin marketplace add informatics-isi-edu/deriva-mcp
+/plugin marketplace add informatics-isi-edu/deriva-plugins
 /plugin install deriva
+/plugin install deriva-ml
 ```
 
-**Update the skills plugin** when a new version is released:
+`deriva` covers generic Deriva catalog operations (schema, vocabulary, query patterns, Chaise display); `deriva-ml` adds the DerivaML domain layer (dataset lifecycle, executions, features, experiments, Hydra-zen configs, model development). The `deriva-ml` plugin assumes `deriva` is loaded for cross-references — install both.
 
-```
-/plugin install deriva
-```
+To pick up new plugin versions automatically, enable `"autoUpdate": true` for the `deriva-plugins` marketplace entry in `~/.claude/settings.json` and restart Claude Code. Otherwise rerun `/plugin install deriva` and `/plugin install deriva-ml` when a release ships.
 
-To check if all DerivaML components are up to date, use the version check skill. It checks three components — the **deriva-ml** Python package, the **deriva-mcp skills plugin**, and the **deriva-mcp MCP server** — against upstream releases and offers to update outdated ones:
+For checking versions of the underlying components (deriva-py, deriva-mcp-core, deriva-ml, deriva-ml-mcp), the troubleshooting skills cover it:
 
-```
-/deriva:check-versions
-```
-
-You can also just ask *"check deriva versions"* or *"am I up to date?"* and the skill will be invoked automatically.
-
-See the [deriva-mcp README](https://github.com/informatics-isi-edu/deriva-mcp) for full setup options including HTTP transport, localhost configuration, and native installs.
+- `/deriva:troubleshoot-deriva-errors` — versioning for the foundation (deriva-py, deriva-mcp-core, `deriva` plugin)
+- `/deriva-ml:troubleshoot-execution` — versioning for the DerivaML layer (deriva-ml, deriva-ml-mcp, `deriva-ml` plugin)
 
 ### 5. Authenticate
 
@@ -241,9 +245,9 @@ The template includes a complete CIFAR-10 CNN example. See [CIFAR10.md](CIFAR10.
 
 ## Using Claude Code with DerivaML
 
-With the [DerivaML MCP server and skills plugin](https://github.com/informatics-isi-edu/deriva-mcp) (see step 4), you can interact with catalogs through natural language and get guided workflows for common tasks. Skills auto-trigger based on context, or you can invoke them directly with `/deriva:<skill-name>` (e.g., `/deriva:create-dataset`, `/deriva:run-experiment`).
+With the MCP server connected and the `deriva` + `deriva-ml` skills plugins installed (see step 4), you can interact with catalogs through natural language and get guided workflows for common tasks. Skills auto-trigger based on context, or you can invoke them directly with `/deriva:<skill-name>` for generic catalog operations (e.g. `/deriva:getting-started`, `/deriva:manage-vocabulary`) and `/deriva-ml:<skill-name>` for ML workflows (e.g. `/deriva-ml:dataset-lifecycle`, `/deriva-ml:experiment-lifecycle`, `/deriva-ml:new-model`).
 
-To see what's available, ask Claude *"help with deriva"* or run `/deriva:help` — this will show all the capabilities organized by task: environment setup, catalog structure, data management, running experiments, and troubleshooting.
+To see what's available, ask Claude *"help with deriva"* or run `/deriva:help` / `/deriva-ml:help` — these list the skills in each plugin organized by task: environment setup, catalog structure, data management, running experiments, and troubleshooting.
 
 ## Further Reading
 
