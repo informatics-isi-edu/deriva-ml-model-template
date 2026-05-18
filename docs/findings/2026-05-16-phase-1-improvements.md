@@ -37,7 +37,7 @@ key:
 | E2 | deriva-ml + deriva-ml-mcp | `find_*` vs `list_*` — actually a convention worth documenting | ✅ Fully shipped. MCP wire side: `deriva-ml-mcp/src/deriva_ml_mcp/prompts.py:508-544` "VERB CONVENTIONS ON THE WIRE" section. Python library side: new "Verb naming" subsection in `deriva-ml/CLAUDE.md` §"Key Patterns" + a new "API verb conventions" section in `deriva-ml/README.md`. All three documentation sites cross-reference each other. Live MCP server picks up the source-side prompt change on next container rebuild |
 | E3 | deriva-ml | `feature_values()` returns a generator, not list | ⛔ Not shipped |
 | E4 | deriva-ml | Schema-mutating methods don't invalidate path-builder cache | ✅ Shipped (deriva-py side — see F1; deriva-ml mutations now route through a binding that auto-invalidates) |
-| E5 | deriva-ml | Bootstrapping ships opinionated vocab term set | ⛔ Not shipped (Workflow_Type still has 17 terms, Dataset_Type still has 8 — including project-specific entries) |
+| E5 | deriva-ml | Bootstrapping ships opinionated vocab term set | ✅ Shipped 2026-05-17 in `deriva-ml/main` commit `e52ddc9c` (PR #164). Removed four domain-specific terms from default `Workflow_Type`: `VGG19`, `RETFound`, `Multimodal`, `Embedding`. Remaining 9 seeded terms are all platform-level workflow shapes (Training, Testing, Prediction, Feature_Creation, Visualization, Analysis, Ingest, Data_Cleaning, Dataset_Management). New regression test `tests/schema/test_seeded_vocab_terms.py` pins both the load-bearing platform terms and the absence of the removed domain-specific ones. Docstring now carries the platform-only term-selection principle |
 | F1 | deriva-py | `getPathBuilder()` cache is invalidation-free | ✅ Shipped (same-instance auto-invalidation on `/schema` POST/PUT/DELETE) |
 | F2 | deriva-py | Cheap "is the cache stale?" check | ✅ Shipped (`if_stale=True` parameter probes snaptime cheaply) |
 | F4 | deriva-py | `InsecureRequestWarning` spam against localhost | ⛔ Not shipped |
@@ -58,16 +58,17 @@ opacity issues resolve as a consequence. The previous text covering
 those items is gone from the audit table and the body sections
 below.
 
-**Headline (after the 2026-05-17 doc-add batch): 16 of 25
-remaining items shipped or partially addressed (~64%).** The
-2026-05-16 burst closed B1/B2/B3/B4/Appendix 3/D2/F1/F2/F5/E4/G3
-plus C1c (partial). The 2026-05-17 doc-add batch closed
-**E2** (fully — all three doc sites), **D1** (two-way
-cross-link), **H2** (README §4 rewritten), and **H3** (TLS trust
-docs bundled into H2).
+**Headline (after the 2026-05-17 burst): 18 of 25 remaining
+items shipped or partially addressed (~72%).** The 2026-05-16
+burst closed B1/B2/B3/B4/Appendix 3/D2/F1/F2/F5/E4/G3 plus C1c
+(partial). The 2026-05-17 work closed **E2** (all three doc
+sites), **D1** (two-way cross-link), **H2** (README §4
+rewritten), **H3** (TLS trust docs bundled into H2), and **E5**
+(domain-specific terms removed from default Workflow_Type seeds
+with a new regression test).
 
 **Still open:**
-- **deriva-ml E1/E3/E5** — `refresh_schema()` warning still fires; `feature_values()` is a generator; bootstrap ships project-specific vocab terms.
+- **deriva-ml E1/E3** — `refresh_schema()` warning still fires; `feature_values()` is a generator.
 - **deriva-py F4** — `InsecureRequestWarning` against localhost.
 - **deriva-mcp-core C5** — per-server `<system-reminder>` attribution.
 - **Test plan G1** — resources as first-class in dual-channel verification.
@@ -643,9 +644,42 @@ hit the stale-cache scenario, and that's fixed upstream.
 
 ### E5. Bootstrapping ships an opinionated vocab term set
 
-> **Status: ⛔ NOT SHIPPED.** Catalog 8 (created today against
-> deriva-ml v1.36.5) still has 17 Workflow_Type terms and 8
-> Dataset_Type terms — same as before.
+> **Status: ✅ SHIPPED 2026-05-17 in `deriva-ml/main` commit
+> `e52ddc9c` (PR #164).** Four domain-specific terms removed
+> from the default `Workflow_Type` seeds: `VGG19`, `RETFound`,
+> `Multimodal`, and `Embedding`. The first three were artifacts
+> from an earlier deployment (specific neural-network
+> architectures, a specific retinal-imaging foundation model,
+> and a research-area category respectively); the fourth
+> (`Embedding`) was reclassified during PR review as
+> project-orientation rather than a platform-level workflow
+> shape — workflows producing vector representations are
+> structurally `Feature_Creation` or `Training`.
+>
+> Remaining 9 seeded terms are all platform-level workflow
+> shapes: Training, Testing, Prediction, Feature_Creation,
+> Visualization, Analysis, Ingest, Data_Cleaning,
+> Dataset_Management.
+>
+> New regression test `tests/schema/test_seeded_vocab_terms.py`
+> (8 tests, no live catalog) pins both:
+> - the load-bearing platform terms (so a future cleanup that
+>   drops Training/Testing/etc. breaks the test before consumers);
+> - the absence of the four removed domain-specific terms (so a
+>   future PR re-adding a project-specific name has to argue
+>   it's genuinely platform-level).
+>
+> The `initialize_ml_schema` docstring now carries a
+> "Term-selection principle" section: every seeded term must
+> describe a platform-level concept, not a domain-specific one.
+> Future contributors landing in the source see the rule before
+> they propose a new term.
+>
+> Existing-catalog impact: none. `_ensure_terms` is
+> skip-if-exists, so catalogs already initialized (eye-ai,
+> model-template runs, etc.) keep whatever terms they have.
+> Only new catalogs created after this commit get the cleaner
+> default set.
 
 > **Status: FIXED.** Resolved by deriva-ml PR #164 (released in
 > v1.36.5, 2026-05-17). Four domain-specific terms removed from
@@ -1194,19 +1228,16 @@ After the 2026-05-17 doc-add batch, the remaining open work is:
 3. **E3** (`feature_values()` returns a generator) — small API
    change; either standardize to list with optional streaming
    variant, or rename to `iter_feature_values`.
-4. **E5** (bootstrap vocab term defaults) — prune
-   `Workflow_Type` / `Dataset_Type` to a true minimum or split
-   into core + examples.
-5. **F4** (`InsecureRequestWarning` against localhost) —
+4. **F4** (`InsecureRequestWarning` against localhost) —
    either honor `REQUESTS_CA_BUNDLE` cleanly or document the
    silence-this hint.
-6. **C5** (per-server `<system-reminder>` attribution) —
+5. **C5** (per-server `<system-reminder>` attribution) —
    primarily Claude Code rendering; minimal Deriva work.
-7. **G4 / G5** (uv + Claude Code upstream issues) — file
+6. **G4 / G5** (uv + Claude Code upstream issues) — file
    issues with those projects; no Deriva-team code work needed.
 
-(Items B1, B2, B3, B4, D1, D2, E2, E4, F1, F2, F5, G3, H2, H3,
-plus C1c partial and Appendix 3 are shipped — see the audit
+(Items B1, B2, B3, B4, D1, D2, E2, E4, E5, F1, F2, F5, G3, H2,
+H3, plus C1c partial and Appendix 3 are shipped — see the audit
 table.)
 
 This is a suggestion, not a mandate. The repo owners can re-order
