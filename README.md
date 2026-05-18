@@ -58,12 +58,38 @@ uv sync --group=pytorch
 
 ### 4. Set Up Claude Code (Optional)
 
-If using [Claude Code](https://claude.ai/code), install the DerivaML MCP server and skills plugin for catalog tools and guided workflows.
+If using [Claude Code](https://claude.ai/code), install the
+DerivaML skill plugins and connect Claude Code to the DerivaML MCP
+server. The MCP server exposes catalog tools and ML-domain
+operations; the skill plugins teach Claude Code when and how to
+use them.
 
-**Install the MCP server** (provides catalog tools, dataset management, execution tracking):
+#### 4a. Install the skill plugins
+
+Both plugins ship from a single meta-marketplace:
+
+```
+/plugin marketplace add informatics-isi-edu/deriva-plugins
+/plugin install deriva@deriva-plugins
+/plugin install deriva-ml@deriva-plugins
+```
+
+- `deriva` (tier 1) — generic Deriva catalog operations: schema,
+  vocabulary, query patterns, Chaise display, troubleshooting.
+- `deriva-ml` (tier 2) — DerivaML ML-workflow skills: dataset
+  lifecycle, executions, features, experiments, asset
+  management, Hydra-zen configs. Depends on `deriva`.
+
+To update later, re-run `/plugin install <name>@deriva-plugins`.
+
+#### 4b. Connect Claude Code to the MCP server
+
+Pick the recipe that matches where your DerivaML catalog lives.
+
+**Remote production server (HTTPS, e.g. `ml.derivacloud.org`).**
+Use the published MCP image via stdio:
 
 ```bash
-# Using Docker (recommended)
 docker pull ghcr.io/informatics-isi-edu/deriva-mcp:latest
 ```
 
@@ -77,35 +103,57 @@ Add to `~/.mcp.json`:
       "command": "/bin/sh",
       "args": [
         "-c",
-        "docker run -i --rm --add-host localhost:host-gateway -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-mcp:latest"
+        "docker run -i --rm -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-mcp:latest"
       ]
     }
   }
 }
 ```
 
-**Install the skills plugin** (provides workflow guidance and auto-invoked best practices):
+**Local dev-localhost server** (running deriva-docker on your
+machine). The dev-localhost server runs `deriva-mcp-core` as an
+HTTP service inside the docker stack, fronted by traefik. Use
+the OAuth-enabled HTTP recipe:
 
-```
-/plugin marketplace add informatics-isi-edu/deriva-mcp
-/plugin install deriva
-```
-
-**Update the skills plugin** when a new version is released:
-
-```
-/plugin install deriva
+```bash
+claude mcp add -t http dev-localhost https://localhost/mcp \
+    --client-id deriva-mcp --callback-port 8080
 ```
 
-To check if all DerivaML components are up to date, use the version check skill. It checks three components — the **deriva-ml** Python package, the **deriva-mcp skills plugin**, and the **deriva-mcp MCP server** — against upstream releases and offers to update outdated ones:
+Verify with `claude mcp list` — the entry should show
+`dev-localhost: https://localhost/mcp (HTTP) - ✓ Connected`. The
+OAuth `client-id` (`deriva-mcp`) is pre-registered with the
+credenza auth service in the deriva-docker deployment.
 
+**TLS trust for dev-localhost.** The dev-localhost stack uses a
+self-signed CA (`DERIVA Dev Local CA`). Node.js (which Claude
+Code's HTTP MCP transport runs on) doesn't trust it by default.
+Extract the CA cert from the running container and point Node at
+it:
+
+```bash
+mkdir -p ~/.config/deriva
+docker cp deriva-mcp-test:/usr/local/share/ca-certificates/deriva-dev-ca.crt \
+          ~/.config/deriva/deriva-dev-ca.crt
 ```
-/deriva:check-versions
+
+Then in your project's `.claude/settings.local.json` (or your
+user `~/.claude/settings.json`):
+
+```json
+{
+  "env": {
+    "NODE_EXTRA_CA_CERTS": "/Users/<you>/.config/deriva/deriva-dev-ca.crt"
+  }
+}
 ```
 
-You can also just ask *"check deriva versions"* or *"am I up to date?"* and the skill will be invoked automatically.
+Without `NODE_EXTRA_CA_CERTS`, the HTTP MCP connection fails
+silently with a TLS chain error. Restart Claude Code after
+setting it.
 
-See the [deriva-mcp README](https://github.com/informatics-isi-edu/deriva-mcp) for full setup options including HTTP transport, localhost configuration, and native installs.
+See the [`deriva-ml-mcp` README](https://github.com/informatics-isi-edu/deriva-ml-mcp#connecting-claude-code-to-the-dockerized-server)
+for the canonical dev-localhost recipe and HTTPS-transport notes.
 
 ### 5. Authenticate
 
