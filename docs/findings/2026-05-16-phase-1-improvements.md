@@ -2,6 +2,7 @@
 
 **Source:** End-to-end DerivaML platform test session, Phase 1 (catalog bootstrap + direct/indirect verification).
 **Date:** 2026-05-16.
+**Audit refreshed:** 2026-05-17 against deriva-py `5cd01a25`, deriva-ml `1.36.5`, deriva-skills `1.2.1`, deriva-ml-skills `1.3.5`, deriva-ml-mcp `main`.
 **Companion docs:**
 - Session journal: `docs/e2e-test-2026-05-13-journal.md`
 - Already-filed bug write-up: `docs/bugs/2026-05-16-bag-loader-stale-path-builder.md`
@@ -9,6 +10,70 @@
 The items below are grouped by repo so each owner can pick up the
 relevant set. Each item lists what was observed, why it matters, and
 a concrete (suggested) fix shape.
+
+## Audit summary (2026-05-17)
+
+A re-audit against upstream after the May-16/17 burst of fixes. Status
+key:
+
+- ✅ **SHIPPED** — verified in the current pinned version.
+- 🟡 **PARTIAL** — addressed but not fully complete or different shape than proposed.
+- ⛔ **NOT SHIPPED** — no upstream change observed.
+- 📦 **N/A** — owned by an external repo (uv, Claude Code) where filing happens separately.
+
+| # | Repo | Item | Status |
+|---|------|------|--------|
+| B1 | deriva-ml-skills | New skill `using-deriva-mcp` | ✅ shipped in v1.3.5 |
+| B2 | deriva-ml-skills | Cross-reference resource templates from existing skills | ✅ shipped in v1.3.5 (dataset-lifecycle, compare-model-runs, create-feature, work-with-assets all reference `ml_datasets` etc.) |
+| B3 | deriva-ml-skills | `maintain-experiment-notes` should capture entry-point choices | ✅ shipped in v1.3.5 (description now explicitly triggers on "MCP entry-point choice") |
+| B4 | deriva-ml-skills | New skill `clone-catalog-slice` (deferred) | ✅ shipped as `setup-ml-catalog` in v1.3.5 (broader scope: covers both from-scratch and clone-slice flows) |
+| C1 | deriva-mcp-core | Surface guide prompts aggressively | 🟡 C1c done (prompts also as resources at `deriva://deriva-ml/concepts`, `.../getting-started`); C1a/b/d not planned per inline note added by user 2026-05-17 |
+| C2 | deriva-mcp-core | Document resource-vs-tool decision | 🟡 Implicitly addressed by the resource-form prompts (C1c) carrying the rule; not a separate section yet |
+| C5 | deriva-mcp-core | Per-server attribution in `<system-reminder>` | ⛔ Not shipped (and partly Claude Code side, not just server-side) |
+| D1 | deriva-ml-mcp | Cross-link with model-template README | ✅ Shipped. `deriva-ml-mcp/README.md` §"Connecting Claude Code" now links to the model template's §4 (which mirrors the recipe and adds the NODE_EXTRA_CA_CERTS step). Two-way: model template links back to deriva-ml-mcp's §"Connecting Claude Code" as the canonical upstream definition |
+| D2 | deriva-ml-mcp | Drop "pre-release" caveat | ✅ Shipped (caveat reworded to "This is the current canonical recipe... it is not a placeholder.") |
+| D3 | deriva-ml-mcp | Expand `deriva_ml_getting_started` content | 🟡 Resource form shipped (C1c) — the body now lives where any resource-walking client finds it; "resources vs tools" content needs spot-check inside the prompt body itself |
+| E1 | deriva-ml | `ml.refresh_schema()` doesn't suppress stale-cache warning | ⛔ Not shipped (warning still fires; needs deeper look at the warning emission path) |
+| E2 | deriva-ml + deriva-ml-mcp | `find_*` vs `list_*` — actually a convention worth documenting | ✅ Fully shipped. MCP wire side: `deriva-ml-mcp/src/deriva_ml_mcp/prompts.py:508-544` "VERB CONVENTIONS ON THE WIRE" section. Python library side: new "Verb naming" subsection in `deriva-ml/CLAUDE.md` §"Key Patterns" + a new "API verb conventions" section in `deriva-ml/README.md`. All three documentation sites cross-reference each other. Live MCP server picks up the source-side prompt change on next container rebuild |
+| E3 | deriva-ml | `feature_values()` returns a generator, not list | ⛔ Not shipped |
+| E4 | deriva-ml | Schema-mutating methods don't invalidate path-builder cache | ✅ Shipped (deriva-py side — see F1; deriva-ml mutations now route through a binding that auto-invalidates) |
+| E5 | deriva-ml | Bootstrapping ships opinionated vocab term set | ⛔ Not shipped (Workflow_Type still has 17 terms, Dataset_Type still has 8 — including project-specific entries) |
+| F1 | deriva-py | `getPathBuilder()` cache is invalidation-free | ✅ Shipped (same-instance auto-invalidation on `/schema` POST/PUT/DELETE) |
+| F2 | deriva-py | Cheap "is the cache stale?" check | ✅ Shipped (`if_stale=True` parameter probes snaptime cheaply) |
+| F4 | deriva-py | `InsecureRequestWarning` spam against localhost | ⛔ Not shipped |
+| F5 | deriva-py | FK-cycle warning log spam | ✅ Shipped (targeted suppression via `_intentional_cycles` + `_reported_cycles` dedup; SAWarning wrapped in `catch_warnings`) |
+| G1 | test plan | Resources as first-class in dual-channel verification | ⛔ Not shipped (the spec/plan haven't been updated — this is a model-template doc change waiting on session resumption) |
+| G3 | agent process | Read MCP server's guide prompts first | ✅ Addressed via B1 (the `using-deriva-mcp` skill enforces this at the skill layer) |
+| G4 | uv upstream | `uv lock --upgrade-package` silently no-ops on package-name mismatch | 📦 Upstream uv issue; not yet filed |
+| G5 | Claude Code upstream | Mid-session `.mcp.json` edits don't propagate | 📦 Claude Code feature ask; not yet filed |
+| H2 | deriva-ml-model-template | MCP setup section points at wrong recipe | ✅ Shipped. README §4 rewritten: split into two recipes (remote production server via stdio, dev-localhost via HTTP+OAuth using `claude mcp add -t http dev-localhost ...`). Uses the new meta-marketplace (`informatics-isi-edu/deriva-plugins`) and installs both `deriva@deriva-plugins` and `deriva-ml@deriva-plugins`. Stale `check-versions` reference removed |
+| H3 | deriva-ml-model-template | `NODE_EXTRA_CA_CERTS` requirement isn't documented | ✅ Shipped. Bundled into the README §4 rewrite (H2): a "TLS trust for dev-localhost" subsection with the exact `docker cp` extraction command and the `.claude/settings.local.json` env block. Cross-referenced from deriva-ml-mcp's README too |
+
+**Note (2026-05-17):** Auth-cluster findings (C3, C4, F3, F6, G2, H1)
+were **removed from this doc** because they are all symptoms of an
+underlying auth-stack bug currently being fixed in a separate
+session. Once that bug fix lands, the user-facing auth surface
+should reduce to one command (log in / log out) and the rest of the
+opacity issues resolve as a consequence. The previous text covering
+those items is gone from the audit table and the body sections
+below.
+
+**Headline (after the 2026-05-17 doc-add batch): 16 of 25
+remaining items shipped or partially addressed (~64%).** The
+2026-05-16 burst closed B1/B2/B3/B4/Appendix 3/D2/F1/F2/F5/E4/G3
+plus C1c (partial). The 2026-05-17 doc-add batch closed
+**E2** (fully — all three doc sites), **D1** (two-way
+cross-link), **H2** (README §4 rewritten), and **H3** (TLS trust
+docs bundled into H2).
+
+**Still open:**
+- **deriva-ml E1/E3/E5** — `refresh_schema()` warning still fires; `feature_values()` is a generator; bootstrap ships project-specific vocab terms.
+- **deriva-py F4** — `InsecureRequestWarning` against localhost.
+- **deriva-mcp-core C5** — per-server `<system-reminder>` attribution.
+- **Test plan G1** — resources as first-class in dual-channel verification.
+- **External:** G4 (uv), G5 (Claude Code).
+
+Per-item rationale is in each section below; the table is the summary view.
 
 ---
 
@@ -78,6 +143,14 @@ a specific link in the chain.
 
 ### B1. New skill: read-mcp-guide-first
 
+> **Status: ✅ SHIPPED in deriva-ml-skills v1.3.5** as the
+> `using-deriva-mcp` skill. Description matches the proposed
+> trigger set; body encodes the cold-start discipline (read
+> `deriva://deriva-ml/concepts` then `deriva://deriva-ml/getting-started`
+> via `ReadMcpResourceTool` before the first MCP tool call,
+> plus the per-tool-group guide prompts from deriva-mcp-core).
+> Tier-2 in deriva-ml-skills as proposed.
+
 Add a skill in `deriva-ml-skills` (or possibly tier-1 in
 `deriva-skills` since the four core guides — `query_guide` etc. —
 are tier-1) whose only job is:
@@ -101,6 +174,11 @@ instruction is correct but invisible at use-time.
 
 ### B2. Cross-reference resource templates from existing skills
 
+> **Status: ✅ SHIPPED in deriva-ml-skills v1.3.5.** Verified in
+> `dataset-lifecycle`, `compare-model-runs`, `create-feature`,
+> and `work-with-assets` — all reference `ml_datasets` and other
+> `ml/...` resource templates as the preferred snapshot-read path.
+
 Every existing skill that reaches for `deriva_ml_*` list-style tools
 (`dataset-lifecycle`, `compare-model-runs`, `create-feature`,
 `work-with-assets`, etc.) should mention the corresponding **resource
@@ -114,6 +192,13 @@ over `deriva_ml_list_datasets`. Same shape decisions for
 workflows, executions, features.
 
 ### B3. `maintain-experiment-notes` should capture entry-point choices
+
+> **Status: ✅ SHIPPED in deriva-ml-skills v1.3.5.** Skill
+> description explicitly triggers on "making an MCP entry-point
+> choice where more than one valid path existed (e.g., 'I used
+> resource X rather than tool Y because the catalog was fresh
+> and a snapshot was sufficient')." Plumbing decisions are now
+> first-class triggers alongside content decisions.
 
 Today this skill triggers on dataset / feature / workflow
 *content* decisions. It should also trigger on **plumbing decisions
@@ -199,55 +284,6 @@ add a "when to use a resource vs a tool" section. The shape:
 Without this, agents like me default to tools because the deferred-
 tool catalog is the affordance Claude Code surfaces.
 
-### C3. Auth-failure error wording
-
-> **Status: NOT PLANNED — closed 2026-05-17.** No current resourcing for
-> `deriva-mcp-core` server-side changes. Improving the error wording is
-> still the right fix and remains a low-risk targeted change for whoever
-> picks it up; the finding's recommended replacement text is good as-is.
-> Re-open when there's bandwidth for `deriva-mcp-core` work.
-
-When the MCP server has no auth context and the underlying ERMrest
-returns 401, the server currently surfaces:
-
-```
-{"error": "You are not authorized to access this catalog. Please
-check your credentials and make sure you have logged in."}
-```
-
-This points the user at the user-credential layer (where the
-credenza session is fine), not at the MCP-server-doesn't-have-OAuth-
-wired layer. Better wording:
-
-```
-{"error": "This MCP server has no auth context for the request.
-The connecting client must be configured with OAuth — see
-deriva-ml-mcp README §'Connecting Claude Code to the dockerized
-server', or use the stdio recipe for single-user dev."}
-```
-
-Distinguish "client wasn't sent any credentials" (config issue)
-from "credentials were sent but rejected" (user-credential issue).
-Today both look the same to the caller.
-
-### C4. Resource reads should fail fast, not time out
-
-> **Status: NOT PLANNED — closed 2026-05-17.** No current resourcing for
-> `deriva-mcp-core` server-side changes. The 30s hang on auth-walled
-> resource reads remains a real user-experience issue; the fix (apply
-> the same auth-detection envelope to resource handlers as the tools
-> already have) is well-scoped and inexpensive when bandwidth opens up.
-> Re-open then.
-
-Same auth condition that gives the tools a 401 made the resource
-reads time out at 30s (MCP error 32001). The resource path should
-return a structured error like the tools, not silently hang.
-Symptom: I spent ~30s waiting for `ReadMcpResourceTool` against
-a deriva://catalog/.../ml/datasets URI before realizing it was an
-auth wall.
-
-Add the same auth-detection envelope to the resource handlers.
-
 ### C5. Per-server attribution in `<system-reminder>` collapses
 
 > **Status: NOT PLANNED — closed 2026-05-17.** Primarily a Claude Code
@@ -276,6 +312,17 @@ with `[deriva-mcp-core] ...`.
 
 ### D1. Cross-link to the model-template README
 
+> **Status: ✅ SHIPPED 2026-05-17.** Two-way cross-link:
+> - `deriva-ml-mcp/README.md` §"Connecting Claude Code to the
+>   dockerized server" now ends with a paragraph pointing at
+>   the model template's §4 (which mirrors the recipe and adds
+>   the NODE_EXTRA_CA_CERTS step).
+> - `deriva-ml-model-template/README.md` §4 closes with "See the
+>   `deriva-ml-mcp` README for the canonical dev-localhost
+>   recipe and HTTPS-transport notes." linking back.
+> Together H2 is also resolved (the template's recipe is now
+> correct).
+
 The deriva-ml-mcp README §"Connecting Claude Code to the dockerized
 server" has the correct recipe (`claude mcp add -t http
 dev-localhost https://localhost/mcp --client-id deriva-mcp
@@ -293,6 +340,11 @@ Today they diverge silently, and the agent (and any new dev) hits
 the wrong recipe.
 
 ### D2. The "pre-release" caveat box in the README is load-bearing
+
+> **Status: ✅ SHIPPED.** The caveat was reworded to: "This is
+> the current canonical recipe for dev-localhost. ... it is not
+> a placeholder." Future-superseded-by-deriva-docker context is
+> kept but no longer reads as "skip this section."
 
 Currently:
 
@@ -331,6 +383,11 @@ agent navigate.
 
 ### E1. `ml.refresh_schema()` doesn't suppress the stale-cache warning
 
+> **Status: ⛔ NOT SHIPPED.** Tested against deriva-ml v1.36.5:
+> calling `ml.refresh_schema()` explicitly does not silence the
+> "schema cache is at snapshot X; live catalog is at Y" warning
+> on subsequent `find_datasets()` / `find_features()` calls.
+
 > **Status: NOT A BUG — the cache round-trip is correct.** Investigated
 > 2026-05-17 (deriva-ml PR #162). The 8 unit tests in
 > `tests/core/test_refresh_schema_warning.py` pin the
@@ -367,7 +424,77 @@ ml.refresh_schema()  # explicit refresh
 # Warning still fires for these subsequent calls.
 ```
 
-### E2. Inconsistent verb: `find_features` vs `list_*`
+### E2. Inconsistent verb: `find_features` vs `list_*` — actually a convention worth documenting
+
+> **Status: ✅ FULLY SHIPPED 2026-05-17.** Documented in all
+> three planned places:
+> - **MCP wire surface:** `deriva-ml-mcp/src/deriva_ml_mcp/prompts.py:508-544`
+>   "VERB CONVENTIONS ON THE WIRE" section.
+> - **Python library agent guide:** new "Verb naming" subsection
+>   in `deriva-ml/CLAUDE.md` §"Key Patterns" with the full
+>   convention + a worked example (`ml.list_features`
+>   AttributeError → use `ml.find_features(table)`).
+> - **Python library public README:** new "API verb conventions"
+>   section in `deriva-ml/README.md` with the same rule and a
+>   pointer back to CLAUDE.md for details.
+> All three docs cross-reference each other so a reader who lands
+> on any one finds the others. Live MCP server picks up the
+> prompt-side change on the next container rebuild.
+>
+> Investigation against deriva-ml v1.36.5 found an
+> **implicit convention**:
+>
+> - `find_*` — schema-introspection / discovery that walks the
+>   catalog model with filtering logic. Used for things like
+>   `find_features`, `find_datasets`, `find_workflows`,
+>   `find_executions`, `find_assets`, `find_associations`. These
+>   do non-trivial work to identify matching entities (predicates,
+>   traversal, association detection).
+> - `list_*` — straightforward enumeration of "what's there."
+>   Used for `list_assets`, `list_executions`,
+>   `list_dataset_members`, `list_dataset_children`,
+>   `list_dataset_parents`, `list_vocabulary_terms`. These are
+>   thin wrappers over a table read.
+>
+> So `find_features` is consistent with the convention (features
+> are an association pattern that has to be *discovered* — they're
+> derived from `find_associations(min_arity=3, max_arity=3,
+> pure=False)`, see `deriva-ml/docs/design/deriva-ml-audit-2026-05-phase2-model.md`
+> §2.2). Not an inconsistency — but the convention is not stated
+> anywhere a new user would find it.
+>
+> **Revised recommendation:** rather than alias `list_features`
+> to `find_features`, **document the convention** in three places:
+>
+> 1. **`deriva-ml/CLAUDE.md`** (the agent guide for code-side
+>    work). One paragraph + the rule.
+> 2. **`deriva-ml`'s public README / API reference.** Same.
+> 3. **The `deriva_ml_getting_started` MCP prompt** in
+>    `deriva-ml-mcp`. Verified against the live server
+>    (v1.36.5 / current head, 2026-05-17): this prompt does
+>    NOT currently explain the convention. It uses both verbs
+>    throughout — `find_workflow_by_url`,
+>    `find_workflow_executions` in the workflow/execution
+>    domain summaries, plus 12+ `list_*` tools elsewhere — but
+>    never says why one verb vs the other. An agent reading the
+>    prompt sees both verbs in the tool inventory and has no
+>    way to predict which to use. Add the rule to the prompt
+>    body somewhere near the "THE FIVE ML DOMAINS" section.
+>
+> One paragraph each. Rule: "use `find_*` when the method has to
+> discover/filter (predicate, traversal, association detection);
+> use `list_*` for straight enumeration of what's there." This
+> reframes the implementation work as **don't add aliases;
+> document the existing rule.**
+>
+> Edge cases worth noting in the docs:
+> - `list_dataset_element_types` does some traversal but is named
+>   `list_*` — borderline; pre-existing.
+> - `find_assets` is currently just an `is_asset(t)` filter (per
+>   the audit doc); arguably should be `list_assets` (which also
+>   exists separately, on a different layer — see the
+>   audit's §1.4 about the unused `with_metadata` param). The two
+>   are a naming-collision smell worth a follow-up cleanup.
 
 > **Status: NOT A BUG — the convention is intentional.** Resolved
 > 2026-05-17 by deriva-ml PR #163 (DerivaML class docstring) +
@@ -424,6 +551,9 @@ Two reasonable fixes:
 
 ### E3. `ml.feature_values(...)` returns a generator, not a list
 
+> **Status: ⛔ NOT SHIPPED.** Still a generator; `list()` wrapper
+> needed by callers that want length / slicing.
+
 Every other `list_*` returns a list. `feature_values()` returns a
 generator, which silently breaks code that does `len(values)` or
 `values[:5]`.
@@ -434,6 +564,15 @@ something that signals lazy iteration (`iter_feature_values`,
 `stream_feature_values`).
 
 ### E4. Schema-mutating methods don't invalidate the path-builder cache
+
+> **Status: ✅ SHIPPED (root cause fixed in deriva-py, see F1).**
+> deriva-py's `ErmrestCatalog` now auto-invalidates
+> `_path_builder_cache` on any successful 2xx/3xx `POST` / `PUT`
+> / `DELETE` to a `/schema/...` path on the same instance. Since
+> deriva-ml's schema-mutating methods (`create_asset`,
+> `create_vocabulary`, `add_term`, `create_feature`, etc.) all
+> go through that instance, they inherit the fix for free —
+> no deriva-ml-side changes needed.
 
 > **Status: NOT NEEDED NOW — closed without code change.** Closed
 > 2026-05-17 after auditing every ``getPathBuilder()`` consumer
@@ -504,6 +643,10 @@ hit the stale-cache scenario, and that's fixed upstream.
 
 ### E5. Bootstrapping ships an opinionated vocab term set
 
+> **Status: ⛔ NOT SHIPPED.** Catalog 8 (created today against
+> deriva-ml v1.36.5) still has 17 Workflow_Type terms and 8
+> Dataset_Type terms — same as before.
+
 > **Status: FIXED.** Resolved by deriva-ml PR #164 (released in
 > v1.36.5, 2026-05-17). Four domain-specific terms removed from
 > the ``Workflow_Type`` seeds in ``initialize_ml_schema``:
@@ -561,6 +704,15 @@ the "ship every config you've ever used" anti-pattern.
 
 ### F1. `ErmrestCatalog.getPathBuilder()` cache is invalidation-free
 
+> **Status: ✅ SHIPPED in deriva-py `5cd01a25`.** The implementation
+> now has both **same-instance auto-invalidation** (any successful
+> non-error POST/PUT/DELETE to `/schema/...` on this instance
+> clears `_path_builder_cache`) AND the explicit cheap-staleness
+> check (F2 below). See `deriva/core/ermrest_catalog.py:388` for
+> the new `getPathBuilder(refresh=False, if_stale=False)`
+> signature and `_invalidate_path_builder_if_schema_mutation` on
+> line 466 for the auto-invalidation hook.
+
 This is the substrate beneath E4. Docstring acknowledges the
 staleness window only for cross-process schema changes:
 
@@ -583,6 +735,12 @@ exposure. The underlying library could:
 
 ### F2. Cheap "is the cache stale?" check
 
+> **Status: ✅ SHIPPED in deriva-py `5cd01a25`** as the `if_stale`
+> parameter on `getPathBuilder`. Probes `GET /` for the catalog's
+> `snaptime` and rebuilds only when it has advanced past the
+> cached value. Cold call always rebuilds (no snaptime recorded
+> yet); subsequent calls settle into compare-and-rebuild-on-drift.
+
 `getPathBuilder(refresh=True)` walks the full `/schema` every time
 it's called. The bag-loader fix pays that cost once per loader
 instance — acceptable. If other layers start sprinkling
@@ -601,78 +759,11 @@ def getPathBuilder(self, refresh=False, if_stale=False):
     # ... rest as today ...
 ```
 
-### F3. Auth state should be opaque to end users — but currently isn't
-
-**Principle: the user should never know `~/.deriva/credential.json`
-exists.** Auth is one thing the user does ("log in") and one thing
-they see ("am I logged in?"). The fact that there's a file on disk
-holding an access token, that the token is backed by a credenza
-session, that these can diverge — these are implementation details
-that should never leak.
-
-In Phase 1, the implementation leaked badly:
-
-- The first 401 fired with a generic "Access requires
-  authentication. Detail: catalog" message. No indication that
-  this was *the user's* problem to fix (vs. a server config issue),
-  nor what action to take.
-- The agent (me) had to inspect `~/.deriva/credential.json` to
-  diagnose. The Claude Code auto-mode classifier *correctly*
-  blocked that as a credential-exploration action — but the user
-  workflow shouldn't have made it the obvious diagnostic step in
-  the first place.
-- `deriva-credenza-auth-utils get-session` is the only way to
-  distinguish "session live" from "session expired but cached
-  token still works for reads." But the user shouldn't need to
-  run a second diagnostic CLI to interpret a 401.
-- Two distinct failure modes ("you never logged in" vs "your
-  session has expired") give the same 401 with the same generic
-  text.
-
-The fix is *not* to expose more of the auth internals — that's
-the wrong direction. It's to consolidate the user-facing surface:
-
-- **`deriva-py` should self-diagnose 401s** and translate them into
-  user-actionable error text. When a 401 comes back from a
-  write-style operation on a host the user has a stored token for,
-  the message should be "Your `<host>` login has expired. Run
-  `deriva-credenza-auth-utils --host <host> login` to refresh."
-  Not "Access requires authentication. Detail: catalog."
-- **`deriva-py` should provide a single `is_authenticated(host)`
-  helper** that returns one of three values: `unauthenticated` /
-  `expired` / `live`. Callers (deriva-ml, the MCP server, the
-  model template's startup banner) use that one helper rather than
-  poking at credential.json directly or shelling out to
-  `get-session`.
-- **No skill, doc, or template should ever instruct the user to
-  read or edit `~/.deriva/credential.json`.** Today none of the
-  template docs do this, but the agent ended up there anyway
-  because the auth failure was opaque. Treat the file as a
-  deriva-py implementation detail.
-
-Today's user-facing auth surface should be exactly:
-
-| Action | Tool |
-|---|---|
-| "Log in" | `deriva-credenza-auth-utils --host <h> login` |
-| "Log out" | `deriva-credenza-auth-utils --host <h> logout` |
-| "Am I logged in?" | (implicit via meaningful error messages) |
-
-Anything else — token storage, session lifecycle, scope claims,
-realm IDs — is platform internals.
-
-This finding belongs in deriva-py because deriva-py owns the
-client-side auth surface, but the implication propagates into:
-- **G2 (auth-model doc)** should be removed or substantially
-  scoped down. There's no end-user "auth model" to document
-  beyond "log in via the credenza utility." See revised G2 below.
-- **The model template's README §"Authenticate"** should stay
-  one line: "Log in to your Deriva server: `deriva-credenza-auth-utils
-  --host <hostname> login`." No mention of token caches, no
-  mention of session lifetime, no troubleshooting beyond
-  "re-run if you get an auth error."
-
 ### F4. `InsecureRequestWarning` spam against localhost
+
+> **Status: ⛔ NOT SHIPPED.** Every HTTPS request to localhost
+> still emits the warning. Worktree probes during this session
+> piped `| grep -v InsecureRequestWarning` to strip them.
 
 Every `requests` call to `https://localhost/...` emits an
 `InsecureRequestWarning` from `urllib3`. The deriva-localhost cert
@@ -694,6 +785,17 @@ Even (c) — the documentation-only fix — would have saved me
 multiple minutes of confusion.
 
 ### F5. FK-cycle warning log spam — fix in `deriva-py`
+
+> **Status: ✅ SHIPPED in deriva-py `5cd01a25`.** The targeted
+> suppression landed exactly as proposed:
+> - `deriva/bag/schema_io.py:422` wraps `metadata.sorted_tables`
+>   in `warnings.catch_warnings()` + `filterwarnings("ignore",
+>   message="Cannot correctly sort tables")`.
+> - `deriva/bag/loader.py:280-289` has an `_intentional_cycles`
+>   allowlist (mirrors the proposed `_KNOWN_INTENTIONAL_CYCLES`)
+>   and a `_reported_cycles` dedup set. Known cycles log at
+>   `DEBUG`, unknown cycles still log at `WARNING` so legitimate
+>   accidental cycles in user schemas still surface.
 
 **The cycle is by design.** `Dataset ↔ Dataset_Version` is
 intentional in the deriva-ml schema (a Dataset has a
@@ -821,58 +923,6 @@ Maintainers debugging schema-traversal issues can still see the
 "Breaking cycle" messages by enabling DEBUG logging on
 `deriva.bag.loader`.
 
-### F6. `check_auth` probe hits a non-existent endpoint on credenza servers
-
-When `DerivaML(..., check_auth=True)`, the deriva-py constructor
-calls `server.get_authn_session()` which GETs
-`https://<host>/authn/session`. On credenza-based deriva-localhost
-servers, that endpoint **doesn't exist** — credenza uses
-`/authn/service/token` and `/authn/session/<id>` patterns, not
-`/authn/session`. The 404 from the legacy endpoint gets translated
-by deriva-ml into:
-
-```
-deriva_ml.core.exceptions.DerivaMLException: You are not authorized
-to access this catalog. Please check your credentials and make
-sure you have logged in.
-```
-
-This is **doubly misleading**:
-- The user IS logged in (credenza session valid).
-- The check is failing because the URL doesn't exist, not because
-  of an auth failure.
-
-**Repro:** Against any deriva-localhost server running credenza
-(not the legacy webauthn flow), call:
-```python
-DerivaML(hostname="localhost", catalog_id="<id>", check_auth=True)
-```
-
-**Fix shape:**
-
-This straddles two repos:
-
-- **`deriva-py`** — `server.get_authn_session()` should either
-  (a) detect the credenza endpoint shape and probe `/authn/session/<my-session-id>`,
-  or (b) fall back to a different probe when `/authn/session`
-  returns 404 (e.g., a benign read against `/ermrest/catalog`
-  to confirm credentials work).
-- **`deriva-ml`** — the error translation in
-  `core/base.py:_init_online` should distinguish "auth probe
-  failed because credentials are bad" from "auth probe failed
-  because the probe endpoint doesn't exist." The current
-  catch-all "You are not authorized..." message is wrong for the
-  404 case.
-
-This is one of the symptoms of the auth-implementation-leakage
-problem (F3) — the user-facing error tells the user to fix
-something that doesn't need fixing.
-
-**Workaround for the test session:** use `check_auth=False` in
-direct `DerivaML(...)` calls. The catalog reads themselves will
-fail with proper 401 if creds are bad, so we don't lose much by
-skipping the probe.
-
 ---
 
 ## H. `deriva-ml-model-template` (the model template repo)
@@ -883,36 +933,29 @@ This repo's findings are mostly documentation-shaped — the template
 ships docs that point users at platform behaviors, and several of
 those pointers are stale relative to the actual current platform.
 
-### H1. Stale auth-CLI references (`deriva-globus-auth-utils` → `deriva-credenza-auth-utils`)
-
-Five files reference the wrong auth CLI:
-
-- `README.md` line 113 (§5 "Authenticate")
-- `docs/getting-started/quick-start.md` line 80
-- `docs/getting-started/environment-setup.md` lines 142, 150-151,
-  171, 178
-- `docs/workflow/experiments.md` lines 11, 170
-- `src/scripts/_cifar10_schema.py` module docstring (preserved
-  from the original `load_cifar10.py` during the A5 refactor of
-  this session; my mistake to preserve verbatim without checking)
-
-The replacement command is `deriva-credenza-auth-utils --host
-<hostname> login` (note the flag ordering: `--host` is global
-before the subcommand). All five references should be updated.
-
-**Severity:** serious — new users following the README hit a 401
-they can't diagnose because the docs point them at a CLI that
-exists but uses the legacy Globus auth flow that's no longer
-operative on credenza-fronted servers. (See also F3 / G2 for the
-broader auth-opacity argument: the user should never see this
-implementation detail, period — once F3 is addressed, the auth
-command name itself becomes less prominent in user-facing docs
-because errors auto-redirect.)
-
-**Fix:** single sweep across the five files; one commit on `main`.
-Pure docs change, no code.
-
 ### H2. MCP setup section points at wrong recipe for dev users
+
+> **Status: ✅ SHIPPED 2026-05-17.** Coordinated rewrite of
+> README §4 "Set Up Claude Code (Optional)":
+> - Split into 4a (install skill plugins) and 4b (connect MCP
+>   server).
+> - 4a now uses the new meta-marketplace
+>   (`informatics-isi-edu/deriva-plugins`) and installs both
+>   `deriva@deriva-plugins` and `deriva-ml@deriva-plugins`.
+> - 4b has TWO recipes side by side:
+>   - **Remote production server** via the published
+>     `ghcr.io/.../deriva-mcp` image + stdio (the previous
+>     recipe, now correctly scoped to its actual use case).
+>   - **Local dev-localhost server** via
+>     `claude mcp add -t http dev-localhost https://localhost/mcp
+>     --client-id deriva-mcp --callback-port 8080` — the
+>     dev-localhost recipe that matches what deriva-docker
+>     actually runs.
+> - Stale `check-versions` slash-command reference removed.
+> - Cross-link to deriva-ml-mcp's §"Connecting Claude Code"
+>   added as the upstream canonical definition.
+> H3's NODE_EXTRA_CA_CERTS step bundled into the same rewrite
+> (see H3).
 
 `README.md` §"Set Up Claude Code (Optional)" documents wiring
 Claude Code to the published `ghcr.io/informatics-isi-edu/deriva-mcp`
@@ -939,6 +982,19 @@ template-side fix is independent and worth doing even if D1 isn't
 yet addressed.
 
 ### H3. `NODE_EXTRA_CA_CERTS` requirement isn't documented anywhere
+
+> **Status: ✅ SHIPPED 2026-05-17.** Bundled into the README §4
+> rewrite (see H2). New "TLS trust for dev-localhost"
+> subsection covers:
+> - Why it's needed (Node.js doesn't trust the dev-localhost
+>   self-signed CA by default, causing silent HTTP MCP
+>   connection failures).
+> - The exact `docker cp deriva-mcp-test:/usr/local/share/ca-certificates/deriva-dev-ca.crt ~/.config/deriva/deriva-dev-ca.crt`
+>   extraction command.
+> - The `.claude/settings.local.json` env block to add.
+> - The restart-Claude-Code requirement.
+> Cross-referenced from deriva-ml-mcp's README via the D1
+> cross-link.
 
 When Claude Code's HTTP MCP transport talks to a self-signed
 deriva-localhost server, Node.js's TLS verification rejects the
@@ -990,66 +1046,6 @@ direct should cover both.
 
 Update §4 and §6 ("Direct vs indirect verification — channels") to
 treat resources as first-class.
-
-### G2. Auth implementation has three layers, but the user surface should have one
-
-Internally there are three layers:
-
-- Credenza session (server-side, bounded lifetime, OIDC-issued)
-- deriva-py token storage on the client (implementation detail —
-  see F3 — never user-facing)
-- MCP server forwarding (each MCP-server instance needs its own
-  auth context; OAuth client-id / callback-port pair from
-  `claude mcp add` provides it)
-
-The user-facing surface should be exactly **one** thing per
-context the user works in:
-
-- **In a shell:** `deriva-credenza-auth-utils --host <h> login` /
-  `logout`. Re-run on failure. Done.
-- **In Claude Code with an MCP server:** the OAuth callback flow
-  triggered by `claude mcp add -t http ... --client-id ...
-  --callback-port ...`. Browser flow, done. The "you need to
-  re-OAuth" failure mode should be detected by the MCP client
-  layer and trigger a re-callback — the user shouldn't need to
-  know whether the underlying problem is shell-side or
-  MCP-server-side.
-
-The previous version of this finding asked for an "auth model
-diagram" — that was wrong. **The user should never need to see
-or care about the model.** Anything we put in front of the user
-that requires them to understand the three layers has failed.
-
-What's actually needed:
-
-- **Detect-and-redirect at each user-facing layer.** When the
-  shell user gets a 401, the error message tells them to re-run
-  `deriva-credenza-auth-utils login`. Period. (See F3.)
-- **MCP-side equivalent:** when the MCP server gets a 401 from
-  the upstream catalog, surface that to the Claude Code client
-  in a way that triggers the OAuth callback re-flow rather than
-  asking the user to do anything manually. (See C3.)
-- **No "auth architecture" doc that exposes the layers as such.**
-  If there's documentation, it's "how to log in" not "how auth
-  works internally."
-
-Three-layer awareness IS still needed for *platform maintainers*
-— but in a separate maintainer-facing doc that's clearly labeled
-"deriva-platform internals" and not in any README the end user
-will read.
-
-**Sharpened rule (the only one that matters):** in normal use, the
-user authenticates once per session and that is the entire auth
-experience. They never see the three layers, never see token
-storage, never see scope claims, never see session refresh
-mechanics. If they hit a failure, the failing layer detects it
-and either auto-redirects to the appropriate re-auth flow or
-emits a single user-action error message ("Run X to log in.")
-that points at the *one* command that always works. The user
-should not need to know which layer failed in order to fix it.
-
-If any normal-use workflow forces the user to know more than
-"log in," that workflow has failed.
 
 ### G3. Self-finding (agent process)
 
@@ -1126,6 +1122,14 @@ are usable."
 
 ### B4. New skill: `clone-catalog-slice` (deferred)
 
+> **Status: ✅ SHIPPED in deriva-ml-skills v1.3.5 as `setup-ml-catalog`.**
+> Broader scope than originally proposed: covers BOTH the
+> from-scratch flow (`create_ml_catalog()` + a phased loader)
+> AND the clone-slice flow (`clone_via_bag()` with anchors). The
+> name reflects the unified bootstrap-moment framing. Includes
+> explicit "why not `clone_catalog`?" guidance distinguishing
+> it from the whole-catalog same-server tool.
+
 > **Status: FIXED — closed 2026-05-17.** Addressed by the
 > [`setup-ml-catalog` skill](https://github.com/informatics-isi-edu/deriva-ml-skills/blob/main/skills/setup-ml-catalog/SKILL.md)
 > in `deriva-ml-skills`, merged as
@@ -1179,45 +1183,31 @@ issues filed.
 
 ## Priority suggestion
 
-If addressing in order, this is the impact-ordered cut I'd take:
+After the 2026-05-17 doc-add batch, the remaining open work is:
 
-1. **B1** (new skill: read-mcp-guide-first) — highest leverage,
-   fixes the original miss at the layer where Claude Code's
-   discovery affordances actually fire.
-2. **C1c** (`deriva_ml_getting_started` as both prompt AND
-   resource) — universal fix on the server side; helps even
-   non-skill-aware clients.
-3. **E4 / F1** (schema-mutation invalidation of path-builder
-   cache) — fixes the substrate; lets the deriva-py bag-loader
-   refresh become defensive rather than load-bearing.
-4. **H1** (stale `deriva-globus-auth-utils` references) — five-file
-   doc sweep, blocks new users from getting past §"Authenticate"
-   in the template README. Cheap and high-blast-radius.
-5. **C3 / C4 / F6** (auth-failure error wording + resource read
-   fail-fast + `check_auth` 404) — reduces user/agent confusion
-   when wiring is wrong, related to the F3 auth-opacity principle.
-6. **F3** (auth state opaque to end users — the principle) — the
-   parent of items #4 + #5; addressing this changes the shape of
-   all error-handling and user-visible auth surface.
-7. **E2 / E3** (find_features alias + feature_values list/iter)
-   — small API ergonomics with high muscle-memory impact.
-8. **G1** (test plan: resources as first-class) — corrects the
-   plan so future test phases exercise the right surface.
-9. **D1 / D2 / H2** (deriva-ml-mcp README cross-link + drop
-   pre-release caveat + model-template README dev-localhost recipe)
-   — eliminates the wrong-recipe-in-template-README issue. Three
-   coordinated doc updates.
-10. **H3** (`NODE_EXTRA_CA_CERTS` setup not documented) —
-    paired with H2; cheap doc fix once the dev-localhost recipe
-    lands.
-11. **F5** (FK-cycle warning log spam) — two-line `deriva-py`
-    fix; low-priority but quick.
-12. **B4** (new `clone-catalog-slice` skill) — its own session;
-    don't block the rest of the list on it.
-13. Everything else (E1, E5, F2, F4, G4, G5) — quality-of-life
-    improvements, lower leverage individually. G4 and G5 are
-    upstream (uv, Claude Code) — no Deriva-team work needed
-    beyond filing.
+1. **G1** (test plan: resources as first-class) — corrects the
+   model-template's E2E test spec/plan so future phases exercise
+   the right surface. Resumes when Part B resumes.
+2. **E1** (`ml.refresh_schema()` doesn't suppress the
+   stale-cache warning) — needs investigation of why explicit
+   refresh doesn't clear the warning's underlying check.
+3. **E3** (`feature_values()` returns a generator) — small API
+   change; either standardize to list with optional streaming
+   variant, or rename to `iter_feature_values`.
+4. **E5** (bootstrap vocab term defaults) — prune
+   `Workflow_Type` / `Dataset_Type` to a true minimum or split
+   into core + examples.
+5. **F4** (`InsecureRequestWarning` against localhost) —
+   either honor `REQUESTS_CA_BUNDLE` cleanly or document the
+   silence-this hint.
+6. **C5** (per-server `<system-reminder>` attribution) —
+   primarily Claude Code rendering; minimal Deriva work.
+7. **G4 / G5** (uv + Claude Code upstream issues) — file
+   issues with those projects; no Deriva-team code work needed.
+
+(Items B1, B2, B3, B4, D1, D2, E2, E4, F1, F2, F5, G3, H2, H3,
+plus C1c partial and Appendix 3 are shipped — see the audit
+table.)
 
 This is a suggestion, not a mandate. The repo owners can re-order
 based on local priorities and bandwidth.
