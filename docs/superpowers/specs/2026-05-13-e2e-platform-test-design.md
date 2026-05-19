@@ -210,8 +210,12 @@ sub-tag `#refined`, `#new-skill`, or `#eval-added`.
 
 #### Phase 1 — Catalog bootstrap and config repointing
 
-- **Skill:** `route-project-setup`.
-- **Routes to:** `load-cifar10 --create-catalog e2e-test-20260513 --hostname localhost --num-images 500 --show-urls`.
+- **Skill:** `deriva-ml:setup-ml-catalog` (gated: `disable-model-invocation: true`
+  in deriva-ml-skills 1.3.5+). The skill replaces 1.2.1's
+  `route-project-setup`. The gate prevents an agent from invoking it
+  autonomously; the test session falls back to the CLI invocation
+  below per the plan's Step 3.
+- **Routes to:** `load-cifar10 --create-catalog e2e-test-<today> --hostname localhost --num-images 500 --show-urls`.
 - **Direct check:** open the catalog via `DerivaML(...)`. Confirm
   domain schema exists; `Image`, `Image_Class`, `Image_Classification`,
   `Dataset_Type`, `Workflow_Type` tables exist; expected vocabulary
@@ -222,8 +226,10 @@ sub-tag `#refined`, `#new-skill`, or `#eval-added`.
   `small_labeled_training`, `small_labeled_testing`); each dataset
   has expected `current_version`; expected dataset hierarchy.
 - **Indirect check:** `deriva_ml_list_datasets`, `deriva_ml_get_dataset`,
-  `deriva_ml_list_vocabularies`, `deriva_ml_list_vocabulary_terms`,
-  `deriva_ml_list_features`.
+  `list_schemas` (deriva-mcp-core; covers vocab-table discovery),
+  `list_vocabulary_terms` (deriva-mcp-core), `deriva_ml_list_features`.
+  Note: there is no `deriva_ml_list_vocabularies` tool in the current
+  MCP surface.
 - **Diff** counts, names, versions, hierarchy.
 - **Repoint** `src/configs/dev/{deriva,datasets,assets,roc_analysis}_localhost.py`
   with the new catalog ID and dataset RIDs. Commit on the worktree
@@ -231,7 +237,7 @@ sub-tag `#refined`, `#new-skill`, or `#eval-added`.
 
 #### Phase 2 — Quick training (dry-run, then real)
 
-- **Skill:** `route-run-workflows`.
+- **Skill:** `deriva-ml:execution-lifecycle`.
 - **Routes to:** `deriva-ml-run +experiment=cifar10_quick dry_run=true`
   (dry-run first to validate config + Hydra resolution); then re-run
   the same command with `dry_run=true` removed (real training).
@@ -250,15 +256,15 @@ sub-tag `#refined`, `#new-skill`, or `#eval-added`.
 - **Direct check:** raw query of the feature association table.
   Verify `Image_Class` term matches the filename-encoded class (e.g.,
   `train_frog_42.png` → `Image_Class=frog`).
-- **Indirect check:** `deriva_ml_feature_values` (or whichever tool
-  the skill picks).
+- **Indirect check:** `deriva_ml_list_feature_values` (or whichever
+  tool the skill picks).
 - **Diff.** This phase also validates that `create-feature` routes
   correctly when the request is "show me existing features" rather
   than "create a feature." Routing failure here is a `#skill-issue`.
 
 #### Phase 4 — Multirun (parent/child execution lineage)
 
-- **Skill:** `route-run-workflows`.
+- **Skill:** `deriva-ml:execution-lifecycle`.
 - **Routes to:** `deriva-ml-run +multirun=quick_vs_extended` (or
   `lr_sweep`).
 - **Direct check:** parent Execution row + N child Execution rows
@@ -297,8 +303,8 @@ Cross-cutting check, interleaved after phases 2 and 4.
   happen inside Executions per the steering principle).
 - **Direct check:** feature schema in `ml.model.schemas[...]`; feature
   values queryable by raw table read.
-- **Indirect check:** values via `deriva_ml_feature_values`; appears
-  in dataset bag after re-download.
+- **Indirect check:** values via `deriva_ml_list_feature_values`;
+  appears in dataset bag after re-download.
 - **Diff** and journal.
 
 #### Phase 7 — Dataset operations (new split + train on it)
@@ -312,7 +318,7 @@ Cross-cutting check, interleaved after phases 2 and 4.
 - Register a new experiment config in `src/configs/dev/experiments.py`
   pointing at the new split.
 - Run a small training experiment against the new split via
-  `route-run-workflows`.
+  `deriva-ml:execution-lifecycle`.
 - **Direct check:** new datasets in catalog with correct
   `current_version`; new Workflow row with script ref, URL, commit
   hash, workflow-type vocab term; training run records new dataset
@@ -328,9 +334,9 @@ script-generation help produce a runnable artifact?
 
 #### Phase 9 — ROC notebook
 
-- **Skill:** `route-run-workflows` (notebooks live there) or
+- **Skill:** `deriva-ml:execution-lifecycle` (notebooks live there) or
   `compare-model-runs` (since ROC is run comparison). Try
-  `route-run-workflows` first; if it doesn't route to notebooks,
+  `deriva-ml:execution-lifecycle` first; if it doesn't route to notebooks,
   that's `#skill-issue`.
 - Update `dev/assets_localhost.py` + `dev/roc_analysis_localhost.py`
   with the asset RIDs from phases 2 and 4 (queried via MCP tools).
@@ -394,8 +400,9 @@ Two distinct artifacts, two distinct purposes.
 ```markdown
 ### 2026-05-13 14:22 — Phase 1: catalog bootstrap
 
-**Skill:** route-project-setup → ran `load-cifar10 --create-catalog
-e2e-test-20260513 --num-images 500 --hostname localhost`.
+**Skill:** deriva-ml:setup-ml-catalog (gated; agent fell back to CLI)
+→ ran `load-cifar10 --create-catalog e2e-test-20260513 --num-images
+500 --hostname localhost`.
 **MCP tools:** deriva_ml_list_datasets (3 calls — surveying created
 datasets), deriva_ml_get_dataset (verifying RIDs).
 **Direct/indirect diff:** ✓ agree (13 datasets, all hierarchies match).
@@ -440,7 +447,7 @@ treat as `#skill-issue` and fix/work around.
 
 Default: log at **skill level** ("invoked `dataset-lifecycle` to
 create a 70/30 split, which used `deriva_ml_create_dataset` +
-`deriva_ml_add_dataset_member`").
+`deriva_ml_add_dataset_members`").
 
 Drill into args/results **only when something surprised:**
 

@@ -23,6 +23,22 @@ inspection checkpoint structure.
 
 **Spec:** `docs/superpowers/specs/2026-05-13-e2e-platform-test-design.md`
 
+**Date convention:** Throughout this plan, the literal string
+`2026-05-13` is the **plan's authoring date**, not the test-run date.
+For each actual test execution, substitute the current session's
+date (YYYY-MM-DD) into:
+- the worktree branch name (`e2e-test/<today>`)
+- the journal file path (`docs/e2e-test-<today>-journal.md`)
+- domain-schema names like `e2e-test-<today>` (used by `load-cifar10`'s
+  `--create-catalog` argument)
+- the session-journal header ("E2E Platform Test Session Journal —
+  <today>").
+
+The plan/spec **file paths** keep their authored date (they're the
+permanent reference documents). The most recent prior session journal
+was `docs/e2e-test-2026-05-19-journal.md`; consult it for an example
+of how the substitutions look in practice.
+
 ---
 
 ## File Structure
@@ -2510,16 +2526,25 @@ Note in the journal: where does the skill write? If RIDs in catalog,
 note as `#skill-issue` and continue with workaround (export before
 cleanup); if repo files, note the path and continue.
 
-- [ ] **Step 2: Try `route-project-setup` skill**
+- [ ] **Step 2: Try the bootstrap routing skill**
 
+In `deriva-ml-skills` 1.3.5+, the bootstrap-routing skill is
+`deriva-ml:setup-ml-catalog` (it replaced 1.2.1's `route-project-setup`).
 Phrase the request as a user would: *"Set up a fresh CIFAR-10 catalog
 on localhost for end-to-end testing."*
 
 Observe: which skill fires? Does it route to `load-cifar10`?
 
-If it does NOT fire or routes wrong, this is a `#skill-issue`. Apply
-the meta-loop from spec §4: diagnose, fix via `skill-creator`, reload,
-re-attempt. Journal it.
+**Design note (not a `#skill-issue`):** `setup-ml-catalog` is marked
+`disable-model-invocation: true` in 1.3.5. An agent-driven test run
+**cannot** invoke it — only an explicit user `/deriva-ml:setup-ml-catalog`
+slash command can. The plan therefore expects the agent to fall back
+to the CLI per Step 3, and the journal records the gate as a design
+observation rather than a routing bug.
+
+If the skill does fire when the user invokes it and routes wrong,
+that **is** a `#skill-issue`. Apply the meta-loop from spec §4:
+diagnose, fix via `skill-creator`, reload, re-attempt. Journal it.
 
 - [ ] **Step 3: Execute the catalog-creation command**
 
@@ -2570,16 +2595,26 @@ Record direct-check results in journal under "Direct check."
 
 - [ ] **Step 5: Indirect catalog check via MCP tools**
 
-Invoke these MCP tools and record results in the journal:
+Invoke these MCP tools and record results in the journal. The tool
+namespaces split across the two plugins on the MCP server:
+`deriva-mcp-core` owns generic catalog/schema/vocabulary tools (no
+`deriva_ml_` prefix); `deriva-ml-mcp` owns ML-domain tools (with
+`deriva_ml_` prefix).
 
 - `deriva_ml_list_datasets(hostname="localhost", catalog_id=<id>)` —
   expect same count + RIDs as the direct check.
-- `deriva_ml_list_vocabularies(hostname="localhost", catalog_id=<id>)` —
-  expect to include `Image_Class`.
-- `deriva_ml_list_vocabulary_terms(hostname="localhost", catalog_id=<id>, vocabulary="Image_Class")` —
+- `list_schemas(hostname="localhost", catalog_id=<id>)` —
+  expect to include the domain schema (e.g. `e2e-test-20260520`) and
+  `deriva-ml`. (There is no `deriva_ml_list_vocabularies` tool in
+  the current MCP surface; vocabulary tables are discoverable via
+  `list_schemas` + `get_table`, or via the next bullet for their
+  contents.)
+- `list_vocabulary_terms(hostname="localhost", catalog_id=<id>, schema="<domain_schema>", table="Image_Class")` —
   expect the 10 CIFAR class terms.
-- `deriva_ml_list_features(hostname="localhost", catalog_id=<id>, target_table="Image")` —
-  expect `Image_Classification`.
+- `deriva_ml_list_features(hostname="localhost", catalog_id=<id>, table="Image")` —
+  expect `Image_Classification`. (Parameter is `table`, not
+  `target_table` — the latter appears in the response JSON but isn't
+  the tool's input param.)
 
 - [ ] **Step 6: Diff direct vs indirect**
 
@@ -2624,10 +2659,10 @@ Append to `/Users/carl/GitHub/DerivaML/docs/e2e-test-2026-05-13-journal.md`:
 ```markdown
 ### 2026-05-13 HH:MM — Phase 1: catalog bootstrap
 
-**Skill tried:** route-project-setup
-**Routed to:** <load-cifar10 ... | none — fell back to CLI>
-**MCP tools used:** deriva_ml_list_datasets, deriva_ml_list_vocabularies,
-deriva_ml_list_vocabulary_terms, deriva_ml_list_features
+**Skill tried:** deriva-ml:setup-ml-catalog (gated: disable-model-invocation)
+**Routed to:** <load-cifar10 ... | none — fell back to CLI per the gate>
+**MCP tools used:** deriva_ml_list_datasets, list_schemas,
+list_vocabulary_terms, deriva_ml_list_features
 **Catalog created:** <id>
 **Direct/indirect diff:** ✓ agree | ✗ <details>
 **Findings:** <none | list with tags>
@@ -2660,7 +2695,7 @@ Wait for explicit user response.
 
 ## Task B2: Phase 2 — Quick training (dry-run, then real)
 
-- [ ] **Step 1: Try `route-run-workflows` skill (dry-run)**
+- [ ] **Step 1: Try `deriva-ml:execution-lifecycle` skill (dry-run)**
 
 User-style request: *"Run the cifar10_quick experiment as a dry run."*
 
@@ -2786,8 +2821,10 @@ for img in images:
 
 - [ ] **Step 3: Indirect check via MCP**
 
-- `deriva_ml_feature_values(hostname=..., catalog_id=..., target_table="Image", feature_name="Image_Classification", limit=10)` —
+- `deriva_ml_list_feature_values(hostname=..., catalog_id=..., table="Image", feature_name="Image_Classification", limit=10)` —
   same 10 records (or 10 different ones; just verify shape and values).
+  (The parameter is `table` (not `target_table`) and the tool name is
+  `deriva_ml_list_feature_values` (not `deriva_ml_feature_values`).)
 
 - [ ] **Step 4: Diff and journal**
 
@@ -2807,7 +2844,7 @@ Wait.
 
 ## Task B4: Phase 4 — Multirun (parent/child execution lineage)
 
-- [ ] **Step 1: Try `route-run-workflows` skill**
+- [ ] **Step 1: Try `deriva-ml:execution-lifecycle` skill**
 
 User-style request: *"Run the quick vs extended multirun comparison."*
 
@@ -2936,9 +2973,10 @@ assert elapsed_2 < elapsed_1 / 2 or elapsed_2 < 1.0, "Cache did not serve repeat
 
 - [ ] **Step 3: Re-run an MCP-side vocabulary lookup**
 
-Call `deriva_ml_list_vocabulary_terms` for `Image_Class` twice.
-Observe whether the second call is faster, returns identical results,
-and (if introspectable) hits a cache.
+Call `list_vocabulary_terms` (deriva-mcp-core) for `Image_Class` twice
+with the same `(hostname, catalog_id, schema, table)`. Observe whether
+the second call is faster, returns identical results, and (if
+introspectable) hits a cache.
 
 - [ ] **Step 4: Journal findings**
 
@@ -3008,7 +3046,7 @@ exe.upload_execution_outputs()
 - [ ] **Step 5: Direct check + indirect check**
 
 Direct: read feature values from the catalog directly.
-Indirect: `deriva_ml_feature_values` for the new feature.
+Indirect: `deriva_ml_list_feature_values` for the new feature.
 
 - [ ] **Step 6: Verify feature appears in dataset bag**
 
@@ -3121,9 +3159,9 @@ Open the Workflow row in Chaise or via direct query. Verify:
 
 - [ ] **Step 2: Audit script-generation help**
 
-If `route-run-workflows` (or another skill) helped author the new
+If `deriva-ml:execution-lifecycle` (or another skill) helped author the new
 experiment config in Phase 7, journal that path. If no skill helped,
-note as `#skill-issue` (missing skill / `route-run-workflows` doesn't
+note as `#skill-issue` (missing skill / `deriva-ml:execution-lifecycle` doesn't
 cover authoring).
 
 - [ ] **Step 3: User inspection checkpoint**
@@ -3154,7 +3192,7 @@ git add src/configs/dev/
 git commit -m "test: [E2E-DROP] repoint roc_analysis configs with prediction asset RIDs"
 ```
 
-- [ ] **Step 2: Try `route-run-workflows` skill for notebook**
+- [ ] **Step 2: Try `deriva-ml:execution-lifecycle` skill for notebook**
 
 User-style request: *"Run the ROC analysis notebook against the
 localhost catalog using the latest predictions."*
