@@ -114,7 +114,6 @@ def create_or_connect_catalog(
             hostname=args.hostname,
             catalog_id=str(catalog_id),
             domain_schemas={domain_schema},
-            check_auth=True,
         )
 
         set_catalog_provenance(
@@ -131,7 +130,6 @@ def create_or_connect_catalog(
         hostname=args.hostname,
         catalog_id=str(args.catalog_id),
         domain_schemas={args.domain_schema} if args.domain_schema else None,
-        check_auth=True,
     )
     domain_schema = ml.default_schema
     logger.info(f"Connected to catalog, domain schema: {domain_schema}")

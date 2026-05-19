@@ -2540,7 +2540,7 @@ In a Python REPL or one-off script:
 ```python
 from deriva_ml import DerivaML
 
-ml = DerivaML(hostname="localhost", catalog_id="<NEW_CATALOG_ID>", check_auth=True)
+ml = DerivaML(hostname="localhost", catalog_id="<NEW_CATALOG_ID>")
 
 # Schema check
 assert "Image" in ml.model.schemas[ml.default_schema].tables
@@ -2694,7 +2694,7 @@ If catalog is dirty-tree-blocked: use `DERIVA_ML_ALLOW_DIRTY=true uv run ...`
 - [ ] **Step 4: Direct catalog check — workflow + execution + assets**
 
 ```python
-ml = DerivaML(hostname="localhost", catalog_id="<id>", check_auth=True)
+ml = DerivaML(hostname="localhost", catalog_id="<id>")
 
 # Find the workflow row
 workflows = ml.list_workflows()
@@ -2761,7 +2761,7 @@ creating? If not, `#skill-issue`.
 - [ ] **Step 2: Direct check — read feature values for 10 random Image rows**
 
 ```python
-ml = DerivaML(hostname="localhost", catalog_id="<id>", check_auth=True)
+ml = DerivaML(hostname="localhost", catalog_id="<id>")
 
 # Get 10 random Image rows
 pb = ml.catalog.getPathBuilder()
@@ -2828,7 +2828,7 @@ completion.
 - [ ] **Step 3: Direct check — parent + child + FK + assets**
 
 ```python
-ml = DerivaML(hostname="localhost", catalog_id="<id>", check_auth=True)
+ml = DerivaML(hostname="localhost", catalog_id="<id>")
 
 # Find the multirun parent
 parent_exes = [e for e in ml.list_executions() if e.is_multirun_parent]
@@ -2920,7 +2920,7 @@ Download its bag twice in quick succession:
 
 ```python
 import time
-ml = DerivaML(hostname="localhost", catalog_id="<id>", check_auth=True)
+ml = DerivaML(hostname="localhost", catalog_id="<id>")
 
 t1 = time.time()
 bag1 = ml.download_dataset_bag(<dataset_or_exec_rid>)
@@ -3077,7 +3077,7 @@ created in catalog with correct script + commit + URL + type.
 - [ ] **Step 7: Direct check — new Workflow provenance**
 
 ```python
-ml = DerivaML(hostname="localhost", catalog_id="<id>", check_auth=True)
+ml = DerivaML(hostname="localhost", catalog_id="<id>")
 new_wf = [w for w in ml.list_workflows() if "phase7" in w.name.lower() or "e2e" in w.name.lower()]
 assert new_wf
 wf = new_wf[-1]
@@ -3180,7 +3180,7 @@ notebook archived as catalog assets.
 - [ ] **Step 4: Direct check — outputs in catalog**
 
 ```python
-ml = DerivaML(hostname="localhost", catalog_id="<id>", check_auth=True)
+ml = DerivaML(hostname="localhost", catalog_id="<id>")
 exes = ml.list_executions()
 recent = sorted(exes, key=lambda e: e.timestamp)[-1]
 assets = ml.list_execution_assets(recent.rid)
@@ -3237,7 +3237,7 @@ import pandas as pd
 
 # For each child execution from Phase 4, download its prediction CSV
 # and compute accuracy.
-ml = DerivaML(hostname="localhost", catalog_id="<id>", check_auth=True)
+ml = DerivaML(hostname="localhost", catalog_id="<id>")
 rankings = []
 for child_rid in <list from Phase 4>:
     assets = ml.list_execution_assets(child_rid)
