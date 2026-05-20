@@ -43,3 +43,18 @@ notebook_config(
         "from multirun parent 804 — 2 prediction CSVs (836, 87J)."
     ),
 )
+
+
+notebook_config(
+    "roc_e2e_localhost_46",
+    config_class=ROCAnalysisConfig,
+    defaults={
+        "deriva_ml": "localhost_46",
+        "assets": "roc_e2e_localhost_46",
+        "datasets": "no_datasets",
+    },
+    description=(
+        "ROC analysis on localhost 46 (issue #14 repro): quick (CVP) vs "
+        "extended (D14) — 2 prediction CSVs (CXA, D2R)."
+    ),
+)
