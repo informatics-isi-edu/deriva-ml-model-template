@@ -442,3 +442,138 @@ confidence scores).
 Filing it before moving on so the multirun phase doesn't run
 into the same pothole.
 
+---
+
+### 2026-05-20 — Inter-phase: B12 fix verified end-to-end
+
+After deriva-ml #171 landed, bumped the e2e worktree's lock to
+`deriva-ml@4908bce8` and rebuilt the dev-localhost MCP container
+(`docker compose ... build --no-cache deriva-mcp-test` + `up -d
+--force-recreate`). Confirmed the container has the fix
+(`FeatureRecord.select_by_execution([])` returns `None`), then
+re-ran the previously-failing MCP path:
+
+| MCP call | Result |
+|---|---|
+| `deriva_ml_list_feature_values(selector="by_execution", selector_execution_rid="CDG", preflight_count=true)` | **50** (was "No records match" before #171) ✅ |
+| same with `selector_execution_rid="CMY"` | **50** (was "No records match") ✅ |
+
+B12 closed end-to-end. Direct + indirect agree.
+
+---
+
+### 2026-05-20 — Phase 4: multirun (parent/child execution lineage)
+
+**Skill tried:** `deriva-ml:execution-lifecycle`. Routed correctly
+to the multirun cli surface (`+multirun=<name>` syntax — no
+`--multirun` flag needed for named multiruns). The skill's
+`references/cli-reference.md` had the right invocation. No
+`#skill-issue`.
+
+**Multirun:**
+
+```bash
+uv run deriva-ml-run +multirun=quick_vs_extended \
+    deriva_ml=localhost_46 \
+    datasets=cifar10_small_labeled_split_localhost
+```
+
+Sweeps `cifar10_quick` (3 epochs, conv 32→64, hidden 128) and
+`cifar10_extended` (50 epochs, conv 64→128, hidden 256, dropout
+0.25, weight decay 1e-4). Dry-run validated first; one benign
+warning (see below).
+
+**Result:** 3 executions on catalog 46.
+
+| Role | RID | Workflow | Execution_Duration | Status | Output_Assets |
+|---|---|---|---|---|---|
+| **Parent** (multirun supervisor) | **CTA** | CJW | **17.10 s** | Uploaded | 0 (correct — children produce artifacts) |
+| Child Job 0 (cifar10_quick) | CVP | CJW | 0.60 s | Uploaded | weights 6.55 MB, training_log, predictions CSV |
+| Child Job 1 (cifar10_extended) | D14 | CJW | 10.97 s | Uploaded | weights **26.12 MB** (larger architecture), training_log (3.5 KB — 50 epochs), predictions CSV |
+
+Lineage table `deriva-ml.Execution_Execution` correctly records:
+
+| Parent | Child | Sequence |
+|---|---|---|
+| CTA | CVP | 0 |
+| CTA | D14 | 1 |
+
+**Direct check (deriva-ml):**
+
+- `ml.lookup_execution("CTA")` returns an `ExecutionRecord` with
+  the full 1215-char QUICK_VS_EXTENDED_DESCRIPTION markdown
+  populated on `description` — confirms
+  `multirun_descriptions.py` content lands on the parent
+  execution row exactly as authored.
+- All three duration columns populated on parent and both
+  children, matching the PR-2 phase-duration contract.
+- `Execution_Asset_Execution` association rows correctly link
+  child assets (Output role) to their child executions; parent
+  has no direct asset links.
+- Extended-model training metrics: train_acc converges to 100%
+  within ~10 epochs, test_acc stabilizes around 96–98% with mild
+  late-stage oscillation (consistent with the 50-image test set
+  and dropout 0.25 regularization).
+
+**Indirect check (MCP):**
+
+| Call | Outcome |
+|---|---|
+| `deriva_ml_list_execution_children(execution_rid="CTA")` | count=2, returns CVP + D14 with correct descriptions and statuses ✅ |
+| `deriva_ml_list_execution_parents(execution_rid="CVP")` | count=1, returns CTA ✅ |
+| `deriva_ml_get_lineage(rid="CTA")` | root=CTA, lineage tree with no consumed_datasets/assets (parent itself didn't download inputs — children did). Tool description explicitly notes it walks data-flow not orchestration; behavior matches. `walked_complete=true`, no cycles, no depth cap ✅ |
+| All three duration fields on returned `ExecutionSummary` objects from `list_execution_children` / `list_execution_parents` | **`null` for parent and both children** ❌ **`#bug-B13`** |
+| `deriva_ml_get_execution(execution_rid="CVP")` (singular) | All three durations populated correctly ✅ — confirms the bug is *only* in the list_execution_*  paths |
+
+**Bug B13 (deriva-ml): `ExecutionRecord.list_execution_children`
+and `list_execution_parents` drop duration fields.** Root cause
+in `src/deriva_ml/execution/execution_record.py:423-435` (children)
+and `:502-514` (parents): the fetched ermrest row contains
+`Execution_Duration`, `Download_Duration`, `Upload_Duration`, but
+the constructor call for the yielded `ExecutionRecord` only
+passes `execution_rid`, `workflow`, `status`, `description`. The
+duration fields fall to their None defaults. `_summarize_execution`
+in deriva-ml-mcp then dutifully reads None for all three.
+
+Fix is two two-line additions (one per method): plumb the three
+duration columns through to the `ExecutionRecord(...)` constructor
+calls. Note that `start_time` / `stop_time` are *not* catalog
+columns — they live in the local SQLite registry — so those
+correctly remain `None` for any catalog-derived ExecutionRecord
+and don't need propagating here.
+
+**Other observation (not a bug):** Hydra dry-run logs
+"`Failed to complete parent execution: Execution 0000 no longer
+in workspace registry`" as a warning. Cause: in dry-run mode the
+parent multirun supervisor uses RID `0000` as a placeholder, which
+isn't in the SQLite registry — so `execution_stop()` raises
+`DerivaMLStateInconsistency` (correctly documented as one of the
+expected causes: "gc'd, never created, or **dry-run**"). The
+atexit handler catches and logs as a warning, exit code is 0.
+This is benign but the warning text is misleading — it suggests a
+state-consistency problem when in fact the dry-run path is doing
+exactly what it should. Filing as `#log-noise-finding` for a
+future pass over runner.py:243 to special-case the dry-run RID
+("0000") with a clearer message ("dry-run: parent execution not
+recorded").
+
+**Diff:** counts and lineage agree everywhere. Workflow IDs match
+between parent and children (CJW for all three, expected: same
+underlying code), descriptions match exactly between
+direct-fetch and MCP-list responses. The only delta is B13 — a
+clear MCP-side data loss that's surfaceable as a fix in deriva-ml.
+
+**Carry-forward to Phase 5 / Phase 4 closure:**
+
+- B13 PR queued (task #96). Small (~6 lines + test), low-risk.
+- Phase 5 (client cache validation) is the next step per the
+  e2e spec §4 phase ordering — interleaves after Phase 2 (already
+  passed) and again after Phase 4. The `#cache-finding` from
+  Phase 2 (CMY's bag download took longer than CK6 against the
+  same dataset RID) is now joined by a new data point: the
+  multirun children CVP and D14 share the same dataset RID with
+  CDG — Phase 5 can now compare BDBag-cache behavior across a
+  3-execution sequence.
+
+
+
