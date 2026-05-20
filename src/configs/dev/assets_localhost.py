@@ -1,4 +1,4 @@
-"""Localhost catalog 36 asset RIDs (prediction CSVs from multirun children).
+"""Localhost catalog 46 asset RIDs (prediction CSVs from multirun children).
 
 Asset RIDs are produced by *executions*, not by the loader, and so are
 populated only after the corresponding experiments have run. Phase 1 of
@@ -10,7 +10,7 @@ the entries below are empty placeholders.
 Select on the CLI:
 
     uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb \\
-        --host localhost --catalog 36 \\
+        --host localhost --catalog 46 \\
         assets=roc_lr_sweep_localhost
 """
 
@@ -19,7 +19,7 @@ from hydra_zen import store
 asset_store = store(group="assets")
 
 # -----------------------------------------------------------------------------
-# Learning-rate sweep multirun on catalog 36.
+# Learning-rate sweep multirun on catalog 46.
 # Populated by Phase 4. Children + their prediction CSVs go here as
 # [child_csv_rid_1, child_csv_rid_2, ...] once known.
 # -----------------------------------------------------------------------------
@@ -30,7 +30,7 @@ asset_store(
 )
 
 # -----------------------------------------------------------------------------
-# E2E quick_vs_extended multirun on catalog 36.
+# E2E quick_vs_extended multirun on catalog 46.
 # Populated by Phase 2 (quick) and a follow-up (extended).
 # -----------------------------------------------------------------------------
 
