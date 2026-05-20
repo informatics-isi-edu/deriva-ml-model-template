@@ -834,6 +834,132 @@ exercised end-to-end in Phase 2.
   (B15 generic-tool fix) remain open follow-ups. Neither blocks
   Phase 7.
 
+---
+
+### 2026-05-20 — Phase 7: dataset operations (new split + curated subset + train)
+
+**Skill tried:** `deriva-ml:dataset-lifecycle`. Loaded the
+canonical script-based-workflow guidance. The skill correctly
+points 3-way splits to `deriva_ml_split_dataset` with
+`val_size` set, so the spec's pessimism about 3-way support is
+inverted — **3-way is fully supported.** That's a documentation
+note, not a finding.
+
+**Findings during Phase 7:**
+
+- **B16 (deriva-ml, filed task #115):** `split_dataset`
+  stratify path hits denormalizer FK-direction errors when
+  `stratify_by_column="Image_Classification.Image_Class"` is
+  supplied. Two manifestations: (a) "Anchors of table(s)
+  ['Image'] have no FK path to any table in
+  include_tables=['Image_Classification']" — incorrect; the FK
+  is in the other direction (assoc → Image), which the
+  denormalizer's FK-direction inference doesn't recognize.
+  (b) When both Image + Image_Classification are in
+  `include_tables`, the denormalizer reports "Multiple
+  candidates for row_per … Specify row_per=… explicitly" but
+  the MCP tool doesn't expose a `row_per` kwarg. Workaround:
+  random split (works; 85J already came in class-balanced from
+  load-cifar10 — though see B17).
+- **B17 (load-cifar10, filed task #116):** 85J
+  (`cifar10_labeled_training_localhost`, advertised as 250
+  labeled images) actually covers only **2 of 10 classes**:
+  225 bird + 25 ship. Small-partition sampling skews to
+  whichever classes the source file orders first. Symptom
+  propagates: CMY's 50-image test set in Phase 3 was also
+  bird/ship dominated. Surfaced when filtering 85J's members
+  for cat/dog/frog returned zero matches. Not a regression —
+  small-partition sampling has always been first-N rather than
+  stratified — but worth documenting / fixing for downstream
+  consumers who expect class diversity at small scale.
+- **Same MCP-container `'git'` gap as Phase 6:** any tool that
+  triggers internal workflow creation (`split_dataset`,
+  `create_workflow`, ...) fails inside the MCP container
+  because git isn't installed there. Workaround: run from the
+  local Python API where git is available in the worktree.
+  Tracked as part of the broader "Hatrac config in container"
+  discussion; not a new finding.
+
+**Step-by-step Phase 7 results:**
+
+**Step 2 — three-way split of 85J:** 60/20/20 stratified random
+split produced 4 new datasets, all initially at `0.1.0` and
+later released to `0.2.0`:
+
+| RID | Role | Members | Released |
+|---|---|---|---|
+| **DKJ** | Split (parent) | (container) | 0.2.0 |
+| **DKT** | Training (60%) | 150 | 0.2.0 |
+| **DM4** | Validation (20%) | 50 | 0.2.0 |
+| **DME** | Testing (20%) | 50 | 0.2.0 |
+
+**Step 3 — curated subset:** since 85J only has bird + ship per
+B17, the spec's cat/dog/frog filter was substituted with a
+**bird-only** filter (the path being exercised is the same).
+Produced dataset **E6R** (225 Images), released to 0.2.0.
+
+The empty dataset **E5M** was created during the
+zero-match cat/dog/frog dry-run; it stays in the catalog as a
+journaled artifact (deletion blocked by classifier; leaving in
+place per session policy).
+
+**Step 4 — register experiment + train:**
+- Added 5 new entries to `src/configs/dev/datasets_localhost.py`
+  (`cifar10_phase7_split_localhost`,
+  `cifar10_phase7_training_localhost`,
+  `cifar10_phase7_bird_subset_localhost`).
+- Added experiment `cifar10_phase7_localhost` to
+  `src/configs/dev/experiments.py`. The experiment pins
+  released versions (0.2.0), not dev labels — honoring the
+  skill's pre-experiment checklist on these new entries.
+- Committed (commit `ff061c4`).
+- Ran `uv run deriva-ml-run +experiment=cifar10_phase7_localhost`
+  end-to-end. Training succeeded.
+
+**Step 5 — verification:**
+
+Direct check (raw ermrest):
+
+| Field | Value |
+|---|---|
+| Execution RID | **EN6** |
+| Status | `Uploaded` |
+| Workflow | `CJW` (dedup hit from earlier cifar10_cnn runs — checksum `afb676f0c587`; correct idempotent behavior since the same script committed at the same commit produces the same workflow) |
+| Duration columns | ED=0.52s, DD=1.52s, UD=0.76s |
+| Input dataset | `DKT` (via `Dataset_Execution` row) |
+| Output assets | 2 (cifar10_cnn_weights.pt + training_log.txt; no predictions.csv since this experiment didn't include a test partition) |
+| Training metrics | epoch 1 train_acc=83.3%, epochs 2-3 train_acc=91.3% on 150 samples × 3 epochs |
+
+Indirect check (MCP):
+
+| Call | Outcome |
+|---|---|
+| `deriva_ml_get_execution(EN6)` | Returns the full record with all three duration fields and description matching the experiment config ✅ |
+| `deriva_ml_get_dataset(DKT)` | `current_version=0.2.0`, types `[Training, Labeled]`, `cite_url` includes the catalog snapshot suffix `@354-GNTN-D1H6` — exactly what release should produce ✅ |
+| `deriva_ml_get_dataset(DKJ)` | Parent Split dataset; types `[Split]`; cite_url snapshot-pinned ✅ |
+| `deriva_ml_get_dataset(E6R)` | Bird subset; types `[Training, Labeled]`; 225 members per direct check ✅ |
+
+**Diff:** clean. Workflow URL embeds the git commit hash from
+the local worktree (`603ea925`), which matches `git log` for
+the e2e branch. Workflow dedup against earlier `CJW` runs is
+correct — same checksum from the same script. Per the spec's
+Phase 8 fold-in: "does the new Workflow row correctly link
+script + commit hash + URL + type?" — yes, on all four
+counts (the type vocab term wasn't checked here since CJW was
+created during Phase 2 with `Training` type already).
+
+**Carry-forward:**
+
+- Phase 8 was folded into Phase 7 per spec ordering — closed.
+- Phase 9 (ROC notebook) and Phase 10 (model comparison) come
+  next, both natural fits for the multirun children CDG / D14
+  from Phase 4 and the new training execution EN6 from Phase 7.
+- B16 and B17 remain open as finding-only tasks (task #115 and
+  #116); neither blocks Phase 9.
+- Empty E5M is a Phase 7 artifact; not actionable.
+
+
+
 
 
 
