@@ -1,0 +1,238 @@
+# E2E Platform Test Session Journal — 2026-05-19 (clean restart)
+
+This journal restarts Phase 1 from scratch against the post-bugfix
+baseline. The prior attempt is preserved at
+`docs/e2e-test-2026-05-19-journal.archived.md` (Phase 1 against
+pre-fix pins; surfaced bugs B1–B7 in `docs/bugs/`, all since fixed).
+
+---
+
+## Session setup
+
+- **Workspace:** `/Users/carl/GitHub/DerivaML/deriva-ml-model-template-e2e`, branch `e2e-test/2026-05-18`
+- **Plan:** `docs/superpowers/plans/2026-05-13-e2e-platform-test.md` (in the main repo)
+- **uv.lock baseline:** `d28bcfb` (deriva-py `ed5ee69`, deriva-ml `0f14de7e`)
+- **Installed pins:** `deriva 2.0.0.dev0 @ ed5ee69`, `deriva-ml 1.36.5.post4+g0f14de7eb`
+- **MCP server:** dev-localhost (deriva-mcp-core `08bb642` + deriva-ml-mcp `2116130`), OAuth via credenza
+
+### Pre-flight cleanup (this session)
+
+- Deleted catalog `20` on localhost (created on pre-fix pins; the
+  archived journal's validity caveat at line 184 explicitly calls
+  for a recreation against the cache-fixed code).
+- Cleared `~/.deriva-ml/localhost/20/` schema cache.
+- Dropped commit `4769eba` ([E2E-DROP] repoint at catalog 20) via
+  `git rebase --onto 116092b 4769eba HEAD`. Kept the uv.lock bump
+  (now `d28bcfb`). Local branch diverged from origin/e2e-test/2026-05-18
+  by design; no force-push without user approval.
+- Archived previous journal to `docs/e2e-test-2026-05-19-journal.archived.md`.
+
+---
+
+### 2026-05-19 16:57 — Phase 1: catalog bootstrap (clean baseline)
+
+**Skill tried:** `deriva-ml:setup-ml-catalog` (1.3.5 replacement for the
+plan-referenced `route-project-setup`). Same status as the archived
+run: marked `disable-model-invocation: true`, so the agent cannot
+invoke it; only an explicit `/deriva-ml:setup-ml-catalog` slash command
+from the user can. Fell back to CLI per the plan's "whether routed by
+skill or by fallback" branch. Same design observation as before
+about the test-mode vs user-confirmation tension.
+
+**Routed to:** none — fell back to CLI.
+
+**MCP tools used:**
+- `deriva_ml_list_datasets(hostname="localhost", catalog_id="36")`
+- `deriva_ml_list_features(hostname="localhost", catalog_id="36", table="Image")`
+- `list_vocabulary_terms(hostname="localhost", catalog_id="36", schema="e2e-test-20260519b", table="Image_Class")`
+- `list_schemas(hostname="localhost", catalog_id="36")`
+
+**Catalog created:** id `36`, domain schema `e2e-test-20260519b`,
+500 images (250 train + 250 test), 500 features (Image_Classification
+per image), 13 datasets (RIDs 84W, 856, 85E, 85R, 868, 86G, 86T, B68,
+B6G, B6T, BQW, BR4, BRE), 10 Image_Class vocab terms.
+
+**Direct/indirect diff:**
+
+| Check | Direct (deriva-ml) | Indirect (MCP) | Agreement |
+|-------|--------------------|----------------|-----------|
+| Schemas | `public, WWW, deriva-ml, e2e-test-20260519b` | same 4 | ✓ |
+| Dataset count | 13 | 13 | ✓ |
+| Dataset RIDs | (above) | match | ✓ |
+| `Image_Class` vocab terms | 10 (airplane…truck) | 10 same | ✓ |
+| `Image_Classification` feature on Image | present, 1 row | `count: 1` | ✓ |
+| `find_features()` (no table) dedup | 1 copy | (always passes table, n/a) | ✓ |
+
+**No `#diff`.** All four MCP indirect channels agree with the direct
+deriva-ml view.
+
+**Regression-fix verification (bugs from the archived Phase 1 run):**
+
+- **B1 (`find_features` duplicates)** — `ml.find_features()` with no
+  `table=` arg now returns **1** copy of `Image_Classification`
+  (previously 3). Fix at deriva-ml `1f2e722` confirmed working in
+  installed pin `0f14de7e`.
+- **B2 (schema-cache staleness after load)** — Fresh `DerivaML()`
+  construction after `load-cifar10` saw `Image`, `Image_Class` vocab,
+  all 13 datasets, and the `Image_Classification` feature **without**
+  any `refresh_schema()` workaround. Fix at deriva-py `3a6a7bb`
+  (cache-invalidation refactor) + deriva-ml `0f14de7` (route schema
+  reads through `getCatalogSchema()`) confirmed working.
+
+**Findings:** none for this run. The skill-invocation gate and the
+plan-drift on `deriva_ml_list_vocabularies` are still open (carried
+over from the archived journal, both already documented in
+`docs/findings/`).
+
+**Decisions:**
+
+- Catalog name `e2e-test-20260519b` chosen with the `b` suffix to avoid
+  collision with prior `e2e-test-20260520` (deleted) and any other
+  same-day names. The resulting catalog id is `36`.
+- Did NOT push the branch — local diverges from origin by 1 commit
+  ahead, 2 commits behind. Push deferred to user approval.
+
+**Repoint:**
+
+- `deriva_localhost.py`: `localhost_1407` → `localhost_36`.
+- `datasets_localhost.py`: 13 dataset RIDs updated, version
+  `0.1.0.post1.dev1`.
+- `assets_localhost.py` + `roc_analysis_localhost.py`: cleared stale
+  RIDs (populated by Phase 2 / 4). All `deriva_ml` refs point at
+  `localhost_36`.
+- `tests/test_configs_load.py` passes after the repoint.
+- DROP commit: `b6492a4` on branch `e2e-test/2026-05-18`.
+
+---
+
+### 2026-05-19 19:29 — Inter-phase: PR 1 (Execution Duration fix) verified
+
+After diagnosing that catalog 36's 5 Execution rows all had `Duration: null`
+(despite `load-cifar10` following the documented `with`-block pattern), filed
+the bug doc at `docs/bugs/2026-05-19-execution-exit-omits-duration.md` and a
+companion design doc at `docs/bugs/2026-05-19-execution-phase-durations-design.md`
+covering the broader three-phase measurement (download / algorithm / upload),
+the `Duration` → `Execution_Duration` rename, and the forward-only migration
+strategy.
+
+**Root cause** (verified by static reading of `execution.py`):
+`Execution.__exit__`'s clean-exit branch issued an inline `Running → Stopped`
+transition with `extra_fields={"stop_time": now}` only — no `duration`. The
+parallel `execution_stop()` method (called from `runner.py:233` for multirun
+parents and `execution.py:1360` for the upload-time auto-stop fallback) writes
+both `stop_time` AND a computed `duration_str`. The catalog body builder
+projects `Duration` into the catalog PUT body only when SQLite has it set, so
+`__exit__`'s shorter payload left the column null for every with-block exit
+— which is the dominant code path across the install base.
+
+**Fix**: `__exit__`'s clean-exit branch now delegates to `execution_stop()`
+instead of issuing its own transition. The Failed branch stays inline (PR 2
+scope to add failure-path duration). Single-atomic-transition invariant
+(audit §4.5) restored for the recommended `with`-block pattern.
+
+**Verification path**:
+- Branch `fix/execution-exit-writes-duration` on deriva-ml, commit `7960c101`.
+- Unit test `test_execution_context_manager` strengthened to assert
+  `catalog_row["Duration"] is not None` after with-block exit. Full
+  `tests/execution/` suite: 302 passed, 8 skipped (one pre-existing
+  failure in `test_bag_loader_path_builder_refresh.py` unrelated to this
+  fix — confirmed it fails on the unmodified branch HEAD too).
+- Deleted catalog 36, cleared its schema cache, bumped this worktree's
+  `pyproject.toml` + `uv.lock` to pin the deriva-ml fix branch
+  (`deriva-ml==1.36.5.post5+g7960c101e`).
+- Reran `load-cifar10 --create-catalog e2e-test-20260519c --num-images 500`,
+  creating catalog **42** (domain schema `e2e-test-20260519c`, 500 images,
+  13 datasets, same shape as catalog 36).
+
+**Result**: all 5 Execution rows in catalog 42 have non-null `Duration`:
+
+| RID | Duration | Status |
+|---|---|---|
+| 458 | `0.0H 0.0min 0.6889sec` | Uploaded |
+| 740 | `0.0H 0.0min 0.0307sec` | Uploaded |
+| 844 | `0.0H 0.0min 1.4057sec` | Uploaded |
+| B5G | `0.0H 0.0min 0.8286sec` | Uploaded |
+| BQ4 | `0.0H 0.0min 0.8364sec` | Uploaded |
+
+Compare to catalog 36's 5 executions (all `Duration: null`) before the fix.
+This is the exact behavior change PR 1 was meant to produce. **`#bug-fixed`**
+
+**Outstanding for PR 1**:
+- Open a PR on `informatics-isi-edu/deriva-ml` for review and landing.
+- After PR lands on main, revert this worktree's `pyproject.toml` to drop
+  the explicit `branch = "fix/..."` pin (back to plain `git = "..."`).
+
+**Carry-forward**: catalog 42 inherits the role catalog 36 had as the Phase 1
+baseline. The dev configs in this worktree still point at catalog 36 (now
+deleted). Repoint to catalog 42 will land as a second `[E2E-DROP]` commit
+in the same phase.
+
+---
+
+### 2026-05-19 19:35 — Inter-phase: PR 2 (phase-duration split + rename) verified
+
+After PR 1 closed the dominant "Duration is always null" bug, PR 2 layered on
+the broader phase-duration design: rename `Duration` →
+`Execution_Duration`, add `Download_Duration` for the
+`_initialize_execution` (dataset/asset materialization) phase, add
+`Upload_Duration` for the `upload_execution_outputs` (bag commit) phase.
+Forward-only migration: new catalogs get all three columns, old catalogs
+keep their unchanged `Duration` column.
+
+**Commits**:
+- `deriva-ml@4727d6a1` on branch `fix/execution-exit-writes-duration`
+  (stacked on PR 1's `7960c101`).
+- `deriva-ml-mcp@50478ee` on branch `feat/execution-phase-durations`
+  (single commit; surfaces the two new fields through ExecutionSummary,
+  the RAG serializer, and every read tool/resource that uses
+  `_summarize_execution`).
+
+**Tests after PR 2**:
+- deriva-ml: 302 passed, 8 skipped (unchanged from PR 1 baseline; one
+  unrelated pre-existing failure deselected).
+- deriva-ml-mcp: 325 passed, 22 deselected (one rag-serializer test
+  updated for the new `Execution Duration` label + the two new lines).
+
+**Verification path** (separate from PR 1 verification since catalog 42
+predates PR 2):
+- Deleted catalog 42, cleared its schema cache.
+- Bumped this worktree's `uv.lock` to `deriva-ml@4727d6a1`
+  (`deriva-ml==1.36.5.post6+g4727d6a19`).
+- Reran `load-cifar10 --create-catalog e2e-test-20260519d --num-images 500`,
+  creating catalog **46** (domain schema `e2e-test-20260519d`, 500 images,
+  13 datasets).
+- Queried Execution rows via the MCP server's generic `get_entities`
+  (bypassing the MCP server's pre-PR-2 deriva-ml-mcp serializer, which
+  hasn't been rebuilt yet — that's fine for column-level verification).
+
+**Result**: all 5 Execution rows in catalog 46 carry all three new
+duration columns:
+
+| RID | Execution_Duration | Download_Duration | Upload_Duration | Status |
+|---|---|---|---|---|
+| 45A | 0.83 s | 1.09 s | **10.62 s** | Uploaded |
+| 742 | 0.03 s | 0.69 s | 0.43 s | Uploaded |
+| 846 | 1.40 s | 0.52 s | 0.33 s | Uploaded |
+| B5J | 0.96 s | 0.55 s | 0.14 s | Uploaded |
+| BQ6 | 0.87 s | 0.82 s | 0.18 s | Uploaded |
+
+The 10.62 s upload time on RID 45A (the bulk image-upload execution
+that PUTs 500 image bytes to Hatrac) is exactly the kind of
+phase-specific diagnostic the design doc called out — under the old
+single `Duration` column, that signal was invisible. **`#bug-fixed`**
+
+**Outstanding for PR 2**:
+- Open PRs on `informatics-isi-edu/deriva-ml`
+  (`fix/execution-exit-writes-duration` carries both PR 1 + PR 2) and
+  `informatics-isi-edu/deriva-ml-mcp` (`feat/execution-phase-durations`).
+- The dev-localhost MCP server in this session is still running pre-PR-2
+  pins — its `_summarize_execution` will report `null` for the two new
+  fields until the server image is rebuilt. That's the expected
+  forward-only behavior for old MCP clients; not blocking PR landing.
+- After PRs land on main, revert this worktree's `pyproject.toml`
+  `branch =` override back to plain `git = "..."`.
+
+**Carry-forward**: catalog 46 now inherits the Phase 1 baseline role
+(replacing catalog 42, which was PR-1-only and is now deleted). Dev
+configs need a final repoint to catalog 46 before Phase 2.
+
