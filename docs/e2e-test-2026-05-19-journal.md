@@ -343,3 +343,102 @@ verification against the cache code).
   is out of date but the routing is correct; flagging as a doc
   refresh task, not a bug.
 
+---
+
+### 2026-05-20 — Phase 3: feature validation (Image_Classification)
+
+**Skill tried:** `deriva-ml:create-feature`. Loaded as
+expected; Phase 5 of the skill body (query / explore) was the
+relevant section. The skill routed correctly to query mode based
+on the explicit "I want to query — not create" framing in the
+invocation. **No `#skill-issue`.** Per the skill's own guidance,
+used the resource-snapshot path first
+(`deriva://catalog/localhost/46/ml/features/Image`), then
+`deriva_ml_get_feature` for column-level detail.
+
+**Feature schema** (one feature on `Image` in catalog 46):
+
+| Property | Value |
+|---|---|
+| `feature_name` | `Image_Classification` |
+| `target_table` | `Image` |
+| `feature_table` | `Execution_Image_Image_Classification` (in domain schema `e2e-test-20260519d`) |
+| `term_columns` | `Image_Class` (FK → `Image_Class` vocab, NOT NULL) |
+| `value_columns` | `Confidence` (float4, nullable, no default) |
+| `asset_columns` | (none) |
+| `comment` | "CIFAR-10 class label and optional confidence score for each image" |
+
+**Direct check** (raw ermrest via
+`getPathBuilder().schemas["e2e-test-20260519d"].tables["Execution_Image_Image_Classification"]`):
+
+600 total rows, grouped by Execution:
+
+| Execution | Role | Rows | Agreement w/ filename ground truth | Notes |
+|---|---|---|---|---|
+| `742` | load-cifar10 ground-truth seeding | 500 | **500/500 = 100.0%** | Every Image row has a feature row whose `Image_Class` matches the class encoded in `Filename` (parsed via the CIFAR-10 class tokens). `Confidence` is null (ground truth has no model). |
+| `CDG` | Phase-2 first successful training run | 50 | **47/50 = 94.0%** | Matches the training-loop-reported `test_acc=94%` exactly. All 3 errors are `ship → bird`. `Confidence` populated (range 0.93-0.999). |
+| `CMY` | Phase-2 verification run after PR B | 50 | **47/50 = 94.0%** | Same 3 ship→bird errors as CDG — deterministic training given same dataset and seeds. |
+
+**Indirect check** (MCP `deriva_ml_list_feature_values`):
+
+| Tool call | MCP result | Matches direct? |
+|---|---|---|
+| `preflight_count=True` (no filter) | 600 | ✅ |
+| `preflight_count, by_execution selector + selector_execution_rid="742"` | 500 | ✅ |
+| `preflight_count, by_execution selector + selector_execution_rid="CDG"` | **"No feature records match execution 'CDG'."** | ❌ **`#bug`** |
+| `preflight_count, by_execution selector + selector_execution_rid="CMY"` | **"No feature records match execution 'CMY'."** | ❌ same bug |
+| `execution_rids=["CDG"], preflight_count` | 50 | ✅ |
+| `selector="newest"`, preflight | 500 | ✅ (one per Image — collapses the 1+2 (ground+predictions) records per test image to the newest, the others to the only ground-truth record) |
+| Row content with `execution_rids=["CDG"], limit=10` | First 3 Image RIDs = `46E`, `46G`, `46W` (the three ship→bird misses); Confidence values match direct check to 8 decimal places | ✅ |
+
+**Bug B12 (deriva-ml): `FeatureRecord.select_by_execution` raises
+instead of returning None for non-matching groups.** Root cause
+in `src/deriva_ml/feature.py:174-178`:
+
+```python
+def _selector(records: list["FeatureRecord"]) -> "FeatureRecord":
+    filtered = [r for r in records if r.Execution == execution_rid]
+    if not filtered:
+        raise DerivaMLException(f"No feature records match execution '{execution_rid}'.")
+    return FeatureRecord.select_newest(filtered)
+```
+
+`feature_values` calls the selector once per *target* (per Image).
+Image `46E` has 3 records (one each from `742`, `CDG`, `CMY`),
+but image `47P` (a training image not in the test set) has only
+1 record from `742`. When `_selector` runs on `47P`'s group with
+`execution_rid="CDG"`, no record matches and the exception is
+raised — aborting the whole query.
+
+The parallel selector `select_by_workflow` (same file, lines
+254-259) handles this correctly:
+
+```python
+def _selector(records: list["FeatureRecord"]) -> "FeatureRecord | None":
+    matched = [r for r in records if r.Execution in execution_rids]
+    if not matched:
+        return None  # feature_values omits this target silently
+    return FeatureRecord.select_newest(matched)
+```
+
+The fix is to return `None` from `select_by_execution` when no
+match is found, mirroring `select_by_workflow`. One-line change
+plus a regression test.
+
+**Workaround:** use the `execution_rids=[...]` filter param instead
+of `selector="by_execution"`. They have different semantics
+(filter vs collapse) but the filter path works correctly today.
+
+**Diff:** counts and row content agree everywhere the `by_execution`
+selector wasn't engaged. The CIFAR-10 ground-truth seeding (742)
+is consistent end-to-end: filename → `Image_Class` matches 100% of
+the time, confirming the load-cifar10 ingest writes the right
+labels. Training predictions match the in-memory training-loop
+metrics to the per-row level (same misclassified images, same
+confidence scores).
+
+**Carry-forward to Phase 4:** B12 fix is small (mirror
+`select_by_workflow`'s `None`-on-empty pattern) but is its own PR.
+Filing it before moving on so the multirun phase doesn't run
+into the same pothole.
+
