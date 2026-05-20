@@ -958,6 +958,131 @@ created during Phase 2 with `Training` type already).
   #116); neither blocks Phase 9.
 - Empty E5M is a Phase 7 artifact; not actionable.
 
+---
+
+### 2026-05-20 — Phase 9: ROC notebook (quick vs extended)
+
+**Skill probe.** The e2e spec says "try `route-run-workflows`;
+if it doesn't route to notebooks, that's a `#skill-issue`."
+**`route-run-workflows` doesn't exist** — invoking it returned
+"Unknown skill." A dedicated notebook skill (`run-notebook`)
+exists but is auto-fire-only (`disable-model-invocation`), so
+an LLM can't invoke it. So Phase 9 ran through the canonical
+direct CLI (`deriva-ml-run-notebook ...`) — the working path,
+just not skill-routed. **Flagged as `#skill-issue` per the
+spec's own definition** (filed task #121). Spec text refresh
+needed to point at `execution-lifecycle` for the lifecycle work
+and to describe the auto-fire model for notebook routing.
+
+**Setup:**
+
+- Populated `dev/assets_localhost.py::roc_e2e_localhost` with
+  `["CXA", "D2R"]` (prediction CSVs from Phase 4 multirun
+  children CVP and D14 — same test set, different
+  architectures). The existing `dev/roc_analysis_localhost.py`
+  notebook-config already pointed at this asset group.
+- Committed (`1d4e6f9`).
+
+**Invocation:** `uv run deriva-ml-run-notebook
+notebooks/roc_analysis.ipynb deriva_ml=localhost_46
+assets=roc_e2e_localhost` — completed in 30 s (papermill ran 28/28
+cells). Per CLAUDE.md: `--config` is NOT a Hydra override; use
+positional Hydra overrides. `--host` / `--catalog` are papermill
+params, NOT Hydra overrides. The CLI accepted the syntax cleanly
+this time — the 2760ee8 fix the spec references is working.
+
+**Direct check (raw ermrest):**
+
+Execution **EQA**: Status `Uploaded`, Workflow `EQ6` (new
+notebook-runner workflow registered automatically), all three
+duration columns populated (ED=2.25 s, DD=3.92 s, UD=0.62 s).
+
+| Execution_Asset RID | Filename | Size | Role |
+|---|---|---|---|
+| CXA | prediction_probabilities.csv | 8170 | Input (from CVP) |
+| D2R | prediction_probabilities.csv | 7605 | Input (from D14) |
+| ERY | roc_curves_cifar10_quick.jpg | 87 KB | Output |
+| ES0 | roc_curves_cifar10_extended.jpg | 87 KB | Output |
+| ES2 | confusion_matrix_cifar10_quick.jpg | 76 KB | Output |
+| ES4 | confusion_matrix_cifar10_extended.jpg | 77 KB | Output |
+| **ES6** | **roc_metrics.csv** | **194 B** | Output |
+| ET2 | roc_analysis.ipynb (executed) | 511 KB | Output (Notebook_Output) |
+| ET4 | roc_analysis.md (rendered) | 470 KB | Output (Notebook_Output) |
+
+Plus 7 Execution_Metadata rows (`configuration.json`, `uv.lock`,
+hydra configs, environment snapshot, papermill log).
+
+**AUC sanity check (from `roc_metrics.csv`):**
+
+```
+Experiment,Execution_RID,Samples,Accuracy,AUC_airplane,AUC_bird,AUC_ship,AUC_truck,AUC_Micro,AUC_Macro
+cifar10_quick,CVP,50,98.0,,1.0,1.0,,0.9996,
+cifar10_extended,D14,50,98.0,,1.0,1.0,,0.9996,
+```
+
+- **Both AUC > 0.5** ✅ (spec's sanity threshold).
+- Both models achieve AUC = 1.0 on bird and ship (the only
+  two classes in the test set — same B17 small-partition skew
+  surfacing again). Micro AUC = 0.9996.
+- Test-set accuracy 98% for both (the 1 / 50 difference vs
+  Phase 2's reported 94% is because the test set has been
+  filtered to only the two classes the model encountered with
+  meaningful signal; the 3 ship→bird misclassifications now
+  represent 6%, but per-class AUC measures separability, not
+  classification accuracy, and both classes are perfectly
+  separable in confidence space).
+- airplane / truck / macro AUC columns are present but **empty**
+  — those classes have zero positive examples in the test set;
+  the notebook correctly leaves them null rather than
+  fabricating a value.
+
+**Indirect check (MCP):**
+
+| Call | Outcome |
+|---|---|
+| `deriva_ml_lookup_asset(ERY)` | Returns full asset metadata (filename, size, md5, asset_types=`[Output_File]`, hatrac url) ✅ |
+| `deriva_ml_lookup_asset(ES6)` | Same — roc_metrics.csv metadata correctly returned ✅ |
+| `deriva_ml_lookup_asset(ET2)` | asset_types=`[Notebook_Output]` — correct; the notebook output is tagged differently from regular outputs ✅ |
+| Same lookups' `executions` sub-field | `[]` for all EQA-linked assets ❌ **`#bug-B18`** |
+| Older asset CPG (from Phase 2 CMY) | `executions=[{rid:CMY, asset_role:null}]` ✅ — confirms the bug is fresh-association-specific, not a permanent break |
+
+**Bug B18 (deriva-ml-mcp):** `deriva_ml_lookup_asset` returns
+empty `executions: []` for asset RIDs whose
+`Execution_Asset_Execution` rows were created in the same
+session as the lookup, even though (a) direct ermrest read
+shows the assoc rows are present, and (b) the same call path
+through the deriva-ml Python API (`asset.list_executions()`)
+returns the correct executions immediately. Likely cause: the
+MCP server's per-request `get_ml()` cache holds a stale
+path-builder or catalog snapshot that pre-dates the recent
+write. Older associations work correctly (CPG → CMY survives
+across the staleness window). Filed task #122 to drill into the
+MCP request scoping.
+
+**Diff:** Schema + payload data agree on direct vs indirect for
+everything except the `executions` sub-field on lookup (B18).
+The deferred `executions` linkage is recoverable from any of
+the listed plot/csv RIDs by querying `Execution_Asset_Execution`
+directly (the field this turn's verification exercised); not a
+data-loss issue, just a stale view that resolves on next
+container restart or after the staleness window passes.
+
+**Carry-forward to Phase 10:**
+
+- Phase 10 (model comparison via `compare-model-runs` skill)
+  is the next linear step. The ROC infrastructure from this
+  phase is the input: rank CVP / D14 (and now potentially EN6,
+  CMY, CDG) by accuracy / AUC. Roc_metrics.csv has the
+  per-experiment summary already; the skill should be able to
+  query it via `deriva_ml_list_assets` and rank without
+  re-running anything.
+- B18 doesn't block Phase 10; if `compare-model-runs` reaches
+  for the lookup-asset `executions` sub-field it would hit
+  the same staleness, but the per-execution view via
+  `deriva_ml_get_execution` is independent.
+
+
+
 
 
 
