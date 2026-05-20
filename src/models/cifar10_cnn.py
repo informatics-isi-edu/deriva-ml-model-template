@@ -12,9 +12,10 @@ Architecture:
 Expected accuracy: ~60-70% with default parameters.
 
 Data loading uses DerivaML's framework adapter ``DatasetBag.as_torch_dataset``
-for training (lazy, label-aware, no on-disk reorganization) plus a thin
-RID-aware wrapper for the test loop so per-image predictions can be recorded
-back to the catalog as ``Image_Classification`` feature values.
+for both training and testing — the adapter yields
+``(sample, target, rid)`` triples, so per-image predictions can be
+recorded back to the catalog as ``Image_Classification`` feature values
+keyed by the element RID with no hand-rolled bag-iteration code.
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 from torchvision import transforms
 
 from deriva_ml import DerivaML, MLAsset, ExecAssetType
@@ -86,56 +87,18 @@ def _load_image(path: Any, _row: dict[str, Any]) -> PIL.Image.Image:
     return PIL.Image.open(path).convert("RGB")
 
 
-class _RidAwareImageDataset(Dataset):
-    """A test-time wrapper that yields ``(image_tensor, label_idx, rid)``.
+def _target_to_class_idx(rec: Any) -> int:
+    """Map an ``Image_Classification`` feature record to its class index.
 
-    ``DatasetBag.as_torch_dataset`` is the right tool for training (lazy,
-    label-aware, no on-disk reorganization), but its ``__getitem__`` returns
-    just ``(sample, target)`` — recording per-image predictions back to the
-    catalog requires the element RID alongside each sample.
-
-    This wrapper iterates the bag's ``Image`` rows directly, decodes via the
-    same PIL+transform pipeline as training, and resolves each row's
-    classification feature value (or returns ``-1`` if the test bag is
-    unlabeled, in which case the label is unused — only the RID and predicted
-    class matter for downstream feature recording).
-
-    Args:
-        bag: The downloaded dataset bag containing ``Image`` rows.
+    Used as the ``target_transform`` for ``bag.as_torch_dataset(...)``.
+    ``rec`` is a typed ``FeatureRecord`` with an ``Image_Class`` term
+    column (or its ``Name`` alias from the underlying vocab term). Missing
+    or unrecognized classes raise — the adapter's ``missing="skip"`` arg
+    is the right place to filter unlabeled elements before they reach
+    here.
     """
-
-    def __init__(self, bag: DatasetBag) -> None:
-        members = bag.list_dataset_members(recurse=True).get("Image", [])
-        # Pre-resolve label per-RID via feature_values; missing → -1 sentinel.
-        # `feature_values` returns FeatureRecords with a target FK column.
-        rid_to_label: dict[str, int] = {}
-        for rec in bag.feature_values("Image", "Image_Classification"):
-            cls = getattr(rec, "Image_Class", None) or getattr(rec, "Name", None)
-            if cls in CIFAR10_CLASS_TO_IDX:
-                # `rec.Image` is the FK pointing back at the asset RID.
-                rid_to_label[rec.Image] = CIFAR10_CLASS_TO_IDX[cls]
-
-        self._rids: list[str] = []
-        self._labels: list[int] = []
-        self._paths: list[Any] = []
-        for row in members:
-            rid = row["RID"]
-            self._rids.append(rid)
-            self._labels.append(rid_to_label.get(rid, -1))
-            # Canonical BDBag asset layout: data/asset/{rid}/{table}/{filename}
-            # (singular `asset/`; rid before the table-name segment). Matches
-            # the layout produced by the bag materializer and resolved by
-            # deriva-ml's torch adapter in `_resolve_asset_path`.
-            self._paths.append(
-                bag.path / "data" / "asset" / rid / "Image" / row["Filename"]
-            )
-
-    def __len__(self) -> int:
-        return len(self._rids)
-
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, int, str]:
-        img = PIL.Image.open(self._paths[idx]).convert("RGB")
-        return _TRANSFORM(img), self._labels[idx], self._rids[idx]
+    cls = getattr(rec, "Image_Class", None) or rec.Name
+    return CIFAR10_CLASS_TO_IDX[cls]
 
 
 def _rid_collate(
@@ -159,8 +122,8 @@ def record_test_predictions(
     """Record per-image classification predictions to the DerivaML catalog.
 
     Iterates ``test_loader`` (which yields ``(image, label, rid)`` triples
-    from :class:`_RidAwareImageDataset`), runs inference, and stages one
-    ``Image_Classification`` feature record per image via
+    from :meth:`DatasetBag.as_torch_dataset`), runs inference, and stages
+    one ``Image_Classification`` feature record per image via
     ``execution.add_features(...)``. Also writes a CSV with the full
     probability distribution per image as an ``Execution_Asset`` for
     downstream ROC analysis.
@@ -290,10 +253,12 @@ def load_cifar10_from_execution(
 ) -> tuple[DataLoader | None, DataLoader | None, list[str]]:
     """Build PyTorch DataLoaders directly from execution dataset bags.
 
-    Uses :meth:`DatasetBag.as_torch_dataset` for training (lazy adapter, no
-    on-disk reorganization) and a :class:`_RidAwareImageDataset` wrapper for
-    testing (so per-image predictions can be linked back to their RIDs when
-    recording features).
+    Uses :meth:`DatasetBag.as_torch_dataset` for both training and testing
+    — the adapter is lazy, label-aware, requires no on-disk reorganization,
+    and now (post-2026-05-19) yields ``(sample, target, rid)`` triples so
+    per-image predictions can be linked back to their catalog RIDs when
+    recording feature values. The same call shape works on both sides; the
+    only difference is ``shuffle`` and whether unlabeled rows are dropped.
 
     Bags are routed into train vs test by the dataset type tags
     (``"Training"`` / ``"Testing"``). Bags with neither tag are skipped.
@@ -312,28 +277,34 @@ def load_cifar10_from_execution(
     train_loader: DataLoader | None = None
     test_loader: DataLoader | None = None
 
+    def _build_dataset(bag: DatasetBag, missing: str):
+        return bag.as_torch_dataset(
+            element_type="Image",
+            sample_loader=_load_image,
+            transform=_TRANSFORM,
+            targets=["Image_Classification"],
+            target_transform=_target_to_class_idx,
+            missing=missing,
+        )
+
     for bag in _flatten_bags(list(execution.datasets)):
         role = _bag_role(bag)
         if role == "training":
-            train_dataset = bag.as_torch_dataset(
-                element_type="Image",
-                sample_loader=_load_image,
-                transform=_TRANSFORM,
-                targets=["Image_Classification"],
-                target_transform=lambda rec: CIFAR10_CLASS_TO_IDX[
-                    getattr(rec, "Image_Class", None) or rec.Name
-                ],
-                missing="skip",  # drop unlabeled training images
-            )
+            train_dataset = _build_dataset(bag, missing="skip")
             train_loader = DataLoader(
                 train_dataset,
                 batch_size=batch_size,
                 shuffle=True,
                 num_workers=0,  # macOS fork() + MPS/GPU threads can deadlock
+                collate_fn=_rid_collate,
             )
             print(f"  Training samples: {len(train_dataset)}")
         elif role == "testing":
-            test_dataset = _RidAwareImageDataset(bag)
+            # Test bags may contain unlabeled images — keep them with
+            # target=-1 so the test loop can still produce predictions
+            # for them (only the RID and predicted class matter for
+            # downstream feature recording on unlabeled data).
+            test_dataset = _build_dataset(bag, missing="unknown")
             test_loader = DataLoader(
                 test_dataset,
                 batch_size=batch_size,
@@ -574,7 +545,7 @@ def cifar10_cnn(
         correct = 0
         total = 0
 
-        for batch_idx, (inputs, labels) in enumerate(train_loader):
+        for batch_idx, (inputs, labels, _rids) in enumerate(train_loader):
             inputs, labels = inputs.to(device), labels.to(device)
 
             optimizer.zero_grad()
