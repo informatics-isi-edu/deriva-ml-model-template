@@ -1081,6 +1081,133 @@ container restart or after the staleness window passes.
   the same staleness, but the per-execution view via
   `deriva_ml_get_execution` is independent.
 
+---
+
+### 2026-05-20 — Phase 10: model comparison (rank by accuracy)
+
+**Skill probe.** `compare-model-runs` is also
+`disable-model-invocation: true` (third such skill this
+session, after `run-notebook` and the absent
+`route-run-workflows`). Per the spec's own definition, three
+spec-named skills that cannot be invoked programmatically =
+three skill-issues. The pattern: skills tagged this way are
+treated as user-typed `/<name>` triggers, not LLM-routable
+suggestions. The spec writers expected an LLM-driven flow; the
+skill architecture has moved away from that for these three.
+**Filing as part of finding #121.** Read the skill body
+directly to derive the right pattern.
+
+**Pattern-detection.** The skill describes two metric-storage
+patterns:
+- **Pattern A** (Feature with scalar columns: accuracy / f1 / loss)
+- **Pattern B** (JSONL `Metrics_File` asset)
+
+The template uses **neither.** Metrics live in:
+- `prediction_probabilities.csv` per-execution (`Execution_Asset`,
+  not the `Metrics_File` asset type) with per-image rows
+- `roc_metrics.csv` per-notebook-run with per-experiment
+  summary rows (also `Execution_Asset`)
+
+The skill's coverage misses this third pattern. **`#finding`**:
+extend `compare-model-runs` with a Pattern C ("prediction CSV
+per execution + summary CSV per analysis") routine, or
+recommend Pattern A migration to the user.
+
+**Phase 10 execution.**
+
+Followed the skill's Pattern-B-adjacent recipe: list candidate
+prediction-CSV asset RIDs, download each, compute accuracy
+locally against the ground-truth feature (Execution 742). The
+spec's "rank multirun children by accuracy" focused on CVP /
+D14, but I extended to all four prediction-CSV-producing runs
+(CDG, CMY, CVP, D14) for completeness.
+
+**Direct check (manual ranking):**
+
+| Rank | Execution | Architecture | Asset RID | Samples | Correct | Accuracy | Misclassifications |
+|---|---|---|---|---|---|---|---|
+| **1** | **D14** | cifar10_extended (50 epochs, 64→128 conv) | D2R | 50 | 49 | **98.00%** | 1 ship→bird |
+| 2 (tied) | CDG | cifar10_quick (3 epochs, 32→64 conv) | CF2 | 50 | 47 | 94.00% | 3 ship→bird |
+| 2 (tied) | CMY | cifar10_quick (3 epochs, 32→64 conv) | CPG | 50 | 47 | 94.00% | 3 ship→bird |
+| 2 (tied) | CVP | cifar10_quick (3 epochs, 32→64 conv) | CXA | 50 | 47 | 94.00% | 3 ship→bird |
+
+Test set is 47 bird + 3 ship (per Phase 9 / B17). Ranking by
+accuracy is unambiguous: extended > quick by 4 points. The 3
+ship images are the same misclassified ones across all 3
+quick-runs (deterministic training given the same dataset and
+seed). The extended model recovered 2 of those 3 ships;
+the third (Image `46W`) remained ship→bird even after 50 epochs.
+
+The three `cifar10_quick` executions produced **bit-identical
+predictions** on the test set — same misclassified Image RIDs,
+similar confidence scores (slight differences in 4th decimal
+place). This is a useful baseline reproducibility check.
+
+**Indirect check (via the Phase 9 `roc_metrics.csv` summary):**
+
+```
+Experiment,Execution_RID,Samples,Accuracy,AUC_bird,AUC_ship,AUC_Micro
+cifar10_quick,CVP,50,98.0,1.0,1.0,0.9996
+cifar10_extended,D14,50,98.0,1.0,1.0,0.9996
+```
+
+**Discrepancy — `#finding-B19`.** The notebook-computed
+accuracy reports **CVP = 98%** while my direct check using the
+same algorithm (`df['Predicted_Class'] == df['True_Class']`
+with the same ground-truth source) reports **CVP = 94%
+(47/50)**. The numbers are simultaneously consistent with the
+AUC values: AUC = 1.0 for bird and ship is achievable even
+with 3 ship→bird argmax misclassifications, because AUC ranks
+probabilities while accuracy uses argmax — the 3 ship images
+had `prob_ship` higher than the other 47 non-ship images
+(perfect ranking) but lower than their own `prob_bird` (wrong
+argmax). The notebook's 98% figure appears to be over-counting
+by 2/50 vs direct check — root cause unclear; filed task #126
+to drill in. Ranking outcome unchanged (D14 ≥ CVP), only
+absolute magnitude differs.
+
+**Skill verdict.**
+
+- Coverage gap (Pattern C missing) is the main finding;
+  workable today by adapting Pattern B's local-Python recipe.
+- **The skill didn't auto-discover prediction assets** — that's
+  reasonable, the spec asked whether it would, and the answer
+  is "no, the user has to identify which assets to compare."
+  Phase-2A of the skill discovers executions via
+  `deriva_ml_list_executions(workflow_rid, sort=True, limit=N)`,
+  which would work for "the last N runs of workflow CJW" but
+  doesn't apply here (we knew the specific multirun children).
+- **The skill didn't infer the metric** — it asks the user
+  ("If the metric column isn't `accuracy`, ask which field they
+  recorded"). Reasonable; metric choice is intent-laden.
+
+**Diff:** ranking matches between direct + Phase 9 indirect (D14
+≥ quick-runs) ✓. Absolute accuracy values differ for CVP only
+(98% vs 94%) — B19. Both AUC and accuracy distinguishable
+across the two architectures (extended > quick); macro AUC NaN
+because some classes have no positive examples in the test set.
+
+**Carry-forward to Phase 11.**
+
+- Phase 11 (maintain experiment notes, cross-cutting) is the
+  last phase per spec §4. The notes from this and earlier
+  phases live in the journal already; Phase 11's question is
+  whether the `maintain-experiment-notes` skill provides a
+  more catalog-attached way to capture decision rationale.
+- Open findings carried into Phase 11 review:
+  - B14 (schema-cache write race)
+  - B15 (deriva-mcp-core PR #9 still open)
+  - B16 (split stratify denormalizer)
+  - B17 (load-cifar10 small-partition class skew, refined: 4
+    classes total across full 500 images, but 85J partition is
+    bird+ship only)
+  - B18 (lookup_asset stale executions)
+  - B19 (ROC notebook accuracy 98 vs 94)
+  - #skill-issue: route-run-workflows + run-notebook +
+    compare-model-runs not LLM-invokable; spec text stale (#121)
+
+
+
 
 
 
