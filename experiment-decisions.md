@@ -101,3 +101,21 @@ Dataset E6R released to 0.2.0 so it can be pinned in an experiment config;
 registered as `cifar10_phase7_bird_subset_localhost`. Empty E5M dataset remains
 as a Phase 7 artifact (created during the zero-match cat/dog/frog dry-run;
 classifier-blocked from deletion, journaled rather than removed).
+
+### Two e2e bugs were misdiagnosed in the journal; verify before fixing
+
+Two findings from this session — B18 (`lookup_asset` "stale executions") and
+B19 (ROC notebook 98% vs 94%) — had hypotheses recorded in the journal at
+discovery time that turned out to be wrong. B18 was filed as a `get_ml()`
+cache-staleness bug; the actual cause (caught during PR #43) was a blanket
+`try/except Exception` in `tools/asset.py` swallowing transient ermrest errors
+into `executions = []`. B19 was filed as a `gt_lookup` filter bug in
+`roc_analysis.ipynb` cell 9; the actual cause (caught during PR #16) was that
+`_initialize_execution` wrote two assets with the same `Filename` to the same
+path, silently overwriting the first — a deriva-ml bug fixed in PR #179
+(RID-key the dest_dir). Lesson: a journal hypothesis written at discovery
+time can persist through issue body, review, and even the start of the fix.
+Verify with a reproduction before settling on a fix scope; if the agent
+investigating finds a different cause, trust the reproduction. Both PRs
+landed correct fixes only because the implementing agent reproduced before
+patching.

@@ -231,7 +231,7 @@ sub-tag `#refined`, `#new-skill`, or `#eval-added`.
 
 #### Phase 2 — Quick training (dry-run, then real)
 
-- **Skill:** `route-run-workflows`.
+- **Skill:** `execution-lifecycle`.
 - **Routes to:** `deriva-ml-run +experiment=cifar10_quick dry_run=true`
   (dry-run first to validate config + Hydra resolution); then re-run
   the same command with `dry_run=true` removed (real training).
@@ -258,7 +258,7 @@ sub-tag `#refined`, `#new-skill`, or `#eval-added`.
 
 #### Phase 4 — Multirun (parent/child execution lineage)
 
-- **Skill:** `route-run-workflows`.
+- **Skill:** `execution-lifecycle`.
 - **Routes to:** `deriva-ml-run +multirun=quick_vs_extended` (or
   `lr_sweep`).
 - **Direct check:** parent Execution row + N child Execution rows
@@ -312,7 +312,7 @@ Cross-cutting check, interleaved after phases 2 and 4.
 - Register a new experiment config in `src/configs/dev/experiments.py`
   pointing at the new split.
 - Run a small training experiment against the new split via
-  `route-run-workflows`.
+  `execution-lifecycle`.
 - **Direct check:** new datasets in catalog with correct
   `current_version`; new Workflow row with script ref, URL, commit
   hash, workflow-type vocab term; training run records new dataset
@@ -328,10 +328,13 @@ script-generation help produce a runnable artifact?
 
 #### Phase 9 — ROC notebook
 
-- **Skill:** `route-run-workflows` (notebooks live there) or
-  `compare-model-runs` (since ROC is run comparison). Try
-  `route-run-workflows` first; if it doesn't route to notebooks,
-  that's `#skill-issue`.
+- **Skill:** `execution-lifecycle` (notebooks run via
+  `deriva-ml-run-notebook`, the same lifecycle machinery as
+  `deriva-ml-run`). `run-notebook` and `compare-model-runs` exist
+  but are tagged `disable-model-invocation: true` — read their
+  SKILL.md bodies directly if the LLM-invokable surface isn't
+  enough. See deriva-ml-skills issue #27 for the design call on
+  whether either should become LLM-invokable.
 - Update `dev/assets_localhost.py` + `dev/roc_analysis_localhost.py`
   with the asset RIDs from phases 2 and 4 (queried via MCP tools).
 - Run: `deriva-ml-run-notebook notebooks/roc_analysis.ipynb deriva_ml=localhost_<id> assets=<roc_asset_config>`.

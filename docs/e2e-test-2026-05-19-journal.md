@@ -1052,12 +1052,32 @@ empty `executions: []` for asset RIDs whose
 session as the lookup, even though (a) direct ermrest read
 shows the assoc rows are present, and (b) the same call path
 through the deriva-ml Python API (`asset.list_executions()`)
-returns the correct executions immediately. Likely cause: the
-MCP server's per-request `get_ml()` cache holds a stale
-path-builder or catalog snapshot that pre-dates the recent
-write. Older associations work correctly (CPG → CMY survives
-across the staleness window). Filed task #122 to drill into the
-MCP request scoping.
+returns the correct executions immediately. Older associations
+work correctly (CPG → CMY survives the same window). Filed
+task #122 to drill into the MCP request scoping.
+
+**Diagnosis correction (post-session, recorded after PR #43
+merge):** The "stale `get_ml()` cache" hypothesis above is
+**wrong.** Verified during the #41/#43 fix: `get_ml()` builds a
+fresh `DerivaML()` every call (`ml_context.py:56-57`), and
+`DerivaML.__init__` builds a fresh `DerivaServer` +
+`ErmrestCatalog` with empty HTTP cache every call
+(`core/base.py:443-449`). Live repro on catalog 46 with a
+freshly inserted association returned the new row on both a
+long-lived and a freshly-built `DerivaML`. The real cause is
+`tools/asset.py:156-165` — a blanket `try/except Exception`
+around `asset.list_executions()` that collapses *any* exception
+(transient ermrest 5xx, partial-loop failure, workflow
+resolution issue) into `executions = []`, indistinguishable from
+"no associations." The B18 symptom (fresh EQA empty, older CMY
+fine) fits a transient ermrest error during the EQA window that
+the silent `except` hid. Fixed in deriva-ml-mcp PR #43 by
+narrowing the swallow to the deterministic "no association
+table" message and surfacing all other failures via a new
+`executions_error` field on `AssetDetail`. **Lesson:** trust the
+reproduction over the journal's hypothesis. The diagnosis lived
+through the issue body and three reviews before the
+verification step caught it.
 
 **Diff:** Schema + payload data agree on direct vs indirect for
 everything except the `executions` sub-field on lookup (B18).
