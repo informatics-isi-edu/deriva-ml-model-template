@@ -138,3 +138,36 @@ datasets_store(
     ),
     name="cifar10_small_labeled_testing_localhost",
 )
+
+# -----------------------------------------------------------------------------
+# Phase 7 e2e: three-way split of 85J + bird-only subset
+# -----------------------------------------------------------------------------
+# Created during the e2e platform test on 2026-05-20. Released at 0.2.0
+# (released, not dev) per ADR-0003 -- they're meant to be pinned in experiment
+# configs. The bird-only subset works around the small-partition class
+# sampling skew (finding B17): 85J's small partition only contains bird +
+# ship, so the spec-suggested cat/dog/frog filter would have returned empty.
+
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="DKJ", version="0.2.0")],
+        "Phase 7 three-way split parent (60/20/20 of 85J).",
+    ),
+    name="cifar10_phase7_split_localhost",
+)
+
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="DKT", version="0.2.0")],
+        "Phase 7 three-way split: training partition (60% = 150 Images of 85J).",
+    ),
+    name="cifar10_phase7_training_localhost",
+)
+
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="E6R", version="0.2.0")],
+        "Phase 7 bird-only curated subset of 85J (225 Images).",
+    ),
+    name="cifar10_phase7_bird_subset_localhost",
+)
