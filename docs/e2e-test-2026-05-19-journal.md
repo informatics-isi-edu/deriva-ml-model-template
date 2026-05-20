@@ -236,3 +236,110 @@ single `Duration` column, that signal was invisible. **`#bug-fixed`**
 (replacing catalog 42, which was PR-1-only and is now deleted). Dev
 configs need a final repoint to catalog 46 before Phase 2.
 
+---
+
+### 2026-05-20 — Phase 2: quick training (dry-run + real)
+
+**Skill tried:** `deriva-ml:execution-lifecycle` (the lifecycle gate
+sits closer to the work than the spec-named `route-run-workflows`,
+which now delegates here). Skill fired and routed correctly to the
+`deriva-ml-run +experiment=...` CLI shape. No `#skill-issue`.
+
+**Inter-phase bugfix interlude.** Phase 2 surfaced four
+post-Phase-1-baseline bugs that were fixed inline before this entry
+was written:
+
+- **B8 (deriva-ml):** `run_model` passed `upload_timeout` /
+  `upload_chunk_size` kwargs to `upload_execution_outputs` that
+  didn't exist on the new pydantic signature. Pydantic
+  `ValidationError` on every real run. **Fixed:** deriva-ml #168
+  (stripped the kwargs). Filed deriva-py issues #261/#262 for the
+  underlying upload-tunable hole.
+- **B9 (template):** the hand-rolled `_RidAwareImageDataset` used
+  the wrong BDBag layout (`data/assets/{table}/{rid}/...` instead
+  of canonical `data/asset/{rid}/{table}/...`). Training crashed on
+  first image read. **Fixed:** template #11 (path), then template
+  #12 (rewrite to drop the hand-rolled class entirely — see B11).
+- **B10 (deriva-ml-mcp):** `ExecutionExperiment.config_choices` and
+  `model_cfg` had narrow pydantic types that rejected hydra-zen's
+  `_zen_exclude: list[str]`. MCP silently returned `null` for the
+  field. **Fixed:** deriva-ml-mcp #39 (broadened to `dict[str, Any]`,
+  stopped swallowing `lookup_experiment` errors).
+- **B11 (deriva-ml + template):** `bag.as_torch_dataset` hid the
+  RID, so the template had to hand-roll a workaround
+  (`_RidAwareImageDataset`) just to surface it for prediction
+  recording. **Fixed:** deriva-ml #169 made the adapter always
+  yield `(sample, target, rid)`; template #12 dropped 56 lines of
+  duplicate bag-iteration logic.
+
+Also discovered (and not a Phase-2 bug per se, but blocking
+verification): the installed deriva-py in this worktree's venv was
+stale and lacked commit `9d6daae` ("make `model` a regular
+attribute, not a `@property`"), causing
+`DatabaseModel.model has no setter` at execution startup. **Fixed
+by venv refresh** — `uv lock --upgrade-package deriva` bumped to
+`ed5ee69c`; no deriva-ml change required.
+
+**Verifying execution (post-bugfix end-to-end run):**
+
+```
+uv run deriva-ml-run +experiment=cifar10_quick \
+    deriva_ml=localhost_46 \
+    datasets=cifar10_small_labeled_split_localhost
+```
+
+Result: execution **CMY** (Workflow CJW, checksum `afb676f0c587`):
+
+- Training: 200 samples → 3 epochs, batch size 128.
+- Test: 50 samples → final test_loss=0.3114, **test_acc=94%**.
+- 50 classification predictions recorded against catalog
+  (`Image_Classification` feature) with RIDs.
+- 3 Execution_Assets uploaded: weights (6.5 MB), training log
+  (480 B), prediction probabilities CSV (7.9 KB).
+
+**Direct check** (raw ermrest via `getPathBuilder`):
+
+| Exec RID | Status | Workflow | Execution_Duration | Download_Duration | Upload_Duration | Notes |
+|---|---|---|---|---|---|---|
+| CDG | Uploaded | CBW | 0.72 s | 1.81 s | 0.77 s | first successful post-B8 run |
+| CK6 | Uploaded | CJW | 0.04 s | 1.05 s | 0.61 s | hit B9 (dataset override missing) → wrote `training_status.txt` then uploaded |
+| **CMY** | **Uploaded** | **CJW** | **0.67 s** | **5.30 s** | **0.79 s** | **full end-to-end with correct dataset override** |
+| C90, CAE | Failed | C8T | 0.08–0.27 s | 1.6 s | null | pre-B8 attempts (validation error before upload phase) |
+| CC2 | Stopped | CBW | 0.72 s | 1.92 s | null | aborted (no commit) |
+| CK2, CK4 | Created | — | null | null | null | orphaned starts (script bail before run_model) |
+
+All three duration columns populated for successful runs — confirms
+PR-1 + PR-2 phase-duration measurement still works end-to-end on
+catalog 46 with the latest pins. Failed runs correctly leave
+`Upload_Duration` null (failure exits before the upload phase).
+
+**Indirect check (MCP):**
+`deriva_ml_get_execution` returns the same RID set with matching
+status + duration values. The `experiment` block on CMY (formerly
+silently null per B10) now correctly includes the full
+`config_choices` and `model_cfg` from the hydra-zen run.
+
+**Diff:** clean. No `#skill-issue`, no `#finding` outside the four
+bugs above (all fixed).
+
+**Cache:** running cifar10_quick a second time (CMY follows CK6 on
+the same dataset RID) reused the local BDBag cache at
+`~/.deriva-ml/localhost/46/...`. Bag download for CMY was 5.3 s
+vs CK6's 1.05 s — opposite of what cache reuse should look like.
+Filed as `#cache-finding` for Phase 5 to investigate (suspect:
+bag-cache key includes the execution RID or a timestamp; needs
+verification against the cache code).
+
+**Carry-forward to Phase 3:**
+- Training executions CDG and CMY each recorded 50
+  `Image_Classification` feature rows over 50 test images, with
+  RIDs surfaced via the new adapter shape. That's the population
+  Phase 3's feature-validation step (`create-feature` in query
+  mode, raw-table check, ground-truth filename comparison) will
+  read.
+- `route-run-workflows` skill never invoked — deriva-ml-skills now
+  ships `execution-lifecycle` as the canonical entry point. The
+  spec text in `superpowers/specs/2026-05-13-e2e-platform-test-design.md`
+  is out of date but the routing is correct; flagging as a doc
+  refresh task, not a bug.
+
