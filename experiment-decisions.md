@@ -56,3 +56,48 @@ reach the same `(element, endpoint)` via different association tables, using
 `is_association(pure=False)` for structural detection rather than naming conventions.
 Added `Image_Dataset_Legacy` to the demo schema as a regression test. Verified fix
 produces 347 rows x 18 columns for `['Subject', 'Clinical_Records']` on 4-411G.
+
+### E2E platform-test baseline run on catalog 46 (execution CMY)
+
+Hypothesis: post-bugfix sweep (PRs landed across deriva-py, deriva-ml,
+deriva-ml-mcp, deriva-ml-skills, template) lets cifar10_quick train end-to-end
+against catalog 46 with RID-aware prediction recording. Picked cifar10_quick +
+cifar10_small_labeled_split for the smallest reproducible loop (200 train /
+50 test, 3 epochs, batch 128). Run finished in ~6s on CPU. Test accuracy 94%
+(47/50, 3 ship→bird misclassifications, all at confidence > 0.98). 50 per-image
+classification predictions recorded as Image_Classification feature values with
+RIDs surfaced via the new (sample, target, rid) tuple shape (deriva-ml #169).
+3 Execution_Assets uploaded (weights, training log, predictions CSV). This
+became the canonical baseline for Phases 3, 6, 9, and 10 of the e2e test.
+
+### Confidence bucket thresholds 0.70 / 0.95 (feature Prediction_Confidence_Bucket)
+
+Created `Prediction_Confidence_Bucket` feature on Image (term column referencing
+new `Confidence_Bucket` vocabulary: Low / Medium / High) for human-readable
+triage of model predictions. Use case: a coarse bucket on top of the continuous
+Confidence score in Image_Classification helps surface high-confidence
+misclassifications — the most valuable triage signal in this run, given CMY's
+hard convergence. Thresholds Low (<0.70) / Medium ([0.70, 0.95)) / High (≥0.95)
+chosen so Low flags review candidates, High is reliable for downstream use.
+Bucketing CMY's 50 test predictions produced 45 High / 5 Medium / 0 Low, and
+crucially all 3 ship→bird misclassifications bucket as High (confidence
+0.98–0.99) — exactly the high-confidence-error signal the feature was designed
+to surface. Population happened inside execution DER. Rejected scalar-only
+feature in favor of term-based: terms are stable across schema changes and
+queryable as first-class taxonomy.
+
+### Phase 7 subset filter substituted bird-only for cat+dog+frog (dataset E6R v0.2.0)
+
+E2E test spec called for a 3-class subset (cat+dog+frog) of dataset 85J to
+exercise the curated-subset path. Discovery: 85J's 250-image partition contains
+only 2 of 10 classes (225 bird, 25 ship) — load-cifar10's small-partition
+sampling biases to whichever classes the source data orders first. Substituted
+bird-only filter (225 images) because that path exercises the same
+create_dataset + add_dataset_members code the spec was probing — only the
+filter classes differ. Rejected dropping the subset test (loses signal);
+rejected switching source dataset (the complete 500-image dataset 850 has 4
+classes — airplane/bird/ship/truck — but is larger and slower to test).
+Dataset E6R released to 0.2.0 so it can be pinned in an experiment config;
+registered as `cifar10_phase7_bird_subset_localhost`. Empty E5M dataset remains
+as a Phase 7 artifact (created during the zero-match cat/dog/frog dry-run;
+classifier-blocked from deletion, journaled rather than removed).

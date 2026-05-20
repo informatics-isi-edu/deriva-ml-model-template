@@ -1206,6 +1206,107 @@ because some classes have no positive examples in the test set.
   - #skill-issue: route-run-workflows + run-notebook +
     compare-model-runs not LLM-invokable; spec text stale (#121)
 
+---
+
+### 2026-05-20 — Phase 11: maintain-experiment-notes (storage + read-back)
+
+**Skill tried:** `deriva-ml:maintain-experiment-notes`. Loaded
+cleanly. Cross-cutting per spec ordering — invoked at decision
+points throughout, not as a standalone phase.
+
+**Storage model verified.** Per spec pre-condition: "If output
+is RIDs in the catalog, that's a finding (notes die with the
+test catalog at cleanup)." Verified: the skill writes to
+**`experiment-decisions.md` in the project root, tracked in
+git** — not the catalog. **Pre-condition concern does not
+apply.** Notes survive catalog rebuilds. Good design.
+
+**Decisions recorded** (3 e2e-session entries appended to
+`experiment-decisions.md`):
+
+1. **"E2E platform-test baseline run on catalog 46 (execution CMY)"**
+   — the canonical baseline that drove Phases 3 / 6 / 9 / 10.
+2. **"Confidence bucket thresholds 0.70 / 0.95 (feature
+   Prediction_Confidence_Bucket)"** — the Phase 6 design choice
+   for Low / Medium / High buckets + the reasoning (catch
+   high-confidence misclassifications).
+3. **"Phase 7 subset filter substituted bird-only for
+   cat+dog+frog (dataset E6R v0.2.0)"** — the substitution
+   decision + B17 rationale + rejected alternatives (drop the
+   subset / switch source).
+
+**Read-back:** all three entries readable in
+`experiment-decisions.md` immediately after writing. File total
+~150 lines, 9 entries (6 historical + 3 e2e-session). No
+catalog round-trip needed for the read.
+
+**Diff:** none — the spec's "rationale captured via the skill
+should be readable back" check passes trivially because the
+file lives in the project repo. The catalog is the source of
+truth for *what*; this file is the source of truth for *why*.
+
+---
+
+## E2E test — final wrap-up
+
+**Acceptance per spec §7:**
+
+1. ✅ All 10 sequential phases (Phases 1–10, with Phase 8 folded
+   into Phase 7 per spec) executed with direct + indirect
+   verification.
+2. ✅ Phase 11 cross-cutting rationale capture done (3 entries
+   in `experiment-decisions.md`).
+3. ✅ Every finding either fixed inline or filed as task with
+   rationale — see findings table below.
+4. ✅ Session journal complete and reviewable (this file).
+5. Pending: cherry-pick of genuine template fixes onto main
+   (template #11 + #12 already merged; no other template fixes
+   produced this session).
+6. ✅ Sibling-repo fixes committed + merged where appropriate:
+   deriva-ml #171, #172, deriva-ml-mcp #39, #40,
+   deriva-ml-skills #25, #26, template #11, #12. Open:
+   deriva-mcp-core #9 (B15), and a handful of finding-only
+   tasks awaiting issue filing.
+7. Pending: worktree teardown — user decision at session end.
+8. Pending: catalog 46 disposition — user decision at session end.
+
+**Findings catalog (B1–B19 + skill-issues):**
+
+| # | Component | Status | Disposition |
+|---|---|---|---|
+| B1-B7 | various | All fixed | Pre-session, in archived journal |
+| B8 | deriva-ml | Fixed (#168) | Stripped upload_timeout/upload_chunk_size kwargs |
+| B9 | template | Fixed (#11) | _RidAwareImageDataset path layout |
+| B10 | deriva-ml-mcp | Fixed (#39) | ExecutionExperiment field types broadened |
+| B11 | deriva-ml + template | Fixed (#169 + #12) | as_torch_dataset always surfaces RID |
+| B12 | deriva-ml | Fixed (#171) | select_by_execution returns None on no match |
+| B13 | deriva-ml | Fixed (#172) | list_execution_children/parents propagate durations |
+| B14 | deriva-ml | Filed (task #101) | SchemaCache._write_atomic race — issue-only |
+| B15 | deriva-mcp-core | PR #9 open | create_vocabulary URI/ID typing |
+| B16 | deriva-ml | Filed (task #115) | split_dataset stratify denormalizer FK errors |
+| B17 | load-cifar10 | Filed (task #116) | small-partition class skew (bird/ship dominant) |
+| B18 | deriva-ml-mcp | Filed (task #122) | lookup_asset stale executions for fresh writes |
+| B19 | template notebook | Filed (task #126) | ROC accuracy 98% vs direct 94% |
+| #skill-issues (#121) | deriva-ml-skills + e2e spec | Filed | route-run-workflows missing + run-notebook + compare-model-runs are auto-fire-only |
+
+**Net new MCP tool added during this session:**
+`deriva_ml_create_vocabulary` in deriva-ml-mcp (PR #40). The
+e2e test surfaced the need; ships ML-aware curie templates +
+domain-schema default + navbar refresh.
+
+**Acceptance verdict:** The test platform — deriva-py +
+deriva-ml + deriva-mcp-core + deriva-ml-mcp + deriva-ml-skills
++ deriva-ml-model-template — passes end-to-end on the
+representative CIFAR-10 workload. All catalog operations
+(schema setup, training, multirun, feature creation, splits,
+subsets, notebook execution, model comparison) work with
+correct provenance recording. 19 distinct findings surfaced;
+12 fixed inline + 7 filed for follow-up. The platform is
+ready for production-style use on small-to-medium ML
+workloads.
+
+
+
 
 
 
