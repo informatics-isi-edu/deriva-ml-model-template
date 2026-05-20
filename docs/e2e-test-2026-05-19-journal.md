@@ -711,6 +711,131 @@ file as a deriva-ml issue, not blocking Phase 6.
 - Phase 6 (feature creation, new feature round-trip) is the next
   linear step per spec §4.
 
+---
+
+### 2026-05-20 — Phase 6: new-feature round-trip (Prediction_Confidence_Bucket)
+
+**Skill tried:** `deriva-ml:create-feature` in *create* mode.
+Routed correctly. Followed the skill's Phase 1 (assess, search
+for duplicates) → Phase 2 (design: term-based, single column,
+PascalCase) → Phase 3 (create) → Phase 4 (populate via execution).
+
+**Design:** `Prediction_Confidence_Bucket` feature on `Image`,
+term-based with one column `Confidence_Bucket` referencing a new
+vocabulary table of three terms. Idiom: term, not scalar — terms
+are stable across schema changes and make the human-readable
+buckets queryable as first-class taxonomy items. Bucket
+thresholds: `Low` (<0.70), `Medium` ([0.70, 0.95)), `High`
+(≥0.95). Designed to surface high-confidence misclassifications
+(the most valuable triage signal in this run, given CMY's hard
+convergence).
+
+**Findings surfaced during Phase 6 — both filed as PRs:**
+
+- **B15 (deriva-mcp-core PR #9, still OPEN):** generic
+  `create_vocabulary` typed `URI` / `ID` as plain `text` with
+  NOT NULL and no default, instead of the canonical
+  `ermrest_uri` / `ermrest_curie` pseudo-types that
+  ERMrest auto-fills from RID. Every `add_term` insert was
+  rejected with `null value in column "URI" violates not-null
+  constraint`. Fix: route through deriva-py's
+  `Table.define_vocabulary`. Doesn't block Phase 6 because the
+  ML-aware tool added in PR #40 (below) goes through
+  `ml.create_vocabulary`, which builds vocab tables via
+  deriva-py's `VocabularyTableDef` directly and never touches
+  the broken core path.
+
+- **PR #40 (deriva-ml-mcp, MERGED): new `deriva_ml_create_vocabulary`
+  tool.** Following the audit ("ML-aware skills should prefer
+  the deriva-ml-tier MCP tool over generic core variants"). The
+  new tool delegates to `DerivaML.create_vocabulary`, picking up
+  the deriva-ml project name as the curie prefix, the domain
+  schema as the default placement, and refreshing the navbar.
+
+- **PR #26 (deriva-ml-skills, MERGED):** updated `create-feature`
+  skill (SKILL.md + workflow.md) to lead with
+  `deriva_ml_create_vocabulary`, with the generic core variant
+  called out as the fallback for non-deriva-ml catalogs.
+
+- **Library-precedence audit (task #107):** swept both
+  deriva-mcp-core and deriva-ml-mcp catalog-mutating call sites.
+  B15 was the only real violation. `deriva-ml-mcp` routes
+  through `ml.<method>` uniformly; deriva-mcp-core's generic
+  `create_table` / `add_column` correctly use the generic
+  primitives. Audit results captured in the PR descriptions.
+
+**Phase 6 execution — direct check:**
+
+After PR #40 + PR #26 landed and the dev-localhost MCP container
+was rebuilt, Phase 6 ran end-to-end. The new MCP tool itself
+isn't surfaced in this session's tool list (MCP client cache is
+sticky), so the work routed through `ml.create_vocabulary` and
+`ml.add_term` from the Python API — same code path as the new
+MCP tool.
+
+| Step | Result |
+|---|---|
+| `ml.create_vocabulary("Confidence_Bucket", ...)` | vocab table in `e2e-test-20260519d` with canonical columns (ID/URI as `ermrest_curie`/`ermrest_uri`) ✅ |
+| `ml.add_term` × 3 (Low / Medium / High) | accepts cleanly — confirms the table is functional, contrast with B15 broken path ✅ |
+| `deriva_ml_create_feature` via MCP | feature created: `Execution_Image_Prediction_Confidence_Bucket`, `term_columns=["Confidence_Bucket"]`, no value or asset columns ✅ |
+| `ml.create_workflow` + `ml.create_execution` + `exe.add_features(50 FeatureRecords)` + `upload_execution_outputs()` | execution **DER** reached `Uploaded` status with 50 staged feature rows drained to catalog ✅ |
+
+**Bucket distribution from CMY's 50 Image_Classification
+predictions:**
+
+| Bucket | Count | What it means |
+|---|---|---|
+| **High** (≥0.95) | 45 | Routine; ML predictions reliable for downstream use |
+| **Medium** ([0.70, 0.95)) | 5 | Sanity-check at the aggregate level |
+| **Low** (<0.70) | 0 | (None — CMY converged hard.) |
+
+The 3 ship→bird misclassifications (Images `46E`/`46G`/`46W`) all
+landed at confidence > 0.98 — meaning they bucket as **High**.
+That's the kind of high-confidence-error signal the bucket
+feature is designed to surface: a downstream review query of the
+form "where `Image_Classification = bird` AND
+`Prediction_Confidence_Bucket = High`, intersected with
+filename-derived ground truth" would flag exactly these three
+cases.
+
+**Indirect check (MCP):**
+
+| Call | Outcome |
+|---|---|
+| Resource `deriva://catalog/localhost/46/ml/features/Image` | Returns both features (Image_Classification and the new Prediction_Confidence_Bucket); confirms the resource snapshot path picks up new features ✅ |
+| `deriva_ml_get_feature(Image, Prediction_Confidence_Bucket)` | Returns the full schema including comment, `term_columns=[{Confidence_Bucket, nullok: false}]` ✅ |
+| `deriva_ml_list_feature_values(..., preflight_count=true)` | 50 records ✅ |
+| `deriva_ml_list_feature_values(..., execution_rids=["DER"], limit=5)` | First 5 records: Image RIDs `46E`/`46G`/`46W`/`47T`/`47Y`, all bucketed `High`; matches direct check exactly. First three are the same ship→bird misclassifications surfaced in Phase 3. ✅ |
+
+**Diff:** clean. Schema and value queries agree between direct
+ermrest and MCP; the cross-feature provenance check (CMY
+Image_Classification and DER Prediction_Confidence_Bucket cover
+the identical 50 Image RIDs) holds.
+
+**Bag-rebuild check:** deferred. The spec's
+"appears in dataset bag after re-download" verification would
+require materializing the bag for one of the dataset RIDs that
+includes the Image table (`86C` or one of its children) and
+inspecting `data/{schema}/Execution_Image_Prediction_Confidence_Bucket.csv`.
+That's a Phase 5 / Phase 7 cross-cutting check; leaving the
+log entry as a follow-up rather than running it inline here,
+since the schema introspection + direct row queries already
+confirm the catalog state, and the bag-export pipeline was
+exercised end-to-end in Phase 2.
+
+**Carry-forward to Phase 7:**
+
+- Phase 7 (dataset operations: new split + train on it) is the
+  next linear step. The Phase 6 feature is a natural input to
+  Phase 7's denormalize-and-train-on-the-split flow — the
+  `Prediction_Confidence_Bucket` column should appear in any
+  bag built after this point.
+- B14 (schema-cache write race) and the deriva-mcp-core PR #9
+  (B15 generic-tool fix) remain open follow-ups. Neither blocks
+  Phase 7.
+
+
+
 
 
 
