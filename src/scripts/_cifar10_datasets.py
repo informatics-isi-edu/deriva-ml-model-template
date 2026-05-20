@@ -44,10 +44,115 @@ from deriva_ml import DerivaML
 from deriva_ml.dataset.split import split_dataset
 from deriva_ml.execution import ExecutionConfiguration
 
+from scripts._cifar10_assets import class_from_filename
+
 logger = logging.getLogger(__name__)
 
 SMALL_TRAIN_SIZE = 500
 SMALL_TEST_SIZE = 500
+
+# Column to stratify by for class-balanced splits — matches the
+# Image_Classification feature populated in stage 2b.
+STRATIFY_COLUMN = "Image_Classification.Image_Class"
+
+
+def stratified_sample_rids(
+    rids: list[str],
+    classes: list[str | None],
+    sample_size: int,
+    seed: int,
+) -> list[str]:
+    """Pick a class-balanced sample of asset RIDs.
+
+    Mirrors :func:`scripts._cifar10_assets.stratified_sample_by_class`
+    but operates over a flat ``(rid, class)`` pairing — used for the
+    ``Small_Training`` / ``Small_Testing`` random samples that previously
+    called :func:`random.sample` on the full RID list (which left them
+    skewed toward whichever classes came first in the catalog query).
+
+    Args:
+        rids: All candidate RIDs.
+        classes: Parallel list of class names. ``None`` entries are
+            treated as unknown-class and excluded from the result.
+        sample_size: Number of RIDs to return. If ``>= len(rids)`` the
+            full known-class set is returned.
+        seed: Seed used for per-class and final shuffles.
+
+    Returns:
+        A list of ``sample_size`` RIDs with roughly equal class
+        representation when ``sample_size >= len(unique classes)``.
+
+    Example:
+        >>> rids = [f"R{i}" for i in range(6)]
+        >>> classes = ["a", "b", "a", "b", "a", "b"]
+        >>> sample = stratified_sample_rids(rids, classes, 4, seed=1)
+        >>> sum(1 for r, c in zip(rids, classes) if r in sample and c == "a")
+        2
+    """
+    if sample_size <= 0:
+        return []
+    by_class: dict[str, list[str]] = {}
+    for rid, cls in zip(rids, classes):
+        if cls is None:
+            continue
+        by_class.setdefault(cls, []).append(rid)
+
+    total_known = sum(len(v) for v in by_class.values())
+    if sample_size >= total_known:
+        rng = random.Random(seed)
+        flat = [r for v in by_class.values() for r in v]
+        rng.shuffle(flat)
+        return flat
+
+    num_classes = len(by_class)
+    if num_classes == 0:
+        return []
+    if sample_size < num_classes:
+        logger.warning(
+            "Stratified RID sample requested for %d items but %d classes "
+            "are available; result will be class-biased.",
+            sample_size,
+            num_classes,
+        )
+
+    class_rng = random.Random(seed)
+    sorted_classes = sorted(by_class.keys())
+    shuffled_by_class: dict[str, list[str]] = {}
+    for cls in sorted_classes:
+        bucket = list(by_class[cls])
+        class_rng.shuffle(bucket)
+        shuffled_by_class[cls] = bucket
+
+    base_quota = sample_size // num_classes
+    remainder = sample_size % num_classes
+    order_rng = random.Random(seed + 1)
+    class_order = list(sorted_classes)
+    order_rng.shuffle(class_order)
+    extras = set(class_order[:remainder])
+
+    picked: list[str] = []
+    for cls in sorted_classes:
+        quota = base_quota + (1 if cls in extras else 0)
+        picked.extend(shuffled_by_class[cls][:quota])
+
+    if len(picked) < sample_size:
+        already = set(picked)
+        leftover: list[str] = []
+        for cls in sorted_classes:
+            quota = base_quota + (1 if cls in extras else 0)
+            leftover.extend(shuffled_by_class[cls][quota:])
+        leftover_rng = random.Random(seed + 2)
+        leftover_rng.shuffle(leftover)
+        for rid in leftover:
+            if len(picked) >= sample_size:
+                break
+            if rid in already:
+                continue
+            picked.append(rid)
+
+    final_rng = random.Random(seed + 3)
+    final_rng.shuffle(picked)
+    return picked
 
 
 def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, str]:
@@ -83,6 +188,16 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
 
     train_rids = [a.asset_rid for a in assets if a.filename.startswith("train_")]
     test_rids = [a.asset_rid for a in assets if a.filename.startswith("test_")]
+    train_classes = [
+        class_from_filename(a.filename)
+        for a in assets
+        if a.filename.startswith("train_")
+    ]
+    test_classes = [
+        class_from_filename(a.filename)
+        for a in assets
+        if a.filename.startswith("test_")
+    ]
     all_rids = train_rids + test_rids
     logger.info(f"  Train: {len(train_rids)}, Test: {len(test_rids)}")
 
@@ -171,23 +286,32 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
     if test_rids:
         _batched_add(datasets["testing"], test_rids, "Testing")
 
-    # Small splits — random sample if enough; else use all
+    # Small splits — stratified sample by class if enough; else use all.
+    # The previous random.sample() left bird/ship-only partitions when
+    # the source was class-skewed (#13). Stratified sampling keeps each
+    # class proportionally represented at any sample size >= 10.
     if train_rids:
-        sample = (
-            random.sample(train_rids, SMALL_TRAIN_SIZE)
-            if len(train_rids) >= SMALL_TRAIN_SIZE
-            else train_rids
-        )
+        if len(train_rids) >= SMALL_TRAIN_SIZE:
+            sample = stratified_sample_rids(
+                train_rids, train_classes, SMALL_TRAIN_SIZE, seed=42
+            )
+        else:
+            sample = train_rids
         _batched_add(datasets["small_training"], sample, "Small_Training")
     if test_rids:
-        sample = (
-            random.sample(test_rids, SMALL_TEST_SIZE)
-            if len(test_rids) >= SMALL_TEST_SIZE
-            else test_rids
-        )
+        if len(test_rids) >= SMALL_TEST_SIZE:
+            sample = stratified_sample_rids(
+                test_rids, test_classes, SMALL_TEST_SIZE, seed=43
+            )
+        else:
+            sample = test_rids
         _batched_add(datasets["small_testing"], sample, "Small_Testing")
 
-    # Labeled splits derived from Training
+    # Labeled splits derived from Training. Stratify by the
+    # Image_Classification feature so each child partition keeps a
+    # balanced class distribution — without this, the 400/100 small
+    # split inherited the source class skew and ended up bird/ship-only
+    # at --num-images 500 (#13).
     if train_rids:
         logger.info("Creating Labeled_Split (80/20 of training)...")
         labeled = split_dataset(
@@ -195,10 +319,12 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
             datasets["training"],
             test_size=0.2,
             seed=42,
+            stratify_by_column=STRATIFY_COLUMN,
             training_types=["Labeled"],
             testing_types=["Labeled"],
             element_table="Image",
-            split_description="CIFAR-10 labeled split: 80/20 from training images",
+            include_tables=["Image_Classification"],
+            split_description="CIFAR-10 labeled split: stratified 80/20 from training images",
         )
         datasets["labeled_split"] = labeled.split.rid
         datasets["labeled_training"] = labeled.training.rid
@@ -212,10 +338,12 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
                 test_size=100,
                 train_size=400,
                 seed=42,
+                stratify_by_column=STRATIFY_COLUMN,
                 training_types=["Labeled"],
                 testing_types=["Labeled"],
                 element_table="Image",
-                split_description="Small CIFAR-10 labeled split: 400/100 from training",
+                include_tables=["Image_Classification"],
+                split_description="Small CIFAR-10 labeled split: stratified 400/100 from training",
             )
         else:
             small_labeled = split_dataset(
@@ -223,10 +351,12 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
                 datasets["training"],
                 test_size=0.2,
                 seed=123,
+                stratify_by_column=STRATIFY_COLUMN,
                 training_types=["Labeled"],
                 testing_types=["Labeled"],
                 element_table="Image",
-                split_description="Small CIFAR-10 labeled split from training",
+                include_tables=["Image_Classification"],
+                split_description="Small CIFAR-10 labeled split: stratified from training",
             )
         datasets["small_labeled_split"] = small_labeled.split.rid
         datasets["small_labeled_training"] = small_labeled.training.rid
