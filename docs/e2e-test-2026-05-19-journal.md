@@ -575,5 +575,43 @@ clear MCP-side data loss that's surfaceable as a fix in deriva-ml.
   CDG — Phase 5 can now compare BDBag-cache behavior across a
   3-execution sequence.
 
+---
+
+### 2026-05-20 — Inter-phase: B13 fix verified end-to-end
+
+deriva-ml **PR #172** landed on main as commit `4120fce1`.
+Bumped the e2e worktree's lock from `4908bce8` (PR-1+#171) to
+`4120fce1` (adds #172), rebuilt the dev-localhost MCP container
+no-cache, restarted with `--force-recreate`, waited for healthy.
+Container source verified to include the fix (`'Execution_Duration'`
+appears in `inspect.getsource(ExecutionRecord.list_execution_children)`).
+
+Re-ran both previously-broken MCP paths:
+
+**`deriva_ml_list_execution_children(execution_rid="CTA")`** —
+both children now carry all three duration fields:
+
+| Child | duration | download_duration | upload_duration |
+|---|---|---|---|
+| **CVP** (Job 0, cifar10_quick) | **0.5982 s** | **1.5305 s** | **0.5644 s** |
+| **D14** (Job 1, cifar10_extended) | **10.9653 s** | **1.6869 s** | **0.7849 s** |
+
+**`deriva_ml_list_execution_parents(execution_rid="CVP")`** —
+parent now carries all three duration fields:
+
+| Parent | duration | download_duration | upload_duration |
+|---|---|---|---|
+| **CTA** (multirun supervisor) | **17.1031 s** | **1.1042 s** | **0.128 s** |
+
+All values match direct ermrest to displayed precision. Before
+#172 these were uniformly `null` even though the same row was
+being fetched. **`#bug-fixed`** B13 closed end-to-end on both
+children and parents.
+
+Phase 4 is now fully closed. Moving on to Phase 5 (client cache
+validation) per the e2e spec §4 phase ordering.
+
+
+
 
 
