@@ -122,9 +122,12 @@ class _RidAwareImageDataset(Dataset):
             rid = row["RID"]
             self._rids.append(rid)
             self._labels.append(rid_to_label.get(rid, -1))
-            # Bag asset path: <bag_path>/data/assets/Image/<rid>/<filename>
+            # Canonical BDBag asset layout: data/asset/{rid}/{table}/{filename}
+            # (singular `asset/`; rid before the table-name segment). Matches
+            # the layout produced by the bag materializer and resolved by
+            # deriva-ml's torch adapter in `_resolve_asset_path`.
             self._paths.append(
-                bag.path / "data" / "assets" / "Image" / rid / row["Filename"]
+                bag.path / "data" / "asset" / rid / "Image" / row["Filename"]
             )
 
     def __len__(self) -> int:
