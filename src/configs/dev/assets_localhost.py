@@ -31,10 +31,12 @@ asset_store(
 
 # -----------------------------------------------------------------------------
 # E2E quick_vs_extended multirun on catalog 46.
-# Populated by Phase 2 (quick) and a follow-up (extended).
+# Populated by Phase 4 (multirun parent CTA -> children CVP cifar10_quick +
+# D14 cifar10_extended). The two prediction CSVs let the ROC notebook
+# compare the 3-epoch and 50-epoch architectures on the same test set.
 # -----------------------------------------------------------------------------
 
 asset_store(
-    [],
+    ["CXA", "D2R"],
     name="roc_e2e_localhost",
 )
