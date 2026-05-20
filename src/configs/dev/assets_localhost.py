@@ -45,3 +45,16 @@ asset_store(
     ["836", "87J"],
     name="roc_e2e_localhost",
 )
+
+# -----------------------------------------------------------------------------
+# E2E quick_vs_extended on catalog 46 (issue #14 repro).
+# -----------------------------------------------------------------------------
+# Children:
+#   CMY (cifar10_quick)    -> CF2  (epoch 1)
+#   CDG (cifar10_quick)    -> CPG  (epoch 2)
+#   CVP (cifar10_quick)    -> CXA  (epoch 3)
+#   D14 (cifar10_extended) -> D2R  (epoch 50)
+asset_store(
+    ["CXA", "D2R"],
+    name="roc_e2e_localhost_46",
+)

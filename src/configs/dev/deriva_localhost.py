@@ -30,3 +30,18 @@ deriva_store(
         )
     },
 )
+
+deriva_store(
+    DerivaMLConfig,
+    name="localhost_46",
+    hostname="localhost",
+    catalog_id=46,
+    use_minid=False,
+    zen_meta={
+        "description": (
+            "Localhost catalog 46 (e2e-test-20260519d schema, "
+            "500 ground-truth labels + CMY/CDG/CVP/D14 prediction executions). "
+            "Catalog from issue #14 — ROC accuracy discrepancy repro."
+        )
+    },
+)
