@@ -611,6 +611,108 @@ children and parents.
 Phase 4 is now fully closed. Moving on to Phase 5 (client cache
 validation) per the e2e spec §4 phase ordering.
 
+---
+
+### 2026-05-20 — Phase 5: client cache validation
+
+**Skill tried:** none — Phase 5 is a cross-cutting investigation,
+not a skill-routed phase. Read the deriva-ml cache code paths
+directly + drove repeat-invocation timing tests.
+
+**Sub-phase 5a: BDBag cache.** Investigated the pending
+`#cache-finding` from Phase 2 (CMY's Download_Duration was 5.30 s
+vs CK6's 1.05 s on the same dataset RID).
+
+Local inspection of `~/.deriva-ml/localhost/46/cache/`:
+
+- One cached bag at `bags/0c4d9652c5524c11_None/Dataset_BR0/`,
+  ~2.4 MB payload, anchored on Dataset RID `BR0` (the
+  load-cifar10-produced training subset that the
+  `cifar10_small_labeled_split_localhost` config maps to via
+  nested dataset traversal). Index file
+  `cache/index.sqlite` has one row mapping the checksum →
+  Dataset RID.
+- 13 `commit-bag-*` directories at the catalog root — one per
+  execution. These are **upload-side working directories**, not
+  download caches. The naming was a source of initial confusion.
+- Cache key shape is `{checksum}_None` where the suffix encodes
+  the dataset version (`None` for the dev version this experiment
+  pinned at). Same dataset RID + same version → same cache key
+  → one cached bag for all runs.
+
+Three back-to-back warm dry-runs against the same dataset:
+**5.58 s, 5.57 s, 5.20 s** total wall-clock. Then cleared
+`cache/bags/*` + `index.sqlite` and reran three times:
+**11.70 s cold, 7.44 s warm, 9.11 s warm**. Cold-to-warm
+improvement ≈ 37%; warm-to-warm jitter ≈ ±2 s (uv overhead +
+catalog connection + python startup dominate, leaving a ~5 s
+download-phase window with ~1.5 s natural jitter).
+
+**Conclusion:** the cache is functioning correctly. The Phase 2
+`#cache-finding` (CMY=5.30 s vs CK6=1.05 s) was a **false alarm**
+— both values fall inside the normal warm-cache variance window
+(roughly 1–5 s for the 500-image `_initialize_execution` phase).
+`Download_Duration` measures `_initialize_execution` (bag open +
+asset materialization + DatasetBag construction), not pure
+network download — so per-row variance is expected even with the
+cache hot. Closing the `#cache-finding` tag as **not-a-bug**.
+
+**Sub-phase 5b: MCP / schema cache.** Repeated calls to
+`list_vocabulary_terms(deriva-ml, Dataset_Type)` showed:
+
+- Both calls return identical 8-term payload with matching RCT
+  timestamps (deterministic).
+- MCP container logs show auth-verifier hits for **both** calls
+  (so the requests reached the catalog both times) but no
+  explicit cache-hit/cache-miss log lines for vocab lookups.
+- Schema cache at `/root/.deriva-ml/deriva/46/schema-cache.json`
+  inside the container, ~551 KB. Single file per catalog. Written
+  via `SchemaCache._write_atomic` — `tmp` then `os.replace`.
+
+**Bug B14 (deriva-ml, surfaced opportunistically):**
+`SchemaCache._write_atomic` (`src/deriva_ml/core/schema_cache.py:130-145`)
+races under concurrent writers. Container logs caught it:
+
+```
+File ".../schema_cache.py", line 145, in _write_atomic
+  os.replace(tmp, self._path)
+FileNotFoundError: [Errno 2] No such file or directory:
+  '/root/.deriva-ml/deriva/46/schema-cache.json.tmp'
+   -> '/root/.deriva-ml/deriva/46/schema-cache.json'
+```
+
+Two MCP-served requests can each create a `.tmp` sibling, then
+the first `os.replace(tmp, target)` consumes one `.tmp` file via
+rename; the second `os.replace` finds its `.tmp` source gone.
+The file-on-disk eventually lands (recovered to 551 KB on
+inspection), so this is a noisy-log finding rather than a data
+correctness bug, but the error should be either (a) caught and
+retried, (b) gated by a file lock, or (c) use per-process tmp
+filenames so two writers can't collide on the same `.tmp`. Will
+file as a deriva-ml issue, not blocking Phase 6.
+
+**Cache layers identified:**
+
+| Layer | Location | Behavior | Notes |
+|---|---|---|---|
+| BDBag cache (deriva-ml) | `~/.deriva-ml/{host}/{catalog}/cache/bags/{checksum}_{version}/` | ✅ Working; ~37% speedup cold→warm; single bag per (dataset, version) | The dominant cache for execution workflows. |
+| Index (deriva-ml) | `~/.deriva-ml/{host}/{catalog}/cache/index.sqlite` | ✅ Tracks checksums → anchor RIDs | Tiny (28 KB); rebuilt on cache-clear. |
+| Schema cache (deriva-ml) | `~/.deriva-ml/{host}/{catalog}/schema-cache.json` | ⚠️ Working but writer not atomic under concurrent processes (B14) | ~551 KB. Read path didn't surface in this phase's vocab tests; need a dedicated MCP-server-side test to verify it serves repeat introspection requests from cache. |
+| Bag commit dirs (per-execution) | `~/.deriva-ml/{host}/{catalog}/commit-bag-{rid}/` | n/a — upload working dirs, not caches | Named confusingly; flagged as a `#docs-finding`. |
+
+**Carry-forward to Phase 6:**
+
+- B14 (schema-cache write race) — file as deriva-ml issue
+  separately. Cosmetic at current usage volumes; safety-tighten
+  before Phase 11 if any heavy-concurrency MCP work is planned.
+- Schema-cache read-path coverage left intentionally light here;
+  it could become Phase 9 / Phase 10 work if notebook execution
+  surfaces a slow-schema-fetch finding.
+- Phase 6 (feature creation, new feature round-trip) is the next
+  linear step per spec §4.
+
+
+
 
 
 
