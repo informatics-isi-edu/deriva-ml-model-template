@@ -139,3 +139,13 @@ uv run deriva-ml-run dry_run=true        # dry run (no catalog writes)
   reference.
 - [experiment-decisions.md](experiment-decisions.md) — design
   rationale and decision log for the example model.
+
+## Test plans
+
+- When the user asks to run an end-to-end platform test (any
+  variant of "let's do an e2e run", "exercise the stack", or
+  "test the platform"), the current plan of record is
+  [docs/test-plans/2026-05-20-e2e-multipersona.md](docs/test-plans/2026-05-20-e2e-multipersona.md).
+  Read it before kicking off the run. The prior single-agent
+  platform-fitness plan (May 2026) is superseded but kept in
+  `docs/superpowers/specs/` for historical reference.
