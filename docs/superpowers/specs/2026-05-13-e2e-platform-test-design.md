@@ -2,7 +2,7 @@
 
 **Author:** Carl Kesselman (with Claude)
 **Date:** 2026-05-13
-**Status:** Approved design; implementation plan TBD.
+**Status:** Superseded by [docs/test-plans/2026-05-20-e2e-multipersona.md](../../test-plans/2026-05-20-e2e-multipersona.md) (multi-persona variant). Kept here for historical reference — the May 2026 run was executed against this spec and produced the May 19 session journal. The next run uses the multi-persona plan.
 
 ## 1. Scope and goals
 
