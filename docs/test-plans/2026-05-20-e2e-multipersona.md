@@ -36,7 +36,14 @@ findings during the run.
    next persona reads from it before starting. Gaps in the handoff
    are findings — about the file, the prior persona's writing, or
    the `maintain-experiment-notes` skill itself.
-3. **Surface bugs and rough spots** *as a byproduct* of the personas
+3. **Confirm what the indirect channel (skills + MCP tools) reports
+   matches the catalog's actual state.** Each persona's normal work
+   uses skills and MCP tools, but before declaring their arc done
+   they must verify directly (deriva-ml Python API, raw ermrest)
+   that the catalog actually contains what the tools said happened.
+   Disagreement is a finding — and historically the most valuable
+   kind. See §3.4.
+4. **Surface bugs and rough spots** *as a byproduct* of the personas
    doing their work. The personas are not bug hunters; they're users.
    Bugs they hit are findings; bugs they don't hit aren't relevant
    to this test.
@@ -231,15 +238,77 @@ Each persona, regardless of mode, follows the same arc:
    them to `experiment-decisions.md` via `maintain-experiment-notes`.
    At minimum: one entry per major decision (dataset choice, split
    strategy, model config selection, metric choice).
-5. **Write handoff.** At end of arc, persona appends a "handoff
+5. **Cross-channel verification.** Before declaring the arc done,
+   the persona verifies that the catalog *actually* contains what
+   their skills and tools *said* they created. See §3.4. Disagreement
+   is a finding.
+6. **Write handoff.** At end of arc, persona appends a "handoff
    summary" section to `experiment-decisions.md` named for the
    next persona, describing what's ready and what's pinned. This
    is the explicit knowledge-transfer step.
-6. **Produce arc summary.** A markdown summary of what was done,
+7. **Produce arc summary.** A markdown summary of what was done,
    findings raised, decisions captured, and success-criteria
    status (which met, which not, why). In interactive mode this
    is the exit checkpoint; in autonomous mode it feeds the final
    consolidated report.
+
+### 3.4 Cross-channel verification
+
+The single most important methodology principle from the May 2026
+run: **the catalog's actual state and what the skills/MCP tools
+report about its state must agree.** When they don't agree, it's
+usually the skill/MCP side that's wrong, and the discrepancy is
+exactly the kind of friction this test exists to surface.
+
+Each persona's normal work uses the **indirect channel** — skills
+and MCP tools, the surface a real user would see. Before declaring
+their arc done, the persona must check the **direct channel** —
+deriva-ml Python API or raw ermrest, with no skill or MCP indirection
+— and confirm the catalog state matches the indirect channel's
+reports.
+
+**What to verify** depends on the persona; minimums:
+
+- **Curator:** every dataset they reported creating, every dataset
+  type assigned, every member added — visible via `ml.find_datasets`,
+  `ml.lookup_dataset(rid).list_dataset_members()`, with counts
+  matching what the skill said.
+- **Developer:** every Execution row reported as committed, every
+  Execution_Asset uploaded — visible via `ml.find_executions`,
+  `ml.lookup_execution(rid).list_assets()`, with counts and statuses
+  matching.
+- **Analyst:** every plot, summary CSV, or notebook asset reported
+  uploaded — visible via direct asset queries. Predictions used in
+  the analysis match what the developer's executions actually
+  produced (cross-persona check).
+
+**What to do on disagreement:**
+
+1. Write a finding (§4) at the exact point of disagreement. Capture
+   both the skill/MCP report AND the direct-channel query result
+   verbatim.
+2. If the persona's deliverable depends on the catalog actually being
+   in the state the skill reported, the persona is blocked. Note in
+   the arc summary which success criterion failed and why.
+3. If the deliverable is unaffected (the discrepancy is in metadata
+   the persona didn't need), proceed; the finding documents the
+   discrepancy for the fix-pass.
+
+**Tie-breaker channel:** if direct (deriva-ml Python) and indirect
+(MCP / skill) disagree and `deriva-ml` is in both code paths (which
+it is for most catalog operations), the persona should drop one
+level lower and use raw `ermrest_catalog.get(...)` or
+`DatapathBuilder` with no deriva-ml helpers to break the tie. This
+identifies whether the bug is in deriva-ml itself or in the layer
+above it.
+
+This step is mandatory regardless of mode. Personas don't get to
+skip it because they "feel good about the work" — the May 2026 run
+caught multiple high-severity bugs precisely because the indirect
+channel reported success while the direct channel revealed silent
+failures.
+
+### 3.5 Multi-agent setup
 
 ### 3.4 Multi-agent setup
 
@@ -455,7 +524,11 @@ By the time Phase 0 is done, the following is true:
    uv run load-cifar10 --hostname localhost \
        --create-catalog e2e-test-<YYYYMMDD> --num-images 500
    ```
-   Confirm via direct deriva-ml inspection:
+   Then run the **same cross-channel verification** that personas run
+   (§3.4) — both via direct deriva-ml inspection AND via the MCP
+   tools (`deriva_ml_list_datasets`, `deriva_ml_list_features`,
+   `deriva_ml_list_vocabulary_terms`). The two channels must agree
+   on:
    - Catalog exists at the expected name + a numeric catalog ID.
    - 13 datasets present with the expected names.
    - `Image_Classification` feature values are populated for the
@@ -463,9 +536,11 @@ By the time Phase 0 is done, the following is true:
    - Class distribution is balanced across all 10 CIFAR-10 classes
      (post-#15 fix; not the pre-fix bird+ship-dominant skew).
 
-   If any of these fail, that is a Phase 0 finding. The test
-   either aborts or proceeds with the finding documented and the
-   Curator's success criteria adjusted accordingly. User decides.
+   If the two channels disagree, that's a Phase 0 finding (likely an
+   MCP-side bug, given the May 2026 pattern). If either channel
+   fails any of the listed checks, that's also a Phase 0 finding. The
+   test either aborts or proceeds with the finding documented and
+   the Curator's success criteria adjusted accordingly. User decides.
 5. **Repoint dev configs.** Update `src/configs/dev/*_localhost.py`
    in this checkout with the new catalog ID and dataset RIDs. Commit
    on `main` of each per-persona worktree with the `[E2E-DROP]` marker
@@ -479,7 +554,7 @@ By the time Phase 0 is done, the following is true:
    ground state the personas will see. Mismatches against the
    personas' expected skill list go in `findings/setup/` as a
    pre-curator finding bucket.
-8. **Create worktrees.** One per persona, per §3.4.
+8. **Create worktrees.** One per persona, per §3.5.
 9. **Mode selection.** Ask the user — interactive or autonomous?
 10. **Launch curator** in their worktree with their persona prompt.
 
@@ -565,6 +640,7 @@ itself is broken and that's its own finding worth investigating.
 | Where does the persona handoff happen? | `experiment-decisions.md` (project root) |
 | Who creates the catalog? | Phase 0 bootstrap (§6), via `load-cifar10` — *before* any persona runs |
 | What's the catalog name? | `e2e-test-<YYYYMMDD>` (chosen at run start) |
+| Cross-channel verification? | Each persona must verify, before declaring arc complete, that direct deriva-ml inspection of the catalog matches what the skills/MCP tools said happened. Disagreement is a finding (§3.4). |
 | Mode flag? | Interactive (checkpoint per persona) or Autonomous (final report only); chosen at start |
 | Branch naming? | `e2e-test/<YYYY-MM-DD>-<persona>`, branched from `main` |
 | Final artifact? | `findings/REPORT-<YYYY-MM-DD>.md` |
