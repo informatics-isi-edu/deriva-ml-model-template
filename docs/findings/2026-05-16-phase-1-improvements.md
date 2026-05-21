@@ -135,6 +135,20 @@ one valid path."
 
 ### C1. Surface the guide prompts more aggressively
 
+> **Status: PARTIALLY DONE (C1c) + remainder NOT PLANNED — closed 2026-05-17.**
+> **C1c is shipped** — `deriva_ml_getting_started` and `deriva_ml_concepts`
+> are exposed as both prompts AND resources at
+> `deriva://deriva-ml/getting-started` and `deriva://deriva-ml/concepts`
+> (resource handlers in `deriva-ml-mcp/src/deriva_ml_mcp/resources/ml.py`).
+> Resource-walking clients now find them.
+> **C1a, C1b, C1d are NOT PLANNED** — no current resourcing for further
+> `deriva-mcp-core` changes. The user-facing impact of C1 (agents skipping
+> the orientation) is mitigated in `deriva-ml-skills` by the
+> `using-deriva-mcp` skill ([PR #17](https://github.com/informatics-isi-edu/deriva-ml-skills/pull/17))
+> which encodes the cold-start discipline at the skill layer using the
+> resource form C1c provides. Re-open C1a/b/d if non-Claude-Code clients
+> need server-side enforcement.
+
 Server-level instructions ("Call the relevant guide prompt...") are
 correct but easily missed. Options, in increasing order of
 intrusiveness:
@@ -159,6 +173,18 @@ do read resources.
 
 ### C2. Document the resource-vs-tool decision
 
+> **Status: NOT PLANNED at server layer — mitigated at skill layer.** Closed
+> 2026-05-17. No current resourcing for `deriva-mcp-core` / `deriva-ml-mcp`
+> prompt edits. The teaching is now carried in `deriva-ml-skills`:
+> `deriva-ml-context`'s "Read-side questions: fetch the resource first"
+> section is the canonical statement, reinforced by individual skills
+> (`dataset-lifecycle`, `compare-model-runs`, `create-feature`,
+> `work-with-assets`) that cross-reference the resource alternative next
+> to their `deriva_ml_list_*` examples ([PR #18](https://github.com/informatics-isi-edu/deriva-ml-skills/pull/18)).
+> This addresses the user-visible problem (Claude Code agents defaulting
+> to tools when a resource would serve) but leaves non-Claude-Code clients
+> with no server-side guidance. Re-open if those clients matter.
+
 In `deriva_ml_getting_started` (or a new `entry_points_guide`),
 add a "when to use a resource vs a tool" section. The shape:
 
@@ -174,6 +200,12 @@ Without this, agents like me default to tools because the deferred-
 tool catalog is the affordance Claude Code surfaces.
 
 ### C3. Auth-failure error wording
+
+> **Status: NOT PLANNED — closed 2026-05-17.** No current resourcing for
+> `deriva-mcp-core` server-side changes. Improving the error wording is
+> still the right fix and remains a low-risk targeted change for whoever
+> picks it up; the finding's recommended replacement text is good as-is.
+> Re-open when there's bandwidth for `deriva-mcp-core` work.
 
 When the MCP server has no auth context and the underlying ERMrest
 returns 401, the server currently surfaces:
@@ -200,6 +232,13 @@ Today both look the same to the caller.
 
 ### C4. Resource reads should fail fast, not time out
 
+> **Status: NOT PLANNED — closed 2026-05-17.** No current resourcing for
+> `deriva-mcp-core` server-side changes. The 30s hang on auth-walled
+> resource reads remains a real user-experience issue; the fix (apply
+> the same auth-detection envelope to resource handlers as the tools
+> already have) is well-scoped and inexpensive when bandwidth opens up.
+> Re-open then.
+
 Same auth condition that gives the tools a 401 made the resource
 reads time out at 30s (MCP error 32001). The resource path should
 return a structured error like the tools, not silently hang.
@@ -210,6 +249,14 @@ auth wall.
 Add the same auth-detection envelope to the resource handlers.
 
 ### C5. Per-server attribution in `<system-reminder>` collapses
+
+> **Status: NOT PLANNED — closed 2026-05-17.** Primarily a Claude Code
+> rendering issue (per the finding's own note) rather than something
+> `deriva-mcp-core` can fix definitively. No current resourcing for
+> server-side mitigation either. If multiple-MCP-server agent confusion
+> becomes a recurring debugging cost in real sessions, the server-side
+> prefix workaround (`[deriva-mcp-core] ...` in its instruction text)
+> is a one-line change worth re-opening for.
 
 The aggregated `<system-reminder>` for "MCP Server Instructions"
 concatenates all servers' instructions into one block. With one
@@ -1078,6 +1125,27 @@ are usable."
 ## Section addendum: missing skill (was B4 from earlier journal note)
 
 ### B4. New skill: `clone-catalog-slice` (deferred)
+
+> **Status: FIXED — closed 2026-05-17.** Addressed by the
+> [`setup-ml-catalog` skill](https://github.com/informatics-isi-edu/deriva-ml-skills/blob/main/skills/setup-ml-catalog/SKILL.md)
+> in `deriva-ml-skills`, merged as
+> [PR #16](https://github.com/informatics-isi-edu/deriva-ml-skills/pull/16).
+> The skill covers the same workflow this finding requested (clone
+> a slice of an existing catalog into a fresh destination) plus the
+> sibling "create from scratch via `create_ml_catalog` + a phased
+> loader" path. Branch 2 of the new skill walks the three-step
+> sequencing the finding flagged: create the destination catalog,
+> install the deriva-ml schema, then call `clone_via_bag` with
+> anchors that define the slice. The skill teaches anchor assembly
+> as its own decision point (pick your roots — Dataset, Subject,
+> Experiment, Workflow) and explains why the upstream
+> `clone_via_bag` defaults produce a working ML catalog with
+> bounded scope (the `terminal_tables` asymmetry follows outbound
+> FKs for full provenance, blocks inbound FKs to prevent cross-
+> anchor over-fetch). Naming chose `setup-ml-catalog` over
+> `clone-catalog-slice` so the skill could cover both bootstrap
+> paths (from-scratch and from-slice) under one user-facing entry
+> point.
 
 This was flagged in the journal but not yet captured in this
 findings doc.
