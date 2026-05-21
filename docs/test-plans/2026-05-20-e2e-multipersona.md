@@ -484,6 +484,34 @@ curator. None of this is persona work — this is infrastructure setup
 that must complete *before* any persona starts. A failure here is a
 Phase 0 finding and may block the test entirely.
 
+### Why Phase 0 is not the Curator
+
+The Curator persona inherits a bootstrapped catalog rather than
+creating it. This is a deliberate choice, not an oversight, and the
+spec calls it out so future readers don't relitigate the question:
+
+- **The test measures user experience, not infrastructure setup.**
+  `load-cifar10` is mechanical (one CLI invocation) and reveals no
+  judgment-laden friction. A Curator arc that includes bootstrap
+  dilutes the persona's role away from their actual value-add:
+  *deciding what dataset variants serve downstream personas* —
+  audit, curation, naming, versioning, handoff documentation.
+- **`load-cifar10` is the test harness, not the test subject.**
+  Its bugs were shaken out in earlier runs (B17 stratified sampling,
+  the Toronto migration). Re-running it through a persona adds no
+  new signal.
+- **In real organizations, role overlap varies.** Some shops have
+  separate data-engineering and data-curation roles. Others combine
+  them in one person. The persona is an abstraction, not a roleplay
+  — treat Phase 0 as "the data-engineering hat" the same human (or
+  a different one) wears before the curation hat goes on. The
+  abstraction holds either way.
+- **Bootstrap failure modes are still surfaced.** Phase 0 step 4
+  runs the same cross-channel verification (§3.4) that personas do.
+  If `load-cifar10` breaks the catalog or the MCP surface lies about
+  what it produced, the discrepancy is a Phase 0 finding before any
+  persona starts.
+
 ### 6.1 What Phase 0 produces (the persona inputs)
 
 By the time Phase 0 is done, the following is true:
