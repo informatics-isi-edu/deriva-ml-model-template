@@ -60,30 +60,42 @@ reach for**, and **success criteria** (how we know they got there).
 
 ### 2.1 The Curator
 
-> *"I have raw data I want to make available as well-versioned,
-> well-labeled datasets that downstream users can train on. I care
-> about provenance and reproducibility. I don't train models."*
+> *"Someone handed me a freshly-bootstrapped catalog of image data.
+> My job is to understand what's in it, make sure the canonical
+> datasets and ground-truth labels are sane, create the dataset
+> variants downstream users will actually train on, and document
+> the catalog's shape for them. I don't train models; I curate."*
 
-**Goal:** Bootstrap a fresh test catalog from the CIFAR-10 source,
-register the canonical datasets (split, labeled, small, etc.), make
-sure ground-truth labels are populated, and document the catalog's
-shape for downstream personas. Create a non-trivial dataset variant
-(curated subset or new split) to demonstrate the lifecycle.
+**Inputs (set up by Phase 0 bootstrap, before this persona starts):**
+- A fresh catalog at `localhost` named `e2e-test-<YYYYMMDD>`.
+- Domain schema populated by `load-cifar10` (Image table, vocabularies,
+  built-in datasets, `Image_Classification` ground-truth feature
+  values for labeled partitions).
+- `src/configs/dev/*_localhost.py` repointed at the new catalog/RIDs.
+- `experiment-decisions.md` either empty or with a single
+  "Bootstrap" entry from Phase 0 noting what was created and how.
 
-**Primary skills/tools:** `setup-ml-catalog`, `dataset-lifecycle`,
-`create-feature` (in query mode), `manage-vocabulary`,
-`maintain-experiment-notes`.
+**Goal:** Audit the bootstrapped catalog, verify it's in shape for
+downstream personas, then *add value* on top of it: create at least
+one curated dataset variant (a subset or a new split) that exercises
+the dataset-lifecycle skill, and document the catalog's shape and
+the curation rationale for downstream personas.
+
+**Primary skills/tools:** `dataset-lifecycle`, `create-feature` (in
+query mode), `manage-vocabulary`, `maintain-experiment-notes`.
 
 **Success criteria:**
-- Catalog exists at `localhost`, named `e2e-test-<YYYYMMDD>`.
-- All built-in datasets present and versioned.
-- `Image_Classification` ground-truth feature is populated for at
-  least the labeled partitions.
+- Curator has inspected the built-in datasets and confirmed their
+  shape matches what the spec said Phase 0 would produce. Any
+  mismatch is a Phase 0 finding, not a Curator finding.
+- `Image_Classification` ground-truth values are present for the
+  labeled partitions; curator has spot-checked a sample.
 - At least one new dataset (a curated subset or new split) created
-  via `dataset-lifecycle`.
-- `experiment-decisions.md` contains entries explaining: why this
-  catalog, what the canonical splits are for, which dataset variant
-  was created and why.
+  via `dataset-lifecycle`, with a real motivation that a downstream
+  persona would care about (not "to exercise the API").
+- `experiment-decisions.md` contains entries explaining: what the
+  curator inherited and what their assessment of it is, what new
+  dataset was created and why, what downstream consumers should know.
 - A "handoff summary" to the next persona at the bottom of the
   curator's notes: what's ready, what's pinned, gotchas.
 
@@ -399,26 +411,88 @@ Gaps go in `findings/` like any other friction.
 ## 6. Bootstrap (Phase 0)
 
 Run once, by the orchestrator (or the user) before launching the
-curator. None of this is persona work.
+curator. None of this is persona work — this is infrastructure setup
+that must complete *before* any persona starts. A failure here is a
+Phase 0 finding and may block the test entirely.
 
-1. **Choose date**: pick the run date as `<YYYY-MM-DD>`. All branches,
-   catalog name, journal, and report use this.
-2. **Verify clean state**: model template `main` is clean, no
-   stale `e2e-test/*` branches conflict, prior test catalogs (if
-   any) are either kept intentionally or deleted with user
-   confirmation.
-3. **Refresh sibling versions**: `uv sync` in the workspace; verify
-   `deriva-ml`, `deriva-ml-mcp`, `deriva-mcp-core` versions; rebuild
-   the dev-localhost MCP container against the current sibling
-   versions; restart Claude Code's MCP servers.
-4. **Audit Claude Code skill registry**: verify which skills are
+### 6.1 What Phase 0 produces (the persona inputs)
+
+By the time Phase 0 is done, the following is true:
+
+- A fresh catalog exists at `localhost` named `e2e-test-<YYYYMMDD>`.
+- The catalog has the cifar10 domain schema populated by `load-cifar10`
+  (Image table, vocabularies including `Image_Class`, the 13 built-in
+  datasets, ground-truth `Image_Classification` feature values).
+- `src/configs/dev/{deriva,datasets,assets,roc_analysis}_localhost.py`
+  in each persona's worktree are repointed at the new catalog ID and
+  the new dataset RIDs.
+- The first entry in `experiment-decisions.md` is a single
+  "Bootstrap" note from Phase 0 recording catalog name, dataset RIDs,
+  the `load-cifar10` invocation that created them, and the sibling
+  versions of the platform stack at run-start.
+- The dev-localhost MCP container is rebuilt against the current
+  sibling versions; Claude Code's MCP server connection is restarted.
+- One git worktree exists per persona (curator, developer, analyst),
+  each branched from `main` of this repo.
+
+### 6.2 Phase 0 steps (in order)
+
+1. **Choose date.** Pick the run date as `<YYYY-MM-DD>`. All branches,
+   catalog name, journal, and report use this. Refuse to proceed if a
+   prior catalog at the same name exists unless the user explicitly
+   says delete-and-reuse.
+2. **Verify clean state.** Model template `main` is at the latest
+   commit; no stale `e2e-test/*` branches conflict; prior test
+   catalogs (if any) are either kept intentionally or deleted with
+   user confirmation.
+3. **Refresh sibling versions.** `uv sync` in the workspace; verify
+   `deriva-ml`, `deriva-ml-mcp`, `deriva-mcp-core`, `deriva-skills`,
+   `deriva-ml-skills` versions all match their `main` HEADs; rebuild
+   the dev-localhost MCP container against those versions; restart
+   Claude Code's MCP servers and confirm the container is healthy.
+4. **Bootstrap the catalog.** Run:
+   ```
+   uv run load-cifar10 --hostname localhost \
+       --create-catalog e2e-test-<YYYYMMDD> --num-images 500
+   ```
+   Confirm via direct deriva-ml inspection:
+   - Catalog exists at the expected name + a numeric catalog ID.
+   - 13 datasets present with the expected names.
+   - `Image_Classification` feature values are populated for the
+     labeled partitions (count > 0).
+   - Class distribution is balanced across all 10 CIFAR-10 classes
+     (post-#15 fix; not the pre-fix bird+ship-dominant skew).
+
+   If any of these fail, that is a Phase 0 finding. The test
+   either aborts or proceeds with the finding documented and the
+   Curator's success criteria adjusted accordingly. User decides.
+5. **Repoint dev configs.** Update `src/configs/dev/*_localhost.py`
+   in this checkout with the new catalog ID and dataset RIDs. Commit
+   on `main` of each per-persona worktree with the `[E2E-DROP]` marker
+   so the commit can be dropped at session end.
+6. **Seed `experiment-decisions.md`** with the "Bootstrap" entry — a
+   short note recording what was created in step 4 and what the
+   ground state looks like. Sibling versions (commit SHAs or release
+   tags) are part of this entry so the run is reconstructable.
+7. **Audit Claude Code skill registry.** Verify which skills are
    auto-fire vs slash-only by reading frontmatter; this is the
    ground state the personas will see. Mismatches against the
-   personas' expected skill list go in `findings/setup/` (a
-   pre-curator finding bucket).
-5. **Create worktrees**: one per persona, per §3.4.
-6. **Mode selection**: ask the user — interactive or autonomous?
-7. **Launch curator** in their worktree with their persona prompt.
+   personas' expected skill list go in `findings/setup/` as a
+   pre-curator finding bucket.
+8. **Create worktrees.** One per persona, per §3.4.
+9. **Mode selection.** Ask the user — interactive or autonomous?
+10. **Launch curator** in their worktree with their persona prompt.
+
+### 6.3 What's *not* Phase 0
+
+- `load-cifar10` itself. The script lives in `src/scripts/load_cifar10.py`
+  and is treated as platform code, not test code. If it breaks during
+  step 4, that's a finding against the script (or against `deriva-ml`
+  if the failure is in a library call), not test-design feedback.
+- Schema or vocabulary creation beyond what `load-cifar10` does. Any
+  curation work belongs to the Curator persona, not bootstrap.
+- Feature populations beyond ground-truth. The Curator is the persona
+  who decides whether additional features are needed downstream.
 
 ---
 
@@ -489,6 +563,7 @@ itself is broken and that's its own finding worth investigating.
 | Where does this spec live? | `docs/test-plans/2026-05-20-e2e-multipersona.md` |
 | Where do findings go? | `findings/<persona>/<NN>-<slug>.md` per worktree |
 | Where does the persona handoff happen? | `experiment-decisions.md` (project root) |
+| Who creates the catalog? | Phase 0 bootstrap (§6), via `load-cifar10` — *before* any persona runs |
 | What's the catalog name? | `e2e-test-<YYYYMMDD>` (chosen at run start) |
 | Mode flag? | Interactive (checkpoint per persona) or Autonomous (final report only); chosen at start |
 | Branch naming? | `e2e-test/<YYYY-MM-DD>-<persona>`, branched from `main` |
