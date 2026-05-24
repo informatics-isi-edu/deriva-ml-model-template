@@ -13,7 +13,10 @@ keywords = ["deriva-ml"]
 
 dependencies = [
     # Change this to be the module with the domain specific class derived from deriva-ml.
-    "deriva-ml",
+    # Pinned to v2.x — v2.0.0 introduces the unified
+    # Execution.commit_output_assets surface (ADR-0009); the legacy
+    # upload_execution_outputs method is removed without a shim.
+    "deriva-ml>=2.0,<3.0",
     "notebook>=7.4.7",
     "torchvision",
     # For ROC analysis notebook
