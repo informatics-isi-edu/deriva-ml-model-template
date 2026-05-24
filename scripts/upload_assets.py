@@ -2,7 +2,7 @@
 
 This script uploads files (model weights, checkpoints, etc.) to a catalog asset
 table with full provenance tracking. It creates a DerivaML execution, stages
-the files, uploads them with chunked transfers and retry logic for large files,
+the files, commits them with ``Execution.commit_output_assets`` (ADR-0009),
 and sets descriptions on the uploaded records.
 
 Files and their descriptions are defined in a TOML manifest file.
@@ -51,17 +51,17 @@ DEFAULT_CATALOG_ID = "6"
 DEFAULT_TABLE = "Model_Artifact"
 DEFAULT_MANIFEST = Path(__file__).resolve().parent / "assets.toml"
 
-# Upload tuning — sized for multi-GB checkpoint files
-CHUNK_SIZE = 10 * 1024 * 1024   # 10 MB
-CONNECT_TIMEOUT = 30             # seconds
-READ_TIMEOUT = 600               # seconds
-MAX_RETRIES = 5
-RETRY_DELAY = 10.0               # seconds
+# Note: deriva-ml v2.0 (ADR-0009) removed the per-call upload tuning
+# parameters (chunk_size, timeout, max_retries, retry_delay). Tune
+# HTTP session timeout and Hatrac chunk size on the DerivaML instance
+# itself when the upstream surface gains support; until then, defaults
+# apply for all uploads here.
 
 
 # ---------------------------------------------------------------------------
 # Manifest loading
 # ---------------------------------------------------------------------------
+
 
 def load_manifest(manifest_path: Path) -> dict[str, str]:
     """Load a TOML manifest mapping filenames to descriptions.
@@ -86,6 +86,7 @@ def load_manifest(manifest_path: Path) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 # Upload logic
 # ---------------------------------------------------------------------------
+
 
 def upload_assets(
     files: dict[str, str],
@@ -141,35 +142,25 @@ def upload_assets(
     )
 
     # Use the execution as a context manager — exiting transitions it through
-    # Running → Stopped, which is the prerequisite for upload_execution_outputs.
+    # Running → Stopped, which is the prerequisite for commit_output_assets.
     with ml.create_execution(config) as execution:
         print(f"\nExecution: {ml.cite(execution.execution_rid)}")
 
         # Stage each file for upload. asset_file_path registers it in the
-        # execution's manifest; upload_execution_outputs will then transfer
+        # execution's manifest; commit_output_assets will then transfer
         # everything in the staging directory.
         for filepath in file_paths:
             print(f"Staging {filepath.name} ({filepath.stat().st_size / 1e6:.1f} MB)")
             execution.asset_file_path(table, str(filepath))
 
-    # Upload with chunked transfers and progress reporting. Run after the
-    # context exit (the public API contract — uploading inside the context
-    # would race with the Stopped transition).
+    # Commit output assets with progress reporting. Run after the context
+    # exit (the public API contract — committing inside the context would
+    # race with the Stopped transition).
     def progress(p):
         print(f"  {p.file_name}: {p.percent_complete:.1f}%", flush=True)
 
-    print(
-        f"\nUploading with {CHUNK_SIZE // (1024 * 1024)}MB chunks, "
-        f"{READ_TIMEOUT}s timeout...",
-        flush=True,
-    )
-    execution.upload_execution_outputs(
-        progress_callback=progress,
-        chunk_size=CHUNK_SIZE,
-        timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
-        max_retries=MAX_RETRIES,
-        retry_delay=RETRY_DELAY,
-    )
+    print("\nCommitting output assets...", flush=True)
+    execution.commit_output_assets(progress_callback=progress)
     print("Upload done!", flush=True)
 
     # Set descriptions on the uploaded records.
@@ -193,6 +184,7 @@ def upload_assets(
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -218,10 +210,7 @@ Examples:
         "files",
         nargs="*",
         type=Path,
-        help=(
-            "Files to upload. If omitted, uploads all files listed "
-            "in the manifest."
-        ),
+        help=("Files to upload. If omitted, uploads all files listed in the manifest."),
     )
     parser.add_argument(
         "--manifest",

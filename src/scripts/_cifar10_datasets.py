@@ -264,7 +264,7 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
             [small_training.dataset_rid, small_testing.dataset_rid], validate=False
         )
 
-    exe.upload_execution_outputs(clean_folder=True)
+    exe.commit_output_assets(clean_folder=True)
 
     # Member assignment runs against the catalog directly
     # (the Execution above has already been committed)
@@ -394,7 +394,7 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
             datasets["small_labeled_training"] = small_labeled.training.rid
             datasets["small_labeled_testing"] = small_labeled.testing.rid
 
-        split_exe.upload_execution_outputs(clean_folder=True)
+        split_exe.commit_output_assets(clean_folder=True)
 
     return datasets
 

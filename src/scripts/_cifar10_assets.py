@@ -431,16 +431,15 @@ def upload_images(
                 f"  Total: {train_count} train + {test_count} test = {train_count + test_count}"
             )
 
-        # Upload after context exits (matches previous behavior)
+        # Commit after context exits (matches previous behavior)
         total_count = train_count + test_count
         progress_callback, _ = _create_upload_progress_callback(total_count)
-        upload_result = exe.upload_execution_outputs(
+        upload_result = exe.commit_output_assets(
             clean_folder=True, progress_callback=progress_callback
         )
 
         logger.info("  [Upload] 100% complete")
-        uploaded_count = sum(len(files) for files in upload_result.values())
-        logger.info(f"  Upload complete: {uploaded_count} files uploaded")
+        logger.info(f"  Upload complete: {upload_result.total_uploaded} files uploaded")
 
     return {
         "total_images": train_count + test_count,
@@ -509,7 +508,7 @@ def add_classification_features(ml: DerivaML) -> dict[str, Any]:
         logger.info(f"  Adding {len(feature_records)} classification labels...")
         exe.add_features(feature_records)
 
-    exe.upload_execution_outputs(clean_folder=True)
+    exe.commit_output_assets(clean_folder=True)
     logger.info(f"  Added {len(feature_records)} Image_Classification features")
 
     return {
