@@ -147,5 +147,5 @@ Use DerivaML to track these instead:
 # Register large output for upload
 model_path = execution.asset_file_path("Model", "weights.pt")
 torch.save(model.state_dict(), model_path)
-execution.upload_execution_outputs()
+execution.commit_output_assets()
 ```

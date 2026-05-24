@@ -139,13 +139,13 @@ After a run completes, find the execution in the catalog:
 
 ## Post-Run Tasks
 
-### Upload Outputs (if not automatic)
+### Commit Output Assets (if not automatic)
 
-For scripts, outputs are uploaded as part of the run. For notebooks:
+For scripts, output assets are committed as part of the run. For notebooks:
 
 ```python
 # At the end of your notebook
-execution.upload_execution_outputs()
+execution.commit_output_assets()
 ```
 
 ### Document Results

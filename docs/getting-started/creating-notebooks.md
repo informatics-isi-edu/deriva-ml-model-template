@@ -133,10 +133,10 @@ print(f"Results saved to: {output_path}")
 ```
 
 ```python
-# Cell 4: Upload (final cell)
-# Upload all registered outputs to the catalog
-execution.upload_execution_outputs()
-print("Outputs uploaded successfully!")
+# Cell 4: Commit (final cell)
+# Commit all registered output assets to the catalog
+execution.commit_output_assets()
+print("Outputs committed successfully!")
 ```
 
 ## Step 3: Test Your Notebook
@@ -233,7 +233,7 @@ Before running your notebook in production:
 - [ ] Configuration file created in `src/configs/`
 - [ ] Notebook uses `run_notebook()` for initialization
 - [ ] All outputs registered with `execution.asset_file_path()`
-- [ ] Final cell calls `execution.upload_execution_outputs()`
+- [ ] Final cell calls `execution.commit_output_assets()`
 - [ ] Notebook runs start-to-finish without intervention
 - [ ] Commit all changes to Git
 - [ ] Test with `--info` flag to verify configuration
