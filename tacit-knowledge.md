@@ -542,3 +542,241 @@ answer through their own work):**
    (97A — Testing-typed, same images as DAP) instead of
    `cifar10_validation_from_test`.
 
+---
+
+### tk-005 — Analyst metric choice: AUC_Macro is the right summary at N=50, accuracy is the secondary
+**When:** 2026-05-26T11:45:00-07:00
+**By:** Analyst persona (sub-agent, `e2e-test/2026-05-26` worktree)
+**Supported by:** ROC notebook execution `F6C` on catalog 18,
+`roc_metrics.csv` asset `F9P`, plus direct deriva-ml cross-check
+(`scripts/analyst_verify_executions.py`). Both `roc_metrics.csv`
+columns (`Accuracy`, `AUC_Macro`, `AUC_Micro`) and the tk-004 test_acc
+table agree on the accuracy rank.
+
+Compared the Developer's 6 viable executions (DYC, E4A, EC0, EJ0,
+ER0, EY0 — all trained on `CRR`, all tested on `CSA`). Final
+ranking by **AUC_Macro** is the summary metric for this report:
+
+| Rank | Exec | Accuracy | AUC_Macro |
+|---|---|---|---|
+| 1 | **E4A** | 24% | **0.695** |
+| 2 | EJ0 | 30% | 0.647 |
+| 3 | EC0 | 14% | 0.642 |
+| 4 | DYC | 28% | 0.616 |
+| 5 | ER0 | 12% | 0.569 |
+| 6 | EY0 | 10% | 0.500 (chance) |
+
+**Why AUC_Macro and not accuracy.** At N=50 test images (5/class),
+argmax-accuracy has a binomial std error of ~7 percentage points.
+The 8-point spread between the accuracy-best (EJ0 at 30%) and the
+accuracy-3rd (E4A at 24%) is well within noise. AUC integrates
+over the threshold sweep and uses the full probability vector,
+so it's the more stable estimate at this sample size. Whether
+"top-1 is right" (accuracy) is the user-facing experience that
+matters in production for a classification model is a separate
+question — for *ranking model variants*, AUC is the cleaner
+signal here.
+
+**The surprise this metric choice surfaces:** E4A wins on AUC
+despite losing on accuracy. The Developer's tk-004 noted E4A
+peaked at ~32% test_acc around epoch 29 then degraded. The AUC
+numbers say the *underlying score distribution* on E4A is the
+best-discriminating of the six — its argmax just lands on the
+wrong class slightly more often than EJ0's at the end of training.
+Two reasonable reads:
+
+1. *E4A is genuinely the best model and its accuracy is unlucky
+   on these 50 test images.* Without a seed (D02), can't
+   distinguish from (2) by re-running.
+2. *E4A's well-calibrated probabilities are an artifact of
+   training-to-100% on the training set;* the model is confident
+   but slightly miscalibrated for the test distribution.
+
+Honest assessment: at this sample size both reads are admissible.
+For decisions like "which weights to ship," I would want a held-
+out validation set (DAP, blocked by developer/01) before declaring
+a winner. For *this report's purpose* (compare what the Developer
+arc produced), AUC_Macro is the best metric available.
+
+Alternatives weighed:
+
+- *Accuracy alone* — rejected: high noise floor at N=50, ranks
+  on argmax which doesn't use the full prediction vector.
+- *Top-3 accuracy* — rejected: not requested by the Developer's
+  prediction CSV schema (would need to recompute, low marginal
+  value at 10 classes × N=50).
+- *Per-class F1, averaged* — rejected: even noisier than
+  accuracy at 5 imgs/class (e.g. EJ0's recall on `dog` is 0/5 =
+  undefined precision territory).
+- *AUC_Micro* — close call, same ranking direction as AUC_Macro
+  but slightly compressed (the EY0 chance run sets micro=0.500
+  too, so EY0 is unambiguously last either way). Macro
+  highlights class-imbalanced behavior even though the test set
+  is class-balanced, so kept it as primary for future
+  comparability when test sets aren't balanced.
+
+Skipped executions:
+
+- **F40** (Validation bag skipped, developer/01) — 1 asset, no
+  predictions. Filtering by `len(execution_assets) >= 3` cleanly
+  excludes it without hardcoding the RID.
+- **EA8** (lr_sweep parent) — 0 model artifacts. Same filter
+  catches it.
+
+---
+
+### tk-006 — Analyst denormalize rationale: row_per=Execution_Image_Image_Classification on CSA
+**When:** 2026-05-26T11:50:00-07:00
+**By:** Analyst persona (sub-agent, `e2e-test/2026-05-26` worktree)
+**Supported by:** `scripts/analyst_denormalize_check.py` reconciliation
+artifact (`findings/analyst/_artifacts/denormalize_check.json`),
+cross-channel agreement between MCP `deriva_ml_denormalize_dataset`
+and direct `Dataset.get_denormalized_as_dataframe`, plus
+`list_dataset_members(CSA)['Image']` and `feature_values('Image',
+'Image_Classification')` both confirming the 50-image set + 5/class
+balanced distribution.
+
+Exercised `Dataset.get_denormalized_as_dataframe` on dataset `CSA`
+(50-image test partition, seed=123) with:
+
+```python
+ds.get_denormalized_as_dataframe(
+    include_tables=["Image", "Execution_Image_Image_Classification"],
+)
+# row_per auto-inferred to "Execution_Image_Image_Classification"
+# returns 350-row wide table (50 imgs × 7 producing executions)
+```
+
+**Why the feature *table* name instead of the feature name in
+`include_tables`.** Tried `include_tables=["Image",
+"Image_Classification"]` first, which is the natural mental
+model (feature name is the API-public identifier everywhere
+else). `describe_denormalized` accepts it; `get_denormalized_as_dataframe`
+rejects it with "The table Image_Classification doesn't exist."
+The fix is `find_features('Image')` → use the
+`feature_table` attribute. Logged as
+`findings/analyst/01-describe-vs-run-include-tables.md`.
+
+**Why `row_per` was left auto-inferred (`Execution_Image_Image_Classification`)
+instead of pinned to `Image`.** Two reasons:
+
+1. The `Execution_Image_Image_Classification` table carries the
+   `Execution` discriminator. With `row_per="Image"`, the
+   denormalizer refuses to aggregate over multiple feature rows
+   per image — and rightly so, since one image has 7 different
+   feature rows (one ground truth + 6 predictions). The
+   auto-inferred long-format view is the *correct* shape for an
+   analysis that needs both ground truth and predictions visible.
+2. The wide-table-as-feature-value-list view lines up with the
+   right analysis primitive: filter
+   `Execution_Image_Image_Classification.Execution == "854"` for
+   ground truth, `Execution_Image_Image_Classification.Execution
+   in {DYC, E4A, EC0, EJ0, ER0, EY0}` for predictions. Two
+   filters of the same DataFrame replace what would otherwise be
+   "load all 6 prediction CSVs from hatrac, join each to the
+   ground-truth feature query, then concatenate."
+
+If the question were "give me one row per Image with the GT
+label and the 6 prediction confidences as separate columns,"
+that would require aggregation (which the denormalizer
+explicitly refuses) or post-processing the long-format view
+(pivot or pandas `groupby`). For this analysis the long-format
+view was sufficient — the existing ROC notebook downloads each
+prediction CSV separately and joins per-experiment, so the
+denormalize call was *additional cross-check infrastructure*
+rather than the primary data path.
+
+**Reconciliation result.** All three channels (denormalize wide
+table, `list_dataset_members(CSA)['Image']`, and
+`feature_values('Image', 'Image_Classification')` filtered to
+the CSA image RIDs) agree on:
+
+- 50 image RIDs, exact set match
+- 5-per-class balanced label distribution across all 10 CIFAR-10
+  classes
+- 50 ground-truth rows (Execution=854), 50 prediction rows per
+  Developer execution (350 total)
+
+No denormalize-specific finding raised — the surface is
+behaving correctly on this catalog.
+
+**The describe-vs-run inconsistency is the one rough edge** and
+is filed as analyst/01 (Low severity). The output column naming
+(`Table.column`, with `Image.RID` and
+`Execution_Image_Image_Classification.Image` both present and
+equal-valued) is mildly redundant but predictable; ergonomic
+nit, not a finding.
+
+**For future Analysts using this surface:** the
+`describe_denormalized` preview's `estimated_row_count` field
+correctly reports 50 when `row_per="Image"` is set, and 350 (well,
+"unknown N" because the FK direction is downstream) when
+`row_per` is left to auto-infer to the feature table. Use the
+preview to validate the join shape before fetching the data; it's
+faster than running and inspecting the result.
+
+---
+
+### Handoff to Wrap-up
+
+**What's ready in catalog 18 from the Analyst arc:**
+
+- **Analysis execution `F6C`** (`Workflow_Type=ROC Analysis Notebook`,
+  Status=Uploaded). 14 new `Execution_Asset` rows:
+  - 6 per-experiment ROC curve JPGs: `F8W` (DYC), `F8Y` (E4A),
+    `F90` (EC0), `F92` (EJ0), `F94` (ER0), `F96` (EY0)
+  - 1 ROC comparison overlay JPG: `F98`
+  - 6 confusion matrix JPGs: `F9A` (DYC), `F9C` (E4A), `F9E`
+    (EC0), `F9G` (EJ0), `F9J` (ER0), `F9M` (EY0)
+  - 1 summary CSV: `F9P` (`roc_metrics.csv`, 6 rows × 16 cols)
+  - 1 executed notebook + 1 markdown export: `FBP` / `FBR`
+- **`src/configs/assets.py`** now has three named asset groups
+  wired in for this catalog: `roc_quick_vs_extended` (E0A, E68),
+  `roc_lr_sweep` (EE0, EM0, ET0, F00), and `roc_all_six` (all 6).
+  All `[E2E-DROP]`.
+- **`src/configs/roc_analysis.py`** gained a `roc_all_six`
+  notebook config, also `[E2E-DROP]`.
+
+**The markdown report:**
+[`docs/reports/2026-05-26-multipersona-analysis.md`](docs/reports/2026-05-26-multipersona-analysis.md)
+— 5-minute read covering ranking, the accuracy-vs-AUC divergence,
+denormalize experience, cross-channel verification table, and
+open questions.
+
+**Cross-channel verification table (full):** see report §5. All
+direct-vs-indirect checks pass for the analysis assets and the
+denormalize surface; the previously-known `workflow_rid: null`
+disagreement (developer/02) persists on F6C as expected.
+
+**Findings raised** (in `findings/analyst/`):
+
+1. `01-describe-vs-run-include-tables.md` — Low. Denormalize
+   describe accepts feature names that the runner rejects.
+2. `02-execution-description-stale-on-asset-override.md` — Low.
+   Notebook execution row's description ignores Hydra asset
+   overrides.
+
+**Pinned things the wrap-up should NOT change:**
+
+- Execution `F6C` and its 14 output assets — committed catalog
+  state.
+- `src/configs/assets.py` and `src/configs/roc_analysis.py`
+  asset/notebook config entries are `[E2E-DROP]` and drop at
+  wrap-up along with `default_deriva`/`default_dataset`.
+
+**Open questions for the user at checkpoint:**
+
+1. Is the accuracy-vs-AUC ranking divergence (E4A best on AUC,
+   EJ0 best on accuracy) interesting enough to spawn its own
+   investigation, or expected behavior at this sample size?
+2. Should `findings/analyst/01-*` (describe/run inconsistency)
+   be promoted to a GitHub issue with my preferred Option 2 fix
+   suggestion (resolve feature names to feature tables at runner
+   call time), or left as Low-severity backlog?
+3. Should the `roc_all_six` asset config be promoted to the
+   default for future analysts, or kept ad-hoc per run?
+4. The Curator's `DB0` (`cifar10_balanced_demo`) was not used —
+   would a follow-up `test_only` analysis run on DB0 add value,
+   or is the CSA-only analysis enough for this multipersona
+   run's purposes?
+
