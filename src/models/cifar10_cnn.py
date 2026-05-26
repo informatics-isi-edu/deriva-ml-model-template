@@ -21,6 +21,7 @@ keyed by the element RID with no hand-rolled bag-iteration code.
 from __future__ import annotations
 
 import csv
+import warnings
 from typing import Any
 
 import PIL.Image
@@ -47,35 +48,83 @@ _TRANSFORM = transforms.Compose(
 )
 
 
-def _bag_role(bag: DatasetBag) -> str:
-    """Return ``"training"``, ``"testing"``, ``"split"``, or ``"unknown"``.
+# Role terms — read straight from the catalog's ``Dataset_Type`` vocabulary.
+# The runner switches on these (case-insensitively) and routes to the
+# matching lane below. Qualifier terms like ``Labeled`` / ``Complete`` are
+# orthogonal and are silently ignored here; they don't pick a lane.
+#
+# To add a new role (e.g., ``Calibration``) the work is two-step: add the
+# vocabulary term to ``Dataset_Type`` in the catalog AND register a handler
+# in the appropriate dict below. The runner no longer carries a closed
+# internal role table — the dispatch keys are the catalog terms themselves.
+_ROLE_TRAINING = "training"
+_ROLE_TESTING = "testing"
+_ROLE_VALIDATION = "validation"
+_ROLE_SPLIT = "split"
 
-    Reads ``bag.dataset_types`` (e.g., ``["Training", "Labeled"]``) and picks
-    the role that matters for loader routing. ``Training``/``Testing`` go
-    straight to a loader; ``Split`` means "descend into children".
+_KNOWN_ROLES: frozenset[str] = frozenset(
+    {_ROLE_TRAINING, _ROLE_TESTING, _ROLE_VALIDATION, _ROLE_SPLIT}
+)
+
+
+def _bag_dataset_types(bag: DatasetBag) -> list[str]:
+    """Return the literal ``Dataset_Type`` vocabulary terms on a bag.
+
+    The runner used to translate these into a closed-list internal role
+    (``"training"``/``"testing"``/``"unknown"``) and silently drop anything
+    unknown. The catalog's vocabulary is the source of truth — this function
+    just exposes it so the dispatch can switch on it directly.
+
+    Args:
+        bag: A ``DatasetBag`` returned by ``execution.datasets``.
+
+    Returns:
+        The bag's ``Dataset_Type`` terms verbatim (case preserved), e.g.
+        ``["Training", "Labeled"]`` or ``["Validation", "Labeled"]``.
     """
-    types_lower = [t.lower() for t in bag.dataset_types]
-    if "training" in types_lower:
-        return "training"
-    if "testing" in types_lower:
-        return "testing"
-    if "split" in types_lower:
-        return "split"
-    return "unknown"
+    return list(bag.dataset_types)
+
+
+def _classify_bag(bag: DatasetBag) -> tuple[set[str], list[str]]:
+    """Split a bag's ``Dataset_Type`` terms into known roles vs other terms.
+
+    A bag can carry multiple types (``["Training", "Labeled"]``). The role
+    set is what the dispatch keys off of; the remaining terms are
+    qualifiers (``Labeled``, ``Complete``) or unrecognized types and are
+    returned separately so callers can warn / log without breaking the
+    dispatch.
+
+    Args:
+        bag: A ``DatasetBag`` returned by ``execution.datasets``.
+
+    Returns:
+        ``(roles, other)`` where ``roles`` is the lower-cased set of role
+        terms recognized by the runner (subset of ``_KNOWN_ROLES``) and
+        ``other`` is the original-case list of terms that are not roles.
+    """
+    roles: set[str] = set()
+    other: list[str] = []
+    for term in _bag_dataset_types(bag):
+        if term.lower() in _KNOWN_ROLES:
+            roles.add(term.lower())
+        else:
+            other.append(term)
+    return roles, other
 
 
 def _flatten_bags(bags: list[DatasetBag]) -> list[DatasetBag]:
     """Flatten a list of bags by recursively expanding ``Split`` parents.
 
     The CIFAR-10 dataset configs ship as either a leaf ``Training``/
-    ``Testing`` bag or a ``Split`` parent containing both as children. The
-    train/test loader cares only about the leaves, so descend into any
-    ``Split`` we encounter. Cycles are not possible since the catalog's
+    ``Testing``/``Validation`` bag or a ``Split`` parent containing several
+    as children. The dispatch cares only about the leaves, so descend into
+    any ``Split`` we encounter. Cycles are not possible since the catalog's
     parent/child graph is a DAG.
     """
     flat: list[DatasetBag] = []
     for bag in bags:
-        if _bag_role(bag) == "split":
+        roles, _ = _classify_bag(bag)
+        if _ROLE_SPLIT in roles:
             flat.extend(_flatten_bags(bag.list_dataset_children()))
         else:
             flat.append(bag)
@@ -250,32 +299,51 @@ class SimpleCNN(nn.Module):
 def load_cifar10_from_execution(
     execution: Execution,
     batch_size: int,
-) -> tuple[DataLoader | None, DataLoader | None, list[str]]:
+    require_training: bool = False,
+) -> tuple[DataLoader | None, DataLoader | None, DataLoader | None, list[str]]:
     """Build PyTorch DataLoaders directly from execution dataset bags.
 
-    Uses :meth:`DatasetBag.as_torch_dataset` for both training and testing
-    — the adapter is lazy, label-aware, requires no on-disk reorganization,
-    and now (post-2026-05-19) yields ``(sample, target, rid)`` triples so
-    per-image predictions can be linked back to their catalog RIDs when
-    recording feature values. The same call shape works on both sides; the
-    only difference is ``shuffle`` and whether unlabeled rows are dropped.
+    Uses :meth:`DatasetBag.as_torch_dataset` for the training, testing, and
+    validation lanes. The adapter is lazy, label-aware, requires no on-disk
+    reorganization, and yields ``(sample, target, rid)`` triples so per-image
+    predictions can be linked back to their catalog RIDs when recording
+    feature values.
 
-    Bags are routed into train vs test by the dataset type tags
-    (``"Training"`` / ``"Testing"``). Bags with neither tag are skipped.
+    Bags are dispatched by their catalog ``Dataset_Type`` terms via the
+    per-role handlers registered below. Each handler matches on a single
+    role term (``Training``/``Testing``/``Validation``) and ignores
+    qualifier terms (``Labeled``, ``Complete``) — so e.g. a bag with type
+    ``["Training", "Labeled"]`` still dispatches to the training handler.
+    ``Split`` parents are flattened by :func:`_flatten_bags` before
+    dispatch.
+
+    Bags whose ``Dataset_Type`` contains no recognized role term emit a
+    warning and are dropped. If ``require_training`` is set and no training
+    bag was found across the entire input, the function raises — this
+    closes the silent-failure mode where a Validation-only execution
+    looked exactly like a successful training run (catalog-18 F40).
 
     Args:
         execution: DerivaML execution containing downloaded ``DatasetBag``s.
-        batch_size: Batch size for both DataLoaders.
+        batch_size: Batch size for all DataLoaders.
+        require_training: If True, raise ``RuntimeError`` when no bag
+            dispatches to the training lane. The training entry point
+            ``cifar10_cnn`` sets this; ``test_only`` does not.
 
     Returns:
-        Tuple of ``(train_loader, test_loader, class_names)``. Either loader
-        may be ``None`` if the corresponding role isn't present in the
-        execution. ``class_names`` is the canonical CIFAR-10 list — this
-        matches the model's output index ordering and is independent of which
-        labels happen to appear in the bags.
+        Tuple of ``(train_loader, test_loader, val_loader, class_names)``.
+        Any loader may be ``None`` if no bag dispatched to that lane.
+        ``class_names`` is the canonical CIFAR-10 list — it matches the
+        model's output index ordering and is independent of which labels
+        happen to appear in the bags.
+
+    Raises:
+        RuntimeError: If ``require_training=True`` and no training bag is
+            present after flattening and dispatch.
     """
     train_loader: DataLoader | None = None
     test_loader: DataLoader | None = None
+    val_loader: DataLoader | None = None
 
     def _build_dataset(bag: DatasetBag, missing: str):
         return bag.as_torch_dataset(
@@ -287,34 +355,103 @@ def load_cifar10_from_execution(
             missing=missing,
         )
 
-    for bag in _flatten_bags(list(execution.datasets)):
-        role = _bag_role(bag)
-        if role == "training":
-            train_dataset = _build_dataset(bag, missing="skip")
-            train_loader = DataLoader(
-                train_dataset,
-                batch_size=batch_size,
-                shuffle=True,
-                num_workers=0,  # macOS fork() + MPS/GPU threads can deadlock
-                collate_fn=_rid_collate,
-            )
-            print(f"  Training samples: {len(train_dataset)}")
-        elif role == "testing":
-            # Test bags may contain unlabeled images — keep them with
-            # target=-1 so the test loop can still produce predictions
-            # for them (only the RID and predicted class matter for
-            # downstream feature recording on unlabeled data).
-            test_dataset = _build_dataset(bag, missing="unknown")
-            test_loader = DataLoader(
-                test_dataset,
-                batch_size=batch_size,
-                shuffle=False,
-                num_workers=0,
-                collate_fn=_rid_collate,
-            )
-            print(f"  Testing samples: {len(test_dataset)}")
+    def _handle_training(bag: DatasetBag) -> None:
+        nonlocal train_loader
+        train_dataset = _build_dataset(bag, missing="skip")
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=0,  # macOS fork() + MPS/GPU threads can deadlock
+            collate_fn=_rid_collate,
+        )
+        print(f"  Training samples: {len(train_dataset)}")
 
-    return train_loader, test_loader, list(CIFAR10_CLASS_NAMES)
+    def _handle_testing(bag: DatasetBag) -> None:
+        # Test bags may contain unlabeled images — keep them with
+        # target=-1 so the test loop can still produce predictions
+        # for them (only the RID and predicted class matter for
+        # downstream feature recording on unlabeled data).
+        nonlocal test_loader
+        test_dataset = _build_dataset(bag, missing="unknown")
+        test_loader = DataLoader(
+            test_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=0,
+            collate_fn=_rid_collate,
+        )
+        print(f"  Testing samples: {len(test_dataset)}")
+
+    def _handle_validation(bag: DatasetBag) -> None:
+        # Validation bags carry ground truth and are evaluated *per epoch*
+        # during training to surface a generalization metric in the
+        # training log. Unlabeled rows are skipped (the val metric is
+        # meaningless without labels), unlike the test lane which keeps
+        # unlabeled rows so it can still record predictions.
+        nonlocal val_loader
+        val_dataset = _build_dataset(bag, missing="skip")
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=0,
+            collate_fn=_rid_collate,
+        )
+        print(f"  Validation samples: {len(val_dataset)}")
+
+    # Dispatch table. Keys are catalog ``Dataset_Type`` terms (case-folded);
+    # values are the per-role handlers. ``Split`` is consumed by
+    # ``_flatten_bags`` before we get here. Adding a new role means: add the
+    # term to the catalog vocabulary AND add an entry here.
+    handlers: dict[str, Any] = {
+        _ROLE_TRAINING: _handle_training,
+        _ROLE_TESTING: _handle_testing,
+        _ROLE_VALIDATION: _handle_validation,
+    }
+
+    for bag in _flatten_bags(list(execution.datasets)):
+        roles, other = _classify_bag(bag)
+        # Pick the highest-priority role this bag carries.
+        # Priority: training > testing > validation. A bag tagged with
+        # more than one role is rare but well-defined; the dispatch is
+        # deterministic.
+        dispatched = False
+        for role in (_ROLE_TRAINING, _ROLE_TESTING, _ROLE_VALIDATION):
+            if role in roles:
+                handlers[role](bag)
+                dispatched = True
+                break
+        if not dispatched:
+            bag_rid = getattr(bag, "dataset_rid", "<unknown>")
+            warnings.warn(
+                f"Bag {bag_rid} has no recognized role term in its "
+                f"Dataset_Type {other!r} — known roles are "
+                f"{sorted(_KNOWN_ROLES - {_ROLE_SPLIT})!r}. Skipping.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+
+    if require_training and train_loader is None:
+        # Safety rail (closes catalog-18 F40-style silent failure).
+        # The runner must not silently succeed when its primary input is
+        # missing. Surface a structured error so the execution fails loudly
+        # — Status=Failed, not Status=Uploaded.
+        diagnostics = [
+            f"  - {getattr(b, 'dataset_rid', '<unknown>')}: "
+            f"Dataset_Type={_bag_dataset_types(b)!r}"
+            for b in _flatten_bags(list(execution.datasets))
+        ]
+        diag_block = "\n".join(diagnostics) if diagnostics else "  (no input bags)"
+        raise RuntimeError(
+            "No bag with Dataset_Type=Training found in execution input. "
+            "Cannot train. Input bags after flattening Split parents:\n"
+            f"{diag_block}\n"
+            "Add a Training-typed dataset to the execution config (see "
+            "src/configs/datasets.py)."
+        )
+
+    return train_loader, test_loader, val_loader, list(CIFAR10_CLASS_NAMES)
 
 
 def cifar10_cnn(
@@ -394,8 +531,8 @@ def cifar10_cnn(
 
     # Load data directly from execution dataset bags (no restructuring needed)
     print("\nBuilding DataLoaders from execution datasets...")
-    train_loader, test_loader, class_names = load_cifar10_from_execution(
-        execution, batch_size
+    train_loader, test_loader, val_loader, class_names = load_cifar10_from_execution(
+        execution, batch_size, require_training=not test_only
     )
 
     # Test-only mode: load weights and run evaluation
@@ -511,23 +648,16 @@ def cifar10_cnn(
         print("\nEvaluation complete!")
         return
 
-    # Training mode: check for training data
-    if train_loader is None:
-        print("WARNING: No training data found in execution datasets.")
-        print("  Make sure your execution configuration includes CIFAR-10 datasets.")
-        # Write a status file indicating no data
-        status_file = execution.asset_file_path(
-            MLAsset.execution_asset,
-            "training_status.txt",
-            description="Training status: indicates no training data was available",
-        )
-        with status_file.open("w") as f:
-            f.write("No training data available in execution datasets.\n")
-        return
-
+    # Training mode: train_loader is guaranteed non-None by the safety rail
+    # in load_cifar10_from_execution (require_training=True). No silent
+    # fallback — a missing training bag raises RuntimeError there, which
+    # bubbles up and fails the execution loudly (Status=Failed, not the
+    # silent Status=Uploaded that catalog-18 F40 exhibited).
     print(f"  Training batches: {len(train_loader)}")
     if test_loader:
         print(f"  Test batches: {len(test_loader)}")
+    if val_loader:
+        print(f"  Validation batches: {len(val_loader)}")
 
     # Loss and optimizer
     criterion = nn.CrossEntropyLoss()
@@ -615,6 +745,47 @@ def cifar10_cnn(
                 f"train_loss={epoch_loss:.4f}, train_acc={epoch_acc:.2f}%"
             )
 
+        # Validation lane: evaluate the held-out validation bag (if any)
+        # at the end of every epoch and surface val_loss/val_acc as a
+        # per-epoch metric in the training log. Validation bags carry
+        # ground truth (we built the loader with missing="skip"), so
+        # unlabeled rows shouldn't reach this loop — but use
+        # ignore_index=-1 defensively to mirror the test lane.
+        # Early-stopping policy on this metric is intentionally out of
+        # scope for this PR; just surface the signal.
+        if val_loader is not None:
+            model.eval()
+            val_criterion = nn.CrossEntropyLoss(ignore_index=-1)
+            val_correct = 0
+            val_total_labeled = 0
+            val_loss_sum = 0.0
+            val_loss_batches = 0
+
+            with torch.no_grad():
+                for inputs, labels, _rids in val_loader:
+                    inputs, labels = inputs.to(device), labels.to(device)
+                    outputs = model(inputs)
+                    loss = val_criterion(outputs, labels)
+                    if torch.isfinite(loss):
+                        val_loss_sum += loss.item()
+                        val_loss_batches += 1
+                    _, predicted = outputs.max(1)
+                    labeled_mask = labels != -1
+                    val_total_labeled += int(labeled_mask.sum().item())
+                    val_correct += int(
+                        (predicted.eq(labels) & labeled_mask).sum().item()
+                    )
+
+            if val_total_labeled > 0:
+                val_acc = 100.0 * val_correct / val_total_labeled
+                val_loss = val_loss_sum / max(val_loss_batches, 1)
+                log_entry["val_loss"] = val_loss
+                log_entry["val_acc"] = val_acc
+                print(
+                    f"  Epoch {epoch + 1}/{epochs} validation: "
+                    f"val_loss={val_loss:.4f}, val_acc={val_acc:.2f}%"
+                )
+
         training_log.append(log_entry)
 
     # Save model weights
@@ -665,6 +836,8 @@ def cifar10_cnn(
             line = f"  Epoch {entry['epoch']}: train_loss={entry['train_loss']:.4f}, train_acc={entry['train_acc']:.2f}%"
             if "test_acc" in entry:
                 line += f", test_acc={entry['test_acc']:.2f}%"
+            if "val_acc" in entry:
+                line += f", val_acc={entry['val_acc']:.2f}%"
             f.write(line + "\n")
     print(f"  Saved log to: {log_file}")
 
