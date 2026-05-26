@@ -59,6 +59,70 @@ SMALL_TEST_SIZE = 500
 STRATIFY_COLUMN = "Execution_Image_Image_Classification.Image_Class"
 
 
+class SmallVariantDegenerateError(RuntimeError):
+    """Raised when the 'small' Toronto split family would equal the full split.
+
+    The ``Small_Training`` / ``Small_Testing`` datasets are intended to be
+    a strictly smaller random sample of the corresponding full Toronto
+    train/test pools. When the source pools are smaller than (or equal to)
+    ``SMALL_TRAIN_SIZE`` / ``SMALL_TEST_SIZE``, the sample step falls
+    through to "use everything," producing dataset rows whose members are
+    byte-identical to the full split. Any ``small`` vs ``full`` comparison
+    on that catalog is then meaningless, with no warning surfaced at run
+    time. We refuse to create that ambiguity and raise this error instead.
+
+    See:
+        ``deriva-ml-model-template-e2e/findings/curator/01-small-variant-equals-full-at-500-images.md``
+    """
+
+
+def _require_small_variant_distinct(train_pool: int, test_pool: int) -> None:
+    """Refuse to build a degenerate small Toronto split family.
+
+    A small variant must draw strictly fewer than the source pool size in
+    each partition; otherwise the "small" datasets are byte-identical to
+    the full datasets. Equality (``pool == SMALL_*_SIZE``) is also
+    degenerate because every source RID would be picked.
+
+    Args:
+        train_pool: Number of available training images in the catalog.
+        test_pool: Number of available testing images in the catalog.
+
+    Raises:
+        SmallVariantDegenerateError: If either pool is too small to yield
+            a strictly smaller sample. The message tells the operator
+            what ``--num-images`` minimum would clear the threshold and
+            suggests the labeled-split family as the right tool for tiny
+            catalogs.
+
+    Example:
+        >>> _require_small_variant_distinct(train_pool=600, test_pool=600)
+        >>> _require_small_variant_distinct(train_pool=250, test_pool=250)
+        Traceback (most recent call last):
+            ...
+        scripts._cifar10_datasets.SmallVariantDegenerateError: ...
+    """
+    if train_pool > SMALL_TRAIN_SIZE and test_pool > SMALL_TEST_SIZE:
+        return
+
+    # --num-images is split evenly between train and test partitions in
+    # _cifar10_assets.upload_images(), so the threshold to recover a
+    # non-degenerate small family is roughly 2*(SMALL_*_SIZE + 1).
+    min_num_images = 2 * (max(SMALL_TRAIN_SIZE, SMALL_TEST_SIZE) + 1)
+    raise SmallVariantDegenerateError(
+        f"At this catalog size (train_pool={train_pool}, test_pool={test_pool}) "
+        f"the 'small' Toronto split family would be byte-identical to the full "
+        f"Toronto split. SMALL_TRAIN_SIZE={SMALL_TRAIN_SIZE} and "
+        f"SMALL_TEST_SIZE={SMALL_TEST_SIZE} require strictly larger source "
+        f"pools to yield a distinct sample. "
+        f"Re-run load-cifar10 with --num-images >= {min_num_images} so each "
+        f"partition exceeds the small-variant sample size, or skip the small "
+        f"Toronto split and use the labeled-split family instead — "
+        f"split_dataset() partitions the training images directly and stays "
+        f"distinct at any catalog size."
+    )
+
+
 def _build_dataset_descriptions(
     train_count: int,
     test_count: int,
@@ -302,6 +366,14 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
         ``labeled_testing``, ``small_labeled_split``,
         ``small_labeled_training``, ``small_labeled_testing``.
 
+    Raises:
+        SmallVariantDegenerateError: If the catalog holds too few
+            training or testing images for the ``Small_Training`` /
+            ``Small_Testing`` datasets to be a strict subset of the
+            full split. The error fires before any catalog writes
+            so the caller can re-run ``load-cifar10`` with a larger
+            ``--num-images``.
+
     Example:
         >>> datasets = create_dataset_hierarchy(ml)
         >>> datasets["training"]
@@ -324,6 +396,16 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
     ]
     all_rids = train_rids + test_rids
     logger.info(f"  Train: {len(train_rids)}, Test: {len(test_rids)}")
+
+    # Refuse to build a degenerate small Toronto split family — see
+    # curator/01 finding from the 2026-05-26 e2e run. Surfacing this
+    # before any catalog writes keeps the catalog clean: if the small
+    # variant can't be distinct, we don't want the full-size datasets
+    # half-created either, since the operator will need to re-run with
+    # more images anyway.
+    _require_small_variant_distinct(
+        train_pool=len(train_rids), test_pool=len(test_rids)
+    )
 
     workflow = ml.create_workflow(
         name="CIFAR-10 Dataset Hierarchy",
@@ -422,26 +504,18 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
     if test_rids:
         _batched_add(datasets["testing"], test_rids, "Testing")
 
-    # Small splits — stratified sample by class if enough; else use all.
-    # The previous random.sample() left bird/ship-only partitions when
-    # the source was class-skewed (#13). Stratified sampling keeps each
-    # class proportionally represented at any sample size >= 10.
-    if train_rids:
-        if len(train_rids) >= SMALL_TRAIN_SIZE:
-            sample = stratified_sample_rids(
-                train_rids, train_classes, SMALL_TRAIN_SIZE, seed=42
-            )
-        else:
-            sample = train_rids
-        _batched_add(datasets["small_training"], sample, "Small_Training")
-    if test_rids:
-        if len(test_rids) >= SMALL_TEST_SIZE:
-            sample = stratified_sample_rids(
-                test_rids, test_classes, SMALL_TEST_SIZE, seed=43
-            )
-        else:
-            sample = test_rids
-        _batched_add(datasets["small_testing"], sample, "Small_Testing")
+    # Small splits — stratified sample by class. The pool-size guard
+    # at the top of this function (_require_small_variant_distinct) has
+    # already verified that train_rids and test_rids each exceed the
+    # respective SMALL_*_SIZE, so the sample is always strictly smaller
+    # than the source. Stratified sampling keeps each class
+    # proportionally represented (#13).
+    sample = stratified_sample_rids(
+        train_rids, train_classes, SMALL_TRAIN_SIZE, seed=42
+    )
+    _batched_add(datasets["small_training"], sample, "Small_Training")
+    sample = stratified_sample_rids(test_rids, test_classes, SMALL_TEST_SIZE, seed=43)
+    _batched_add(datasets["small_testing"], sample, "Small_Testing")
 
     # Labeled splits derived from Training. Stratify by the
     # Image_Classification feature so each child partition keeps a
@@ -495,37 +569,23 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
             datasets["labeled_testing"] = labeled.testing.rid
 
             logger.info("Creating Small_Labeled_Split...")
-            if len(train_rids) >= 500:
-                small_labeled = split_dataset(
-                    ml,
-                    datasets["training"],
-                    split_exe,
-                    test_size=100,
-                    train_size=400,
-                    seed=42,
-                    stratify_by_column=STRATIFY_COLUMN,
-                    training_types=["Labeled"],
-                    testing_types=["Labeled"],
-                    element_table="Image",
-                    include_tables=["Image", "Execution_Image_Image_Classification"],
-                    row_per="Execution_Image_Image_Classification",
-                    split_description=_small_labeled_split_description(len(train_rids)),
-                )
-            else:
-                small_labeled = split_dataset(
-                    ml,
-                    datasets["training"],
-                    split_exe,
-                    test_size=0.2,
-                    seed=123,
-                    stratify_by_column=STRATIFY_COLUMN,
-                    training_types=["Labeled"],
-                    testing_types=["Labeled"],
-                    element_table="Image",
-                    include_tables=["Image", "Execution_Image_Image_Classification"],
-                    row_per="Execution_Image_Image_Classification",
-                    split_description=_small_labeled_split_description(len(train_rids)),
-                )
+            # _require_small_variant_distinct guarantees train_rids > 500,
+            # so the fixed 400/100 split always fits with images to spare.
+            small_labeled = split_dataset(
+                ml,
+                datasets["training"],
+                split_exe,
+                test_size=100,
+                train_size=400,
+                seed=42,
+                stratify_by_column=STRATIFY_COLUMN,
+                training_types=["Labeled"],
+                testing_types=["Labeled"],
+                element_table="Image",
+                include_tables=["Image", "Execution_Image_Image_Classification"],
+                row_per="Execution_Image_Image_Classification",
+                split_description=_small_labeled_split_description(len(train_rids)),
+            )
             datasets["small_labeled_split"] = small_labeled.split.rid
             datasets["small_labeled_training"] = small_labeled.training.rid
             datasets["small_labeled_testing"] = small_labeled.testing.rid

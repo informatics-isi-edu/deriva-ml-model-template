@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from collections import Counter
 
+import pytest
+
 
 def _make_rid_corpus(per_class: int) -> tuple[list[str], list[str]]:
     """Build (rids, classes) with per_class items in each of 10 classes."""
@@ -91,6 +93,96 @@ def test_stratified_rid_sample_empty_inputs_return_empty():
 
     assert stratified_sample_rids([], [], sample_size=5, seed=42) == []
     assert stratified_sample_rids(["A"], ["x"], sample_size=0, seed=42) == []
+
+
+# --- _require_small_variant_distinct --------------------------------------
+# Regression coverage for curator/01 (2026-05-26 e2e): refuse to build a
+# small Toronto split family that would be byte-identical to the full split.
+
+
+def test_require_small_variant_distinct_accepts_large_pools():
+    """Pools strictly larger than SMALL_*_SIZE pass without raising."""
+    from scripts._cifar10_datasets import (
+        SMALL_TEST_SIZE,
+        SMALL_TRAIN_SIZE,
+        _require_small_variant_distinct,
+    )
+
+    # Just above threshold in both partitions — must not raise.
+    _require_small_variant_distinct(
+        train_pool=SMALL_TRAIN_SIZE + 1, test_pool=SMALL_TEST_SIZE + 1
+    )
+    # Comfortably above threshold (Toronto full sizes) — must not raise.
+    _require_small_variant_distinct(train_pool=50_000, test_pool=10_000)
+
+
+def test_require_small_variant_distinct_rejects_curator_01_scenario():
+    """At --num-images 500 the bootstrap loads 250 train + 250 test.
+
+    That is the exact catalog state Curator/01 flagged: the small
+    variant ends up byte-identical to the full variant. We must raise
+    with a message that names the threshold and the alternative.
+    """
+    from scripts._cifar10_datasets import (
+        SmallVariantDegenerateError,
+        _require_small_variant_distinct,
+    )
+
+    with pytest.raises(SmallVariantDegenerateError) as excinfo:
+        _require_small_variant_distinct(train_pool=250, test_pool=250)
+
+    msg = str(excinfo.value)
+    # The operator needs to know how to recover; the message must
+    # surface a concrete --num-images suggestion and point at the
+    # labeled-split alternative.
+    assert "--num-images" in msg
+    assert "labeled-split" in msg
+    # The threshold the message suggests must, when applied, clear
+    # the guard — i.e. it's a working remediation, not just a number.
+    # SMALL_*_SIZE is 500, so the suggested minimum is 2 * 501 = 1002.
+    assert "1002" in msg
+
+
+def test_require_small_variant_distinct_rejects_boundary_case():
+    """Equality (pool == SMALL_*_SIZE) is still degenerate.
+
+    When ``stratified_sample_rids`` is asked for exactly len(rids) it
+    returns every input RID, so the small dataset would still be
+    set-equal to the full one. The guard rejects equality alongside
+    smaller-than-equal.
+    """
+    from scripts._cifar10_datasets import (
+        SMALL_TEST_SIZE,
+        SMALL_TRAIN_SIZE,
+        SmallVariantDegenerateError,
+        _require_small_variant_distinct,
+    )
+
+    with pytest.raises(SmallVariantDegenerateError):
+        _require_small_variant_distinct(
+            train_pool=SMALL_TRAIN_SIZE, test_pool=SMALL_TEST_SIZE
+        )
+
+
+def test_require_small_variant_distinct_rejects_asymmetric_shortage():
+    """Either partition being short is enough to refuse — not both."""
+    from scripts._cifar10_datasets import (
+        SMALL_TEST_SIZE,
+        SMALL_TRAIN_SIZE,
+        SmallVariantDegenerateError,
+        _require_small_variant_distinct,
+    )
+
+    # Plenty of train images, but test partition is short.
+    with pytest.raises(SmallVariantDegenerateError):
+        _require_small_variant_distinct(
+            train_pool=SMALL_TRAIN_SIZE + 100, test_pool=SMALL_TEST_SIZE
+        )
+    # Plenty of test images, but train partition is short.
+    with pytest.raises(SmallVariantDegenerateError):
+        _require_small_variant_distinct(
+            train_pool=SMALL_TRAIN_SIZE, test_pool=SMALL_TEST_SIZE + 100
+        )
 
 
 # --- _build_dataset_descriptions ------------------------------------------
