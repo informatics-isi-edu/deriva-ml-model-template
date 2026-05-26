@@ -290,3 +290,255 @@ configuration smoke test (`tests/test_configs_load.py`) still passes.
 02 feature-values-cursor-empty, 03 bootstrap-dataset-descriptions-misleading.
 None block the Developer arc; all are catalog-observational, not
 behavioral.
+
+---
+
+### tk-004 — Developer training arc: 7 executions across two variants + one lr_sweep multirun
+**When:** 2026-05-26T11:25:00-07:00
+**By:** Developer persona (sub-agent, `e2e-test/2026-05-26` worktree)
+**Supported by:** Direct ermrest cross-check
+(`PathBuilder('Execution').filter(RID==...).entities().fetch()`) on all
+8 executions agrees with the MCP `deriva_ml_get_execution` and
+`deriva_ml_list_execution_children` views on status, RID, duration, and
+parent/child linkage; **disagrees on `workflow_rid`** (direct says
+`DY6`, MCP says `null` for every row — see `findings/developer/02-*`).
+19 Execution_Asset rows confirmed in both channels.
+
+Training arc on catalog 18, ran four configurations against the
+Curator's curated datasets:
+
+**Run 1 — `cifar10_quick` (single, baseline)**
+| Field | Value |
+|---|---|
+| Execution RID | `DYC` |
+| Workflow RID | `DY6` (`cifar10_cnn`) |
+| Hydra config | `+experiment=cifar10_quick` (defaults: `cifar10_small_labeled_split` = CRR) |
+| Dataset | CRR (250 imgs: 200 train + 50 test, seed=123) |
+| Architecture | 32→64 channels, 128 hidden |
+| Hyperparams | epochs=3, batch=128, lr=1e-3 |
+| Final train_acc | 40.50% |
+| Final test_acc | **28.00%** |
+| Weights asset | `E06` (6.55 MB, `cifar10_cnn_weights.pt`) |
+| Training log | `E08` (480 B) |
+| Predictions CSV | `E0A` (7.2 KB, 50-row `prediction_probabilities.csv`) |
+| Duration | 0.676 s training |
+
+**Run 2 — `cifar10_extended` (single, max-config)**
+| Field | Value |
+|---|---|
+| Execution RID | `E4A` |
+| Hydra config | `+experiment=cifar10_extended` |
+| Dataset | CRR (same as Run 1 — controlled comparison) |
+| Architecture | 64→128 channels, 256 hidden, dropout 0.25, weight_decay 1e-4 |
+| Hyperparams | epochs=50, batch=64, lr=1e-3 |
+| Final train_acc | 100% (overfit) |
+| Final test_acc | **24%** (peaked at 32% around epoch 29 — overfit thereafter) |
+| Weights asset | `E64` (24.91 MB — 4× the quick model) |
+| Training log | `E66` (3.5 KB, 50 epochs of metrics) |
+| Predictions CSV | `E68` (8.0 KB) |
+| Duration | 11.69 s training |
+
+**Run 3 — `lr_sweep` (multirun, 4 children)**
+Parent: `EA8` (description = LEARNING_RATE_SWEEP_DESCRIPTION markdown).
+Children link back via `Execution_Parent_Execution_Child` association
+(verified by `deriva_ml_list_execution_children(parent_rid="EA8")` →
+4 rows).
+
+| Sequence | Child RID | LR | Final test_acc | Weights / Log / Predictions |
+|---|---|---|---|---|
+| 0 | `EC0` | 0.0001 | 14% (undertrained — 10 epochs not enough at this LR) | `EDW` / `EDY` / `EE0` |
+| 1 | `EJ0` | 0.001 | **30% (best)** | `EKW` / `EKY` / `EM0` |
+| 2 | `ER0` | 0.01 | 12% (oscillating — LR too aggressive) | `ESW` / `ESY` / `ET0` |
+| 3 | `EY0` | 0.1 | 10% (random — divergence; epoch 1 train_loss = 1269!) | `EZW` / `EZY` / `F00` |
+
+The sweep tells a clean story: LR=1e-3 is the sweet spot at 10 epochs
+on this 200-image training set; an order of magnitude higher
+destabilizes; an order of magnitude lower undertrains. Analyst can use
+this as the worked LR-comparison example.
+
+**Run 4 — degenerate (kept in catalog as evidence of finding 01)**
+| Execution RID | `F40` |
+|---|---|
+| Hydra config | `+experiment=cifar10_quick datasets=cifar10_validation_from_test` |
+| Dataset | DAP (Validation type — what the Curator recommended) |
+| What happened | `_bag_role(DAP)=="unknown"` → no train_loader → no-train path → 50-byte `training_status.txt` (`F5T`) written, status=Uploaded |
+| Useful work | None |
+
+Documented as `findings/developer/01-validation-typed-bag-silently-skipped.md`
+(pending task D01 catalog instance). **Analyst should skip F40 when ranking
+runs** — it has no model weights, no predictions, and would silently
+appear in a "find all uploaded training executions" query.
+
+**Why these four configs, and not others?**
+
+- *Two single variants on the same dataset (CRR) for a controlled comparison*
+  — quick vs extended isolates "what does more model + more epochs buy
+  you?" on this 200-image training set. Answer: severe overfitting,
+  modest improvement in best test_acc (32% peak) before degradation.
+  This is the expected failure mode of training a 600K-parameter model
+  on 200 images; the worth-keeping signal for the Analyst.
+- *`lr_sweep` as the multirun* — Picked because the catalog ships it
+  pre-defined in `src/configs/multiruns.py`. The 4-way grid is small
+  enough to finish in seconds and large enough to be plottable on a
+  4-bar chart. No new multirun config registered — `lr_sweep`
+  already serves the goal.
+- *DAP attempt* — Tried the Curator's recommendation as-is and let the
+  silent-skip happen, so the finding is reproducible with the exact
+  execution `F40` for the Analyst to inspect. Did not "route around"
+  by quietly substituting; the friction is the point.
+- *Did not run `epoch_sweep` or `lr_batch_grid`* — Time budget. lr_sweep
+  is the more interpretable story (1 axis, 4 values) and covers the
+  multirun success criterion. The grid would have added 4 more children
+  without distinct signal.
+
+**Seed strategy.** Honest version: there isn't one for this arc. The
+Curator's tk-003 suggests using C86 (seed=42) and CS0 (seed=123) for
+"variance across seeds," but those are *partition* seeds, not *training*
+seeds — and `cifar10_cnn.py` has no `seed` parameter at all. So every
+training run pulls from PyTorch's default uninitialized global RNG.
+Logged as `findings/developer/03-no-seed-knob-on-cifar10-cnn.md`
+(catalog-18 instance of pending task D02). True variance-across-seeds
+work is blocked until D02 lands. Skipped the Curator's
+seed=42-vs-seed=123 dataset comparison for this arc — it would have
+conflated partition variance with training variance and produced a
+muddled signal.
+
+**What "success" looked like.** Not "best test accuracy" — at 200
+training images, the ceiling is low and CIFAR-10 is a known
+hard-at-small-N dataset. Success was: *the Analyst can rank these
+executions by a defensible metric, see the lr_sweep pattern clearly,
+and produce a confusion matrix that's interpretable.* All runs use
+the same 50-image labeled test partition (CSA, the seed=123 small test
+subset), so test_acc is apples-to-apples across DYC, E4A, EC0, EJ0,
+ER0, EY0. The probability CSVs (`prob_<class>` columns) are the right
+shape for ROC analysis — 50 rows × (Image_RID + Predicted_Class +
+Confidence + 10 per-class probabilities).
+
+**Cross-channel verification result.** Direct ermrest (deriva-ml
+`PathBuilder`) and MCP `deriva_ml_get_execution` /
+`deriva_ml_list_execution_children` / `deriva_ml_list_assets` agree on:
+8 executions (DYC, E4A, EA8, EC0, EJ0, ER0, EY0, F40), all
+`Status=Uploaded`, 19 Execution_Asset rows total (3+3+0+3+3+3+3+1).
+**They disagree on `workflow_rid`**: direct says `DY6`, MCP says
+`null` for every row. Logged as
+`findings/developer/02-mcp-get-execution-drops-workflow-rid.md`.
+
+---
+
+### Handoff to Analyst
+
+**What's ready for the Analyst arc:**
+
+- **6 viable training executions on catalog 18 with weights + per-image
+  predictions CSV**, all using the same 50-image test partition (CSA).
+  Apples-to-apples comparison across all 6 on test_acc, AUC, confusion
+  matrix, ROC, etc.
+- **One multirun parent (`EA8`) with 4 children** for the LR-sweep
+  visualization story.
+- **All prediction CSVs share the same schema**:
+  `Image_RID, Predicted_Class, Confidence, prob_airplane,
+  prob_automobile, prob_bird, prob_cat, prob_deer, prob_dog, prob_frog,
+  prob_horse, prob_ship, prob_truck`. 50 rows each.
+- **All runs train+test on CRR (`cifar10_small_labeled_split`)**, so
+  joining predictions to ground-truth labels uses the CSA test partition
+  RIDs.
+
+**Recommended executions to compare and the ranking by metric:**
+
+| Rank | Execution | Variant | Test_acc | Notes |
+|---|---|---|---|---|
+| 1 | `EJ0` | lr_sweep child, lr=0.001 | **30%** | Best learning rate at 10 epochs |
+| 2 | `DYC` | quick (default lr=1e-3, 3 epochs) | 28% | Cheapest run, near-best result |
+| 3 | `E4A` | extended (50 epochs, larger model) | 24% (peak 32% at epoch 29) | Severely overfit by end of training |
+| 4 | `EC0` | lr_sweep child, lr=0.0001 | 14% | Undertrained |
+| 5 | `ER0` | lr_sweep child, lr=0.01 | 12% | Unstable (loss oscillates) |
+| 6 | `EY0` | lr_sweep child, lr=0.1 | 10% | Diverged (train_loss spiked to 1269) |
+
+**Recommended prediction-CSV assets to load for analysis:**
+
+- DYC → `E0A`
+- E4A → `E68`
+- EC0 → `EE0`, EJ0 → `EM0`, ER0 → `ET0`, EY0 → `F00`
+
+**Skip in any comparison:**
+
+- **`F40`** — degenerate execution from finding 01 (Validation bag
+  silently skipped). Status=Uploaded, no weights, no predictions, just
+  a 50-byte `training_status.txt`. If you use `find_executions(...)` to
+  build the comparison list, filter by checking `len(execution_assets) >= 2`
+  or filter out workflow type "Training" with no `cifar10_cnn_weights.pt`
+  asset.
+- **`EA8`** — multirun parent; descriptive shell with no model
+  artifacts. Use its 4 children instead.
+
+**Suggested analysis angles:**
+
+1. **LR-sweep comparison plot** — 4-bar chart of EC0/EJ0/ER0/EY0
+   test_acc by learning rate. The Analyst's job is to pick the
+   right plot type (log-scale x-axis for LR is natural; the divergent
+   EY0 case is the spike worth annotating).
+2. **Quick-vs-Extended overfit story** — DYC vs E4A, with E4A's
+   training_log showing the test_acc peak at epoch 29 then decline.
+   The `training_log` assets carry per-epoch metrics; load them as
+   text and parse the `Epoch N/50:` lines.
+3. **ROC analysis using the prediction probability CSVs.** With CRR
+   training on a 200-image pool and CSA test on 50 images (5 per class,
+   per CSA's stratified construction), each class has only 5 test
+   examples — be aware that ROC AUC is noisy at this sample size.
+   This is why the Curator added `cifar10_balanced_demo` (DB0, 50
+   images, 5/class) as the "guaranteed-populated confusion matrix"
+   evaluator — but **none of the executions in this arc were evaluated
+   against DB0**, only against CSA. If the Analyst wants a confusion
+   matrix on DB0, they'd need to do a `test_only` run (use existing
+   weights from one of the executions, load via `assets=` config
+   pointing at the weights RID, run on DB0). Not required by the
+   success criteria, but a natural extension.
+
+**Caveats:**
+
+- **No held-out validation set was used in training.** The Curator's
+  intended use of DAP (`cifar10_validation_from_test`, 250 imgs disjoint
+  from training pool) is blocked by finding 01 (`cifar10_cnn` skips
+  Validation bags). Every reported test_acc above is on the
+  in-distribution CSA partition. There's no overfitting-to-test concern
+  because the model never saw the test images during training, but
+  also no proper generalization check on truly held-out data.
+- **Test set is small (50 images, 5 per class).** Confusion matrices
+  will have at most 5 in any diagonal cell and 0 in many off-diagonal
+  cells. Plot accordingly.
+- **MCP `workflow_rid` is null on every row** (finding 02). If the
+  Analyst's notebooks reach for MCP to look up the workflow URL or git
+  hash, they'll get None — use the direct deriva-ml Python path or
+  query the `Workflow` table directly by `DY6`.
+- **No `seed` was set** (finding 03). Re-running any of these
+  experiments will produce *different* weights and *different* test_acc.
+  The numbers above are accurate for *these specific* execution RIDs
+  (DYC, E4A, EC0...) and won't reproduce from the configs alone.
+
+**Pinned things the Analyst should NOT change:**
+
+- The 6 viable + 1 degenerate executions are committed; do not delete
+  or modify their Execution rows. Add analysis assets as new
+  Execution_Asset rows under new analysis executions.
+- `src/configs/datasets.py` and `src/configs/deriva.py` are
+  `[E2E-DROP]` — don't repoint.
+
+**Open questions left for the Analyst (not directives — questions to
+answer through their own work):**
+
+1. Is the 32% peak at epoch 29 of E4A meaningful, or noise? Without a
+   seed (finding 03), re-running the same config might land anywhere
+   from 24% to 36%. The Analyst's ROC + confusion-matrix work might
+   surface whether E4A is *qualitatively* different from EJ0 (e.g.,
+   confusing different class pairs) or just a noisier estimate of the
+   same underlying behavior.
+2. Should the LR sweep be redone with longer epoch budgets per
+   learning rate (smaller LRs given more time)? EC0 at lr=1e-4 with
+   only 10 epochs barely got out of random-init territory.
+3. The Curator added DAP as a held-out validator that the runner
+   doesn't currently honor. If the Analyst wants a true generalization
+   metric, the workaround is a `test_only` run pointing at a
+   `cifar10_cnn` weights asset and using `datasets=cifar10_testing`
+   (97A — Testing-typed, same images as DAP) instead of
+   `cifar10_validation_from_test`.
+
