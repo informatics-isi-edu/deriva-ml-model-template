@@ -145,6 +145,33 @@ datasets_store(
 )
 
 # -----------------------------------------------------------------------------
+# Curator-added variants (catalog 18, created 2026-05-26 by curator script
+# scripts/curator_create_datasets.py). Wired in for the multipersona e2e run.
+# -----------------------------------------------------------------------------
+
+# Validation set: same images as cifar10_testing (97A) but with
+# Dataset_Type=Validation so cifar10_cnn-style runners (D01) have a
+# held-out evaluator distinct from in-pool C8G/CSA test subsets.
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="DAP", version="0.1.0.post1.dev1")],
+        "Validation set (250 images) — wraps 97A with Dataset_Type=Validation.",
+    ),
+    name="cifar10_validation_from_test",
+)
+
+# Balanced demo: 5-per-class hand-picked from 96E, seed=20260526.
+# 50 images, every CIFAR-10 class equally represented. Use for
+# sub-minute smoke runs and guaranteed-populated confusion-matrix cells.
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="DB0", version="0.1.0.post1.dev1")],
+        "Balanced demo (50 images, 5 per class) hand-picked from 96E.",
+    ),
+    name="cifar10_balanced_demo",
+)
+
+# -----------------------------------------------------------------------------
 # Special-case configs (always empty by design)
 # -----------------------------------------------------------------------------
 
