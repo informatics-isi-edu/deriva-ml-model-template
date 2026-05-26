@@ -733,7 +733,7 @@ established, no further P0 work is reachable.
         && echo "FAIL: deriva.py has a real catalog_id"
       grep -E "^[^#]*rid=\"[0-9]" src/configs/datasets.py \
         && echo "FAIL: datasets.py has RIDs filled in"
-      [ "$(wc -l < experiment-decisions.md)" -gt 7 ] \
+      [ "$(wc -l < experiment-decisions.md)" -gt 17 ] \
         && echo "FAIL: experiment-decisions.md is non-template"
       ```
 
@@ -845,7 +845,7 @@ established, no further P0 work is reachable.
      && echo "FAIL: deriva.py is non-template in the worktree"
    grep -E "^[^#]*rid=\"[0-9]" src/configs/datasets.py \
      && echo "FAIL: datasets.py has RIDs in the worktree"
-   [ "$(wc -l < experiment-decisions.md)" -gt 7 ] \
+   [ "$(wc -l < experiment-decisions.md)" -gt 17 ] \
      && echo "FAIL: experiment-decisions.md is non-template in the worktree"
    ```
    None of the FAIL lines should print. If any does, something
