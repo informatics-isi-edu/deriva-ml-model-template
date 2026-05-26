@@ -1,4 +1,4 @@
-# Experiment Design Decisions
+# Tacit Knowledge
 
 This file records **tacit knowledge** — the *why*, the *intent*, and the
 *background* behind decisions made about this project's models and data.

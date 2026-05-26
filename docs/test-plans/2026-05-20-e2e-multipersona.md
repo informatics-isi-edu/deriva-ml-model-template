@@ -31,7 +31,7 @@ findings during the run.
 1. **Characterize the user experience per persona.** Where is the
    platform smooth? Where is it rough? Friction is the unit of
    measurement.
-2. **Test `experiment-decisions.md` as a real knowledge-transfer
+2. **Test `tacit-knowledge.md` as a real knowledge-transfer
    artifact.** Each persona writes to it during their work; the
    next persona reads from it before starting. Gaps in the handoff
    are findings — about the file, the prior persona's writing, or
@@ -82,7 +82,7 @@ reach for**, and **success criteria** (how we know they got there).
   catalog id; `src/configs/datasets.py` already carries the
   loader-produced RIDs. Both edits are `[E2E-DROP]` commits on the
   shared `e2e-test/<YYYY-MM-DD>` branch (see §3.5).
-- `experiment-decisions.md` has a single "Bootstrap" entry from Phase
+- `tacit-knowledge.md` has a single "Bootstrap" entry from Phase
   0 noting what was created and how.
 
 **Goal:** Audit the bootstrapped catalog, verify it's in shape for
@@ -103,7 +103,7 @@ query mode), `manage-vocabulary`, `capture-tacit-knowledge`.
 - At least one new dataset (a curated subset or new split) created
   via `dataset-lifecycle`, with a real motivation that a downstream
   persona would care about (not "to exercise the API").
-- `experiment-decisions.md` contains entries explaining: what the
+- `tacit-knowledge.md` contains entries explaining: what the
   curator inherited and what their assessment of it is, what new
   dataset was created and why, what downstream consumers should know.
 - A "handoff summary" to the next persona at the bottom of the
@@ -136,7 +136,7 @@ new variant beat the baseline?" sense), `capture-tacit-knowledge`.
 - New experiment config registered in `src/configs/experiments.py`
   (on the shared e2e branch) if the developer needed one beyond the
   existing ones.
-- `experiment-decisions.md` contains entries explaining: which
+- `tacit-knowledge.md` contains entries explaining: which
   variants and why, which seed strategy, what success looked like.
 - Handoff summary: which executions the analyst should look at,
   which prediction assets feed the analysis, any caveats.
@@ -183,7 +183,7 @@ section), `capture-tacit-knowledge`.
   — was it discoverable, did the output match expectations, did the
   column naming / element-type ordering match what the persona
   needed for the analysis.
-- `experiment-decisions.md` contains entries explaining: which runs
+- `tacit-knowledge.md` contains entries explaining: which runs
   were compared and why, what metric was chosen, how surprises
   (if any) were interpreted, and the rationale for the denormalize
   call (which element type was treated as the "root", why).
@@ -205,7 +205,7 @@ produced runs the analyst can compare.
 
 **Interactive mode.** After each persona's arc finishes, the run
 pauses. The user reviews the persona's summary, the findings file,
-and the experiment-decisions handoff. The user can redirect, ask
+and the tacit-knowledge handoff. The user can redirect, ask
 for elaboration, request a re-do of a specific step, or proceed to
 the next persona. This mode is for first-time runs and runs where
 the user wants to verify the personas are behaving sensibly.
@@ -227,7 +227,7 @@ governs *checkpoint pauses* (does the orchestrator wait between
 persona arcs?) — it does **not** restrict persona agents from raising
 a short clarifying question to the user *during* an arc when the
 answer would materially improve what gets recorded in
-`experiment-decisions.md` or `findings/`. Inquiry is distinct from a
+`tacit-knowledge.md` or `findings/`. Inquiry is distinct from a
 checkpoint: it's an inline question that doesn't pause the arc, and
 the user's answer feeds the next sentence the agent writes. In
 autonomous mode the bar is higher (asking interrupts the autonomy
@@ -244,7 +244,7 @@ escalate. The rules differ by mode.
 | Decision | Interactive | Autonomous |
 |---|---|---|
 | Which existing dataset/feature/config to use for an obvious task | Decide | Decide |
-| Reasonable parameter choice (split ratio, learning rate, epoch count) within typical range | Checkpoint summary | Decide; note the choice in `experiment-decisions.md` |
+| Reasonable parameter choice (split ratio, learning rate, epoch count) within typical range | Checkpoint summary | Decide; note the choice in `tacit-knowledge.md` |
 | Pick between two equally-valid skills | Checkpoint summary | Decide |
 | Create a new dataset / feature / config not strictly required by the success criteria | Checkpoint, ask first | Decide if it serves the persona's goal; note rationale |
 | Destructive operations (delete catalog, drop schema, force-push, rm -rf working dir) | Always ask | Always ask — abort the persona if blocked |
@@ -261,7 +261,7 @@ agents never fix bugs mid-arc — that's a separate fix-pass.
 Each persona, regardless of mode, follows the same arc:
 
 1. **Read context.** Project's CLAUDE.md, the persona's own brief in
-   this spec, and (critically) `experiment-decisions.md` if it
+   this spec, and (critically) `tacit-knowledge.md` if it
    exists. The previous persona's handoff is in that file. Surface
    any handoff gaps as findings immediately.
 2. **State the plan.** Persona writes a 5-bullet plan of what they're
@@ -272,7 +272,7 @@ Each persona, regardless of mode, follows the same arc:
    skills and tools listed in §2 first. Friction at every step
    gets captured (§4).
 4. **Capture rationale.** As decisions are made, persona writes
-   them to `experiment-decisions.md` via `capture-tacit-knowledge`.
+   them to `tacit-knowledge.md` via `capture-tacit-knowledge`.
    At minimum: one entry per major decision (dataset choice, split
    strategy, model config selection, metric choice).
 5. **Cross-channel verification.** Before declaring the arc done,
@@ -280,7 +280,7 @@ Each persona, regardless of mode, follows the same arc:
    their skills and tools *said* they created. See §3.4. Disagreement
    is a finding.
 6. **Write handoff.** At end of arc, persona appends a "handoff
-   summary" section to `experiment-decisions.md` named for the
+   summary" section to `tacit-knowledge.md` named for the
    next persona, describing what's ready and what's pinned. This
    is the explicit knowledge-transfer step.
 7. **Produce arc summary.** A markdown summary of what was done,
@@ -370,7 +370,7 @@ git worktree add ../deriva-ml-model-template-e2e \
 ```
 
 This worktree is created in Phase 0 step 0 (§6.2) before any persona
-runs. All persona work — config edits, `experiment-decisions.md`
+runs. All persona work — config edits, `tacit-knowledge.md`
 appends, findings under `findings/<persona>/`, helper scripts,
 commits with `[E2E-DROP]` markers — happens here, on this branch.
 
@@ -379,7 +379,7 @@ chose worktree-per-persona to prevent file-stomping between
 concurrent agents. Personas in this run are sequential, not
 concurrent, so the file-stomping risk doesn't apply. The cost of
 per-persona worktrees was much higher: each persona's
-`experiment-decisions.md`, config edits, and findings lived in a
+`tacit-knowledge.md`, config edits, and findings lived in a
 separate working tree, and the orchestrator had to merge between
 branches to carry the handoff forward. That made the knowledge-
 transfer artifact — the whole point of §5 — implicit in the
@@ -497,7 +497,7 @@ platform asked the user to know something they shouldn't have to.>
 ## Handoff quality
 
 <Did each persona understand the prior persona's intent from
-`experiment-decisions.md`? Specific examples of what carried over
+`tacit-knowledge.md`? Specific examples of what carried over
 well vs. what was unclear.>
 
 ## Success-criteria scorecard
@@ -514,7 +514,7 @@ fixes. Not prescriptive — the user decides.>
 
 ---
 
-## 5. `experiment-decisions.md` as test artifact
+## 5. `tacit-knowledge.md` as test artifact
 
 The file lives in the project root and is tracked in git. Each
 persona is expected to:
@@ -592,7 +592,7 @@ By the time Phase 0 is done, the following is true:
   edited *directly* — `configs/dev/` no longer exists in this
   template; the dev-overlay pattern was retired with the 2026-05-21
   rewrite.
-- `experiment-decisions.md` contains a single "Bootstrap" entry
+- `tacit-knowledge.md` contains a single "Bootstrap" entry
   recording catalog name, dataset RIDs, the `load-cifar10` invocation
   that created them, and the sibling versions of the platform stack
   at run-start.
@@ -717,7 +717,7 @@ established, no further P0 work is reachable.
       pristine, no-prior-run state. Every previous multipersona
       run produced `[E2E-DROP]` commits that mutate
       `src/configs/deriva.py`, `src/configs/datasets.py`, and
-      `experiment-decisions.md`. Wrap-up step 4 of the test plan
+      `tacit-knowledge.md`. Wrap-up step 4 of the test plan
       drops those commits when cherry-picking back to `main`, but
       the bookkeeping is easy to get wrong, and a poisoned `main`
       means the *next* multipersona run inherits last run's
@@ -734,7 +734,7 @@ established, no further P0 work is reachable.
         list literals for every dataset group, not RID strings.
         The docstring at the top of the file calls itself out as
         "intentionally empty by default."
-      - `experiment-decisions.md` should be the template header
+      - `tacit-knowledge.md` should be the template header
         only — three short lines of intro + a horizontal-rule
         separator + nothing else. No "Bootstrap" entry, no
         per-persona decision logs, no model-tuning notes.
@@ -747,8 +747,8 @@ established, no further P0 work is reachable.
         && echo "FAIL: deriva.py has a real catalog_id"
       grep -E "^[^#]*rid=\"[0-9]" src/configs/datasets.py \
         && echo "FAIL: datasets.py has RIDs filled in"
-      [ "$(wc -l < experiment-decisions.md)" -gt 17 ] \
-        && echo "FAIL: experiment-decisions.md is non-template"
+      [ "$(wc -l < tacit-knowledge.md)" -gt 17 ] \
+        && echo "FAIL: tacit-knowledge.md is non-template"
       ```
 
       If any check fails: `git log --oneline -- <path>` to find
@@ -859,13 +859,13 @@ established, no further P0 work is reachable.
      && echo "FAIL: deriva.py is non-template in the worktree"
    grep -E "^[^#]*rid=\"[0-9]" src/configs/datasets.py \
      && echo "FAIL: datasets.py has RIDs in the worktree"
-   [ "$(wc -l < experiment-decisions.md)" -gt 17 ] \
-     && echo "FAIL: experiment-decisions.md is non-template in the worktree"
+   [ "$(wc -l < tacit-knowledge.md)" -gt 17 ] \
+     && echo "FAIL: tacit-knowledge.md is non-template in the worktree"
    ```
    None of the FAIL lines should print. If any does, something
    between `main`'s tip and the new branch's tip is wrong —
    abort and inspect (`git diff main..e2e-test/<YYYY-MM-DD> -- \
-   src/configs/ experiment-decisions.md` will be empty for a
+   src/configs/ tacit-knowledge.md` will be empty for a
    clean cut).
 
 3. **Verify clean state.** Model template `main` is at the latest
@@ -943,7 +943,7 @@ established, no further P0 work is reachable.
    test either aborts or proceeds with the finding documented and
    the Curator's success criteria adjusted accordingly. User decides.
 
-10. **Seed `experiment-decisions.md`** with the "Bootstrap" entry — a
+10. **Seed `tacit-knowledge.md`** with the "Bootstrap" entry — a
    short note recording what was created in parts A-C, what the
    ground state looks like, the new catalog id, the
    `load-cifar10` invocations, and the sibling versions
@@ -1045,7 +1045,7 @@ itself is broken and that's its own finding worth investigating.
 |---|---|
 | Where does this spec live? | `docs/test-plans/2026-05-20-e2e-multipersona.md` |
 | Where do findings go? | `findings/<persona>/<NN>-<slug>.md` in the shared e2e worktree |
-| Where does the persona handoff happen? | `experiment-decisions.md` (project root, in the shared e2e worktree) |
+| Where does the persona handoff happen? | `tacit-knowledge.md` (project root, in the shared e2e worktree) |
 | Who creates the catalog? | Phase 0 bootstrap (§6), via `load-cifar10` — *before* any persona runs |
 | What's the catalog name? | `e2e-test-<YYYYMMDD>` (chosen at run start) |
 | Cross-channel verification? | Each persona must verify, before declaring arc complete, that direct deriva-ml inspection of the catalog matches what the skills/MCP tools said happened. Disagreement is a finding (§3.4). |

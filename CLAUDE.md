@@ -137,7 +137,7 @@ uv run deriva-ml-run dry_run=true        # dry run (no catalog writes)
 - [CIFAR10.md](CIFAR10.md) — end-to-end CIFAR-10 walkthrough.
 - [Experiments.md](Experiments.md) — experiment configuration
   reference.
-- [experiment-decisions.md](experiment-decisions.md) — design
+- [tacit-knowledge.md](tacit-knowledge.md) — design
   rationale and decision log for the example model.
 
 ## Test plans
