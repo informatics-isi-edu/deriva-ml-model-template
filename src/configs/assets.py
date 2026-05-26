@@ -48,24 +48,39 @@ asset_store([], name="default_asset")
 asset_store([], name="no_assets")
 
 # -----------------------------------------------------------------------------
-# Add per-experiment asset configs below as you generate them.
-# Examples (commented out — uncomment and replace RIDs after running):
+# E2E catalog 18 (e2e-test-20260526), 2026-05-26 — Analyst arc.
+# Prediction probability CSV RIDs from Developer arc (tk-004 / handoff).
+# All 6 viable training executions tested on the same 50-image CSA partition;
+# apples-to-apples comparison across test_acc, AUC, confusion matrices.
 # -----------------------------------------------------------------------------
 
-# asset_store(["<rid_quick>", "<rid_extended>"], name="roc_quick_vs_extended")
-#
-# asset_store(
-#     with_description(
-#         ["<rid_quick>"],
-#         "Pre-trained weights from cifar10_quick.",
-#     ),
-#     name="quick_weights",
-# )
-#
-# asset_store(
-#     with_description(
-#         ["<rid_extended>"],
-#         "Pre-trained weights from cifar10_extended.",
-#     ),
-#     name="extended_weights",
-# )
+# Quick (DYC) vs Extended (E4A) — controlled architecture/epochs comparison
+# on the same CRR training data.
+asset_store(
+    with_description(
+        ["E0A", "E68"],
+        "Predictions from quick (DYC, 3 ep) and extended (E4A, 50 ep) runs on CRR.",
+    ),
+    name="roc_quick_vs_extended",
+)
+
+# Learning-rate sweep (4 children of EA8): lr ∈ {1e-4, 1e-3, 1e-2, 1e-1}.
+asset_store(
+    with_description(
+        ["EE0", "EM0", "ET0", "F00"],
+        "Predictions from lr_sweep children EC0/EJ0/ER0/EY0 (lr=1e-4, 1e-3, 1e-2, 1e-1).",
+    ),
+    name="roc_lr_sweep",
+)
+
+# All 6 viable Developer executions (DYC + E4A + lr_sweep × 4).
+# Use this for an across-the-board ranking; F40 deliberately excluded
+# (degenerate, no predictions — finding developer/01).
+asset_store(
+    with_description(
+        ["E0A", "E68", "EE0", "EM0", "ET0", "F00"],
+        "All 6 viable training-run predictions on CSA test set "
+        "(DYC quick, E4A extended, lr_sweep × 4).",
+    ),
+    name="roc_all_six",
+)

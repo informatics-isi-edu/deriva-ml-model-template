@@ -103,3 +103,11 @@ notebook_config(
     defaults={"assets": "roc_lr_batch_grid", "datasets": "no_datasets"},
     description="ROC analysis: LR x batch size grid (2x2)",
 )
+
+# All six 2026-05-26 e2e training runs combined.
+notebook_config(
+    "roc_all_six",
+    config_class=ROCAnalysisConfig,
+    defaults={"assets": "roc_all_six", "datasets": "no_datasets"},
+    description="ROC analysis: all 6 viable Developer runs (DYC, E4A, EC0, EJ0, ER0, EY0).",
+)
