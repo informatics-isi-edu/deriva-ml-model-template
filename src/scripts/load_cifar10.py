@@ -129,9 +129,14 @@ def main(args: argparse.Namespace | None = None) -> int:
     if phase in ("all", "schema"):
         run_schema_phase(ml, project_name)
         if phase == "schema":
+            # Echo the catalog id in the completion banner so a setup
+            # persona running --phase schema (the most common first-run
+            # invocation) never has to re-run the command just to recover
+            # the id. See 2026-05-26 e2e finding setup/01.
             _print_done(
                 "SCHEMA PHASE COMPLETE",
-                "Re-run with --phase images or --phase datasets.",
+                f"Catalog ID: {catalog_id} — re-run with "
+                f"--catalog-id {catalog_id} --phase images or --phase datasets.",
             )
             return 0
 

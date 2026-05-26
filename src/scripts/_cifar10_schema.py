@@ -39,6 +39,7 @@ import argparse
 import logging
 from typing import Any
 
+from deriva.core import DerivaServer, get_credential
 from deriva.core.ermrest_model import Schema
 from deriva_ml import DerivaML
 from deriva_ml.catalog import set_catalog_provenance
@@ -73,6 +74,43 @@ DATASET_TYPES: list[tuple[str, str, list[str]]] = [
 ]
 
 
+def _lookup_alias_target(hostname: str, alias: str) -> str | None:
+    """Resolve an ermrest alias to its current catalog id, or ``None``.
+
+    Used to detect whether a re-run of ``--create-catalog <alias>`` is
+    going to retarget an existing alias (orphaning the previously-aliased
+    catalog) versus creating the alias for the first time. The actual
+    create/retarget is still performed by
+    :func:`deriva_ml.schema.create_or_retarget_ml_catalog`; this helper
+    only inspects state so the loader can print an accurate banner.
+
+    Any failure to resolve the alias is treated as "alias does not exist"
+    so the banner falls through to the safe "CREATED NEW CATALOG" message
+    — we never want a transient network blip to mis-report a fresh create
+    as a retarget.
+
+    Args:
+        hostname: Server hostname (e.g., ``"localhost"``).
+        alias: Alias name to resolve (typically the project name).
+
+    Returns:
+        The numeric catalog id (as a string) the alias currently points
+        at, or ``None`` if the alias does not exist or cannot be
+        resolved.
+
+    Example:
+        >>> _lookup_alias_target("localhost", "cifar10_demo")  # doctest: +SKIP
+        '18'
+    """
+    try:
+        server = DerivaServer("https", hostname, credentials=get_credential(hostname))
+        existing_alias = server.connect_ermrest_alias(alias)
+        target = existing_alias.alias_target
+    except Exception:
+        return None
+    return str(target) if target is not None else None
+
+
 def create_or_connect_catalog(
     args: argparse.Namespace,
 ) -> tuple[DerivaML, str | int, str]:
@@ -96,6 +134,16 @@ def create_or_connect_catalog(
             f"Creating new catalog on {args.hostname} with project name: {args.create_catalog}"
         )
 
+        # Detect whether the alias already exists *before* calling the
+        # helper, so we can print an accurate banner. The helper always
+        # creates a fresh catalog and (re)points the alias at it — if the
+        # alias resolved before this call, the previous catalog is being
+        # orphaned by the retarget; the banner must say so. See the
+        # deriva-ml docstring on create_or_retarget_ml_catalog and the
+        # 2026-05-26 e2e finding setup/01 for the misleading-message bug
+        # this guards against.
+        prior_catalog_id = _lookup_alias_target(args.hostname, args.create_catalog)
+
         # create_or_retarget_ml_catalog always creates a fresh catalog and
         # points the alias at it. Re-running with the same project name
         # retargets the alias to the new catalog id; the previously-aliased
@@ -111,7 +159,11 @@ def create_or_connect_catalog(
         domain_schema = args.create_catalog
 
         print(f"\n{'=' * 60}")
-        print("  CREATED NEW CATALOG")
+        if prior_catalog_id is None:
+            print("  CREATED NEW CATALOG")
+        else:
+            print("  RETARGETED ALIAS TO NEW CATALOG")
+            print(f"  Previous catalog id (orphaned): {prior_catalog_id}")
         print(f"  Hostname:    {args.hostname}")
         print(f"  Catalog ID:  {catalog_id}")
         print(f"  Alias:       {args.create_catalog}")

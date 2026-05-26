@@ -30,3 +30,26 @@ def test_module_exposes_expected_api():
         run_schema_phase,
     ):
         assert callable(fn)
+
+
+def test_lookup_alias_target_returns_none_on_failure():
+    """Resolution failures must downgrade to None, not raise.
+
+    The helper feeds into the create-catalog banner; a transient
+    network/credential error must never mis-report a fresh create as a
+    retarget. We exercise the failure path by pointing at a hostname
+    that won't resolve — any exception inside the helper is swallowed
+    and ``None`` is returned, which is the "alias does not exist (or
+    we can't tell)" sentinel the caller expects.
+    """
+    from scripts._cifar10_schema import _lookup_alias_target
+
+    # A hostname that won't resolve and an alias name with no real
+    # significance. The broad except inside the helper catches the
+    # DNS / credential / HTTP failure and returns None.
+    assert (
+        _lookup_alias_target(
+            "invalid-hostname-for-test.example.invalid", "no-such-alias"
+        )
+        is None
+    )
