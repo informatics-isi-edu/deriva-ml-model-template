@@ -35,7 +35,7 @@ findings during the run.
    artifact.** Each persona writes to it during their work; the
    next persona reads from it before starting. Gaps in the handoff
    are findings — about the file, the prior persona's writing, or
-   the `maintain-experiment-notes` skill itself.
+   the `capture-tacit-knowledge` skill itself.
 3. **Confirm what the indirect channel (skills + MCP tools) reports
    matches the catalog's actual state.** Each persona's normal work
    uses skills and MCP tools, but before declaring their arc done
@@ -92,7 +92,7 @@ the dataset-lifecycle skill, and document the catalog's shape and
 the curation rationale for downstream personas.
 
 **Primary skills/tools:** `dataset-lifecycle`, `create-feature` (in
-query mode), `manage-vocabulary`, `maintain-experiment-notes`.
+query mode), `manage-vocabulary`, `capture-tacit-knowledge`.
 
 **Success criteria:**
 - Curator has inspected the built-in datasets and confirmed their
@@ -126,7 +126,7 @@ which configs were tried and why.
 **Primary skills/tools:** `execution-lifecycle`, `run-notebook`
 (if a notebook entry-point feels natural), `configure-experiment`,
 `write-hydra-config`, `compare-model-runs` (optional, in a "did my
-new variant beat the baseline?" sense), `maintain-experiment-notes`.
+new variant beat the baseline?" sense), `capture-tacit-knowledge`.
 
 **Success criteria:**
 - At least two distinct training runs completed, with weights and
@@ -162,7 +162,7 @@ the denormalize surface.
 **Primary skills/tools:** `compare-model-runs`, `run-notebook`,
 `execution-lifecycle` (for executing the notebook with provenance),
 `dataset-lifecycle` (specifically the denormalize / wide-table
-section), `maintain-experiment-notes`.
+section), `capture-tacit-knowledge`.
 
 **Success criteria:**
 - A ranking of the developer's executions by at least one metric.
@@ -233,7 +233,7 @@ the user's answer feeds the next sentence the agent writes. In
 autonomous mode the bar is higher (asking interrupts the autonomy
 contract), so default to provenance markers and inquire only when a
 load-bearing claim would otherwise be `[inferred from pattern]` —
-see the `maintain-experiment-notes` skill's "When to inquire"
+see the `capture-tacit-knowledge` skill's "When to inquire"
 section for the budget, threshold, and confirmatory-shape rules.
 
 ### 3.2 Decision rights — what an agent can decide alone
@@ -272,7 +272,7 @@ Each persona, regardless of mode, follows the same arc:
    skills and tools listed in §2 first. Friction at every step
    gets captured (§4).
 4. **Capture rationale.** As decisions are made, persona writes
-   them to `experiment-decisions.md` via `maintain-experiment-notes`.
+   them to `experiment-decisions.md` via `capture-tacit-knowledge`.
    At minimum: one entry per major decision (dataset choice, split
    strategy, model config selection, metric choice).
 5. **Cross-channel verification.** Before declaring the arc done,
@@ -521,7 +521,7 @@ persona is expected to:
 
 - **Read** the file at startup, before doing any work, to inherit
   prior personas' context.
-- **Write** to it via `maintain-experiment-notes` at decision
+- **Write** to it via `capture-tacit-knowledge` at decision
   points throughout their arc.
 - **Append a handoff section** at end-of-arc with explicit
   instructions for the next persona.
