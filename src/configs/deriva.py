@@ -26,7 +26,7 @@ deriva_store(
     DerivaMLConfig,
     name="default_deriva",
     hostname="localhost",
-    catalog_id=0,  # placeholder — set to your catalog ID, or override via --catalog
+    catalog_id=18,  # e2e-test-20260526 — set during P0 bootstrap on 2026-05-26
     use_minid=False,
     zen_meta={
         "description": (
