@@ -21,9 +21,11 @@ keyed by the element RID with no hand-rolled bag-iteration code.
 from __future__ import annotations
 
 import csv
+import random
 import warnings
 from typing import Any
 
+import numpy as np
 import PIL.Image
 import torch
 import torch.nn as nn
@@ -296,10 +298,52 @@ class SimpleCNN(nn.Module):
         return self.fc2(x)
 
 
+def _seed_everything(seed: int) -> None:
+    """Seed every RNG that affects CIFAR-10 CNN training.
+
+    Covers Python's ``random`` (used by ``DatasetBag`` adapters), NumPy
+    (used by the per-image probability arrays in
+    :func:`record_test_predictions` and any downstream sklearn step), and
+    PyTorch's CPU + CUDA RNGs. Also calls
+    ``torch.use_deterministic_algorithms(True, warn_only=True)`` so any
+    nondeterministic op (e.g. some CUDA kernels) issues a warning rather
+    than silently violating reproducibility — ``warn_only`` keeps the run
+    from hard-erroring on ops that don't have a deterministic
+    implementation.
+
+    The training DataLoader gets its own seeded ``torch.Generator`` in
+    :func:`load_cifar10_from_execution`; this function only handles the
+    global RNG state.
+
+    Args:
+        seed: Non-negative integer seed used everywhere.
+
+    Example:
+        >>> _seed_everything(42)
+        >>> import random
+        >>> a = random.random()
+        >>> _seed_everything(42)
+        >>> b = random.random()
+        >>> a == b
+        True
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    # warn_only=True: don't fail on ops without a deterministic kernel
+    # (e.g. some pooling/conv backward passes on CUDA), just surface a
+    # warning. Full determinism on GPU additionally requires the user to
+    # set CUBLAS_WORKSPACE_CONFIG — out of scope for this template.
+    torch.use_deterministic_algorithms(True, warn_only=True)
+
+
 def load_cifar10_from_execution(
     execution: Execution,
     batch_size: int,
     require_training: bool = False,
+    seed: int | None = None,
 ) -> tuple[DataLoader | None, DataLoader | None, DataLoader | None, list[str]]:
     """Build PyTorch DataLoaders directly from execution dataset bags.
 
@@ -329,6 +373,11 @@ def load_cifar10_from_execution(
         require_training: If True, raise ``RuntimeError`` when no bag
             dispatches to the training lane. The training entry point
             ``cifar10_cnn`` sets this; ``test_only`` does not.
+        seed: If provided, drive the training DataLoader's shuffle order
+            from a dedicated ``torch.Generator`` seeded with this value.
+            Test and validation loaders use ``shuffle=False`` and don't
+            need a generator. ``None`` reproduces the pre-seed-knob
+            behavior (PyTorch's default global generator).
 
     Returns:
         Tuple of ``(train_loader, test_loader, val_loader, class_names)``.
@@ -358,12 +407,21 @@ def load_cifar10_from_execution(
     def _handle_training(bag: DatasetBag) -> None:
         nonlocal train_loader
         train_dataset = _build_dataset(bag, missing="skip")
+        # Per-loader generator so the shuffle order is reproducible from
+        # the run's seed. Falls back to PyTorch's default global generator
+        # when seed is None — this preserves the pre-seed-knob behavior
+        # for any caller that hasn't opted in.
+        loader_generator: torch.Generator | None = None
+        if seed is not None:
+            loader_generator = torch.Generator()
+            loader_generator.manual_seed(seed)
         train_loader = DataLoader(
             train_dataset,
             batch_size=batch_size,
             shuffle=True,
             num_workers=0,  # macOS fork() + MPS/GPU threads can deadlock
             collate_fn=_rid_collate,
+            generator=loader_generator,
         )
         print(f"  Training samples: {len(train_dataset)}")
 
@@ -465,6 +523,7 @@ def cifar10_cnn(
     epochs: int = 10,
     batch_size: int = 64,
     weight_decay: float = 0.0,
+    seed: int = 42,
     # Test-only mode
     test_only: bool = False,
     weights_filename: str = "cifar10_cnn_weights.pt",
@@ -498,6 +557,13 @@ def cifar10_cnn(
         epochs: Number of training epochs.
         batch_size: Training batch size.
         weight_decay: L2 regularization weight decay.
+        seed: RNG seed for byte-reproducible training. Drives weight
+            initialization, training shuffle order, and any numpy/random
+            sampling reached during training or prediction recording.
+            Defaults to ``42`` (the same value used by
+            ``cifar10_labeled_split`` in ``_cifar10_datasets.py``). Vary
+            this knob — not the dataset partition seed — to estimate
+            run-to-run variance across PyTorch random states.
         test_only: If True, skip training and only run evaluation on test data.
         weights_filename: Filename of weights asset to load in test_only mode.
         ml_instance: DerivaML instance for catalog access.
@@ -514,8 +580,13 @@ def cifar10_cnn(
     )
     if not test_only:
         print(
-            f"  Training: lr={learning_rate}, epochs={epochs}, batch_size={batch_size}"
+            f"  Training: lr={learning_rate}, epochs={epochs}, batch_size={batch_size}, seed={seed}"
         )
+
+    # Seed RNGs BEFORE building the model so weight init is reproducible.
+    # Order matters: SimpleCNN(...) below uses torch.nn's default init,
+    # which pulls from the current global PyTorch RNG.
+    _seed_everything(seed)
 
     # Determine device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -532,7 +603,7 @@ def cifar10_cnn(
     # Load data directly from execution dataset bags (no restructuring needed)
     print("\nBuilding DataLoaders from execution datasets...")
     train_loader, test_loader, val_loader, class_names = load_cifar10_from_execution(
-        execution, batch_size, require_training=not test_only
+        execution, batch_size, require_training=not test_only, seed=seed
     )
 
     # Test-only mode: load weights and run evaluation
@@ -805,6 +876,7 @@ def cifar10_cnn(
                 "conv2_channels": conv2_channels,
                 "hidden_size": hidden_size,
                 "dropout_rate": dropout_rate,
+                "seed": seed,
             },
             "training_log": training_log,
         },
@@ -830,7 +902,8 @@ def cifar10_cnn(
         f.write(f"  learning_rate: {learning_rate}\n")
         f.write(f"  epochs: {epochs}\n")
         f.write(f"  batch_size: {batch_size}\n")
-        f.write(f"  weight_decay: {weight_decay}\n\n")
+        f.write(f"  weight_decay: {weight_decay}\n")
+        f.write(f"  seed: {seed}\n\n")
         f.write("Training Progress:\n")
         for entry in training_log:
             line = f"  Epoch {entry['epoch']}: train_loss={entry['train_loss']:.4f}, train_acc={entry['train_acc']:.2f}%"

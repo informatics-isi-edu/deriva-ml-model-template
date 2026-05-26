@@ -33,6 +33,11 @@ from models.cifar10_cnn import cifar10_cnn
 
 # Build the base CIFAR-10 CNN configuration.
 # All parameters have sensible defaults for a simple training run.
+# ``seed`` defaults to 42 to match ``cifar10_labeled_split`` in
+# ``src/scripts/_cifar10_datasets.py`` — picking the same canonical value
+# keeps "default everything" runs byte-reproducible without forcing users
+# to think about RNG state. Override with e.g. ``model_config.seed=123``
+# for run-to-run variance estimates.
 Cifar10CNNConfig = builds(
     cifar10_cnn,
     # Architecture parameters
@@ -45,6 +50,7 @@ Cifar10CNNConfig = builds(
     epochs=10,
     batch_size=64,
     weight_decay=0.0,
+    seed=42,
     # Hydra-zen settings
     populate_full_signature=True,
     zen_partial=True,  # Execution context added later
