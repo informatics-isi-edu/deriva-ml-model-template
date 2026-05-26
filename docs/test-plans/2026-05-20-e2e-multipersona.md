@@ -222,6 +222,20 @@ not change mid-run. (If the user is interactively monitoring and
 wants to step away, the choice is to abort and re-launch in
 autonomous mode, not to switch modes inside one run.)
 
+**Agent-initiated inquiry is allowed in either mode.** The mode flag
+governs *checkpoint pauses* (does the orchestrator wait between
+persona arcs?) — it does **not** restrict persona agents from raising
+a short clarifying question to the user *during* an arc when the
+answer would materially improve what gets recorded in
+`experiment-decisions.md` or `findings/`. Inquiry is distinct from a
+checkpoint: it's an inline question that doesn't pause the arc, and
+the user's answer feeds the next sentence the agent writes. In
+autonomous mode the bar is higher (asking interrupts the autonomy
+contract), so default to provenance markers and inquire only when a
+load-bearing claim would otherwise be `[inferred from pattern]` —
+see the `maintain-experiment-notes` skill's "When to inquire"
+section for the budget, threshold, and confirmatory-shape rules.
+
 ### 3.2 Decision rights — what an agent can decide alone
 
 The personas need clear ground rules about when to act and when to
