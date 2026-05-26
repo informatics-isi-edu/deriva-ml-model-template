@@ -79,7 +79,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hostname", required=True)
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--catalog-id")
-    group.add_argument("--create-catalog", metavar="PROJECT_NAME")
+    group.add_argument(
+        "--create-catalog",
+        metavar="PROJECT_NAME",
+        help=(
+            "Create a fresh catalog and point the alias PROJECT_NAME at it. "
+            "Re-running creates a new catalog and retargets the alias; the "
+            "previously-aliased catalog is left in place (delete with "
+            "delete_ermrest_catalog if no longer needed)."
+        ),
+    )
     parser.add_argument("--domain-schema")
     parser.add_argument("--batch-size", type=int, default=500)
     parser.add_argument("--dry-run", action="store_true")

@@ -44,7 +44,7 @@ from deriva_ml import DerivaML
 from deriva_ml.catalog import set_catalog_provenance
 from deriva_ml.core.ermrest import ColumnDefinition
 from deriva_ml.core.enums import BuiltinTypes
-from deriva_ml.schema import create_ml_catalog
+from deriva_ml.schema import create_or_retarget_ml_catalog
 
 from models.cifar10_classes import CIFAR10_CLASSES
 
@@ -96,7 +96,14 @@ def create_or_connect_catalog(
             f"Creating new catalog on {args.hostname} with project name: {args.create_catalog}"
         )
 
-        catalog = create_ml_catalog(args.hostname, args.create_catalog)
+        # create_or_retarget_ml_catalog always creates a fresh catalog and
+        # points the alias at it. Re-running with the same project name
+        # retargets the alias to the new catalog id; the previously-aliased
+        # catalog is left in place (not auto-deleted). See deriva-ml's
+        # create_schema.create_or_retarget_ml_catalog docstring.
+        catalog = create_or_retarget_ml_catalog(
+            args.hostname, args.create_catalog, alias=args.create_catalog
+        )
         model = catalog.getCatalogModel()
         model.create_schema(Schema.define(args.create_catalog))
 
@@ -107,6 +114,7 @@ def create_or_connect_catalog(
         print("  CREATED NEW CATALOG")
         print(f"  Hostname:    {args.hostname}")
         print(f"  Catalog ID:  {catalog_id}")
+        print(f"  Alias:       {args.create_catalog}")
         print(f"  Schema:      {domain_schema}")
         print(f"{'=' * 60}\n")
 
