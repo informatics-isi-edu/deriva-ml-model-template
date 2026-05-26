@@ -16,12 +16,15 @@ schema set up and some Image asset rows uploaded (Stages 1 and
     - ``Training`` (Labeled) — train-prefix images.
     - ``Testing`` (Labeled) — test-prefix images.
     - ``Small_Split`` — parent of Small_Training and Small_Testing.
-    - ``Small_Training`` (Labeled) — 500 random train-prefix images.
-    - ``Small_Testing`` (Labeled) — 500 random test-prefix images.
+    - ``Small_Training`` (Labeled) — up to ``SMALL_TRAIN_SIZE``
+      stratified train-prefix images (capped at the actual pool).
+    - ``Small_Testing`` (Labeled) — up to ``SMALL_TEST_SIZE``
+      stratified test-prefix images (capped at the actual pool).
     - ``Labeled_Split`` (and Training/Testing children) — 80/20
       split of training images via ``split_dataset()``.
     - ``Small_Labeled_Split`` (and Training/Testing children) —
-      400/100 split for small-scale work.
+      fixed 400/100 split when the training pool is >=500, else
+      an 80/20 fallback for small-scale work.
 
 Stage 3 reads back ``Image`` rows from the catalog and uses
 each filename's ``train_`` or ``test_`` prefix to decide which
@@ -54,6 +57,127 @@ SMALL_TEST_SIZE = 500
 # Column to stratify by for class-balanced splits — matches the
 # Image_Classification feature populated in stage 2b.
 STRATIFY_COLUMN = "Execution_Image_Image_Classification.Image_Class"
+
+
+def _build_dataset_descriptions(
+    train_count: int,
+    test_count: int,
+    small_train_count: int,
+    small_test_count: int,
+) -> dict[str, str]:
+    """Build dataset descriptions parameterized by actual member counts.
+
+    The CIFAR-10 loader's ``--num-images`` flag controls how many
+    Toronto source images get pulled into the catalog, so the resulting
+    dataset member counts depend on the run, not on the Toronto
+    defaults (50,000 / 10,000). Hard-coding the Toronto numbers in the
+    descriptions produced misleading metadata at any
+    ``--num-images < default`` (see e2e finding curator/03 from
+    2026-05-26).
+
+    This helper centralises the description text so it can be
+    unit-tested without a live catalog round-trip.
+
+    Args:
+        train_count: Actual count of images in the ``Training`` dataset.
+        test_count: Actual count of images in the ``Testing`` dataset.
+        small_train_count: Actual count of images in ``Small_Training``
+            (``min(SMALL_TRAIN_SIZE, train_count)``).
+        small_test_count: Actual count of images in ``Small_Testing``
+            (``min(SMALL_TEST_SIZE, test_count)``).
+
+    Returns:
+        Mapping with one entry per Toronto-family dataset key. Keys are
+        ``complete``, ``split``, ``training``, ``testing``,
+        ``small_split``, ``small_training``, and ``small_testing``.
+
+    Example:
+        >>> d = _build_dataset_descriptions(
+        ...     train_count=250, test_count=250,
+        ...     small_train_count=250, small_test_count=250,
+        ... )
+        >>> "250 labeled images" in d["training"]
+        True
+    """
+    total = train_count + test_count
+    small_total = small_train_count + small_test_count
+    return {
+        "complete": (
+            f"Complete CIFAR-10 dataset: {total:,} labeled images "
+            f"({train_count:,} train + {test_count:,} test)."
+        ),
+        "split": (
+            "CIFAR-10 dataset split into training and testing subsets "
+            f"({train_count:,} / {test_count:,} images)."
+        ),
+        "training": (f"CIFAR-10 training partition: {train_count:,} labeled images."),
+        "testing": (f"CIFAR-10 testing partition: {test_count:,} labeled images."),
+        "small_split": (
+            f"Small CIFAR-10 dataset split: {small_total:,} stratified "
+            f"images for quick testing "
+            f"({small_train_count:,} / {small_test_count:,} train/test)."
+        ),
+        "small_training": (
+            f"Small CIFAR-10 training set: {small_train_count:,} "
+            "stratified images for quick testing."
+        ),
+        "small_testing": (
+            f"Small CIFAR-10 testing set: {small_test_count:,} "
+            "stratified images for quick testing."
+        ),
+    }
+
+
+def _labeled_split_description(train_count: int) -> str:
+    """Describe the 80/20 stratified labeled split of the training set.
+
+    Args:
+        train_count: Total number of images in the ``Training`` dataset.
+
+    Returns:
+        A description that reports the resulting child partition sizes
+        (80/20 of ``train_count``, rounded down/up to keep the total).
+
+    Example:
+        >>> _labeled_split_description(250)
+        'CIFAR-10 labeled split: stratified 80/20 from training images (200 / 50, seed=42).'
+    """
+    test_n = train_count // 5
+    train_n = train_count - test_n
+    return (
+        "CIFAR-10 labeled split: stratified 80/20 from training images "
+        f"({train_n:,} / {test_n:,}, seed=42)."
+    )
+
+
+def _small_labeled_split_description(train_count: int) -> str:
+    """Describe the Small_Labeled_Split of the training set.
+
+    At ``train_count >= 500`` the loader uses a fixed 400/100 stratified
+    split; otherwise it falls back to an 80/20 fraction.
+
+    Args:
+        train_count: Total number of images in the ``Training`` dataset.
+
+    Returns:
+        A description that reports the resulting partition sizes.
+
+    Example:
+        >>> _small_labeled_split_description(600)
+        'Small CIFAR-10 labeled split: stratified 400/100 from training (seed=42).'
+        >>> _small_labeled_split_description(250)
+        'Small CIFAR-10 labeled split: stratified 80/20 from training (200 / 50, seed=123).'
+    """
+    if train_count >= 500:
+        return (
+            "Small CIFAR-10 labeled split: stratified 400/100 from training (seed=42)."
+        )
+    test_n = train_count // 5
+    train_n = train_count - test_n
+    return (
+        "Small CIFAR-10 labeled split: stratified 80/20 from training "
+        f"({train_n:,} / {test_n:,}, seed=123)."
+    )
 
 
 def stratified_sample_rids(
@@ -208,6 +332,18 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
     )
     config = ExecutionConfiguration(workflow=workflow)
 
+    # Descriptions reflect the actual catalog state for this run (see
+    # finding curator/03, 2026-05-26): hard-coding the Toronto defaults
+    # (50,000 / 10,000) lied at any --num-images < default.
+    small_train_count = min(SMALL_TRAIN_SIZE, len(train_rids))
+    small_test_count = min(SMALL_TEST_SIZE, len(test_rids))
+    descriptions = _build_dataset_descriptions(
+        train_count=len(train_rids),
+        test_count=len(test_rids),
+        small_train_count=small_train_count,
+        small_test_count=small_test_count,
+    )
+
     datasets: dict[str, str] = {}
 
     with ml.create_execution(config) as exe:
@@ -215,25 +351,25 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
 
         # Parent + child datasets
         complete = exe.create_dataset(
-            description="Complete CIFAR-10 dataset with all labeled images",
+            description=descriptions["complete"],
             dataset_types=["Complete", "Labeled"],
         )
         datasets["complete"] = complete.dataset_rid
 
         split = exe.create_dataset(
-            description="CIFAR-10 dataset split into training and testing subsets",
+            description=descriptions["split"],
             dataset_types=["Split"],
         )
         datasets["split"] = split.dataset_rid
 
         training = exe.create_dataset(
-            description="CIFAR-10 training set with 50,000 labeled images",
+            description=descriptions["training"],
             dataset_types=["Training", "Labeled"],
         )
         datasets["training"] = training.dataset_rid
 
         testing = exe.create_dataset(
-            description="CIFAR-10 testing set with 10,000 labeled images",
+            description=descriptions["testing"],
             dataset_types=["Testing", "Labeled"],
         )
         datasets["testing"] = testing.dataset_rid
@@ -243,19 +379,19 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
         )
 
         small_split = exe.create_dataset(
-            description="Small CIFAR-10 dataset split with 1,000 randomly selected images for testing",
+            description=descriptions["small_split"],
             dataset_types=["Split"],
         )
         datasets["small_split"] = small_split.dataset_rid
 
         small_training = exe.create_dataset(
-            description="Small CIFAR-10 training set with 500 labeled images for quick testing",
+            description=descriptions["small_training"],
             dataset_types=["Training", "Labeled"],
         )
         datasets["small_training"] = small_training.dataset_rid
 
         small_testing = exe.create_dataset(
-            description="Small CIFAR-10 testing set with 500 labeled images for quick testing",
+            description=descriptions["small_testing"],
             dataset_types=["Testing", "Labeled"],
         )
         datasets["small_testing"] = small_testing.dataset_rid
@@ -352,7 +488,7 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
                 element_table="Image",
                 include_tables=["Image", "Execution_Image_Image_Classification"],
                 row_per="Execution_Image_Image_Classification",
-                split_description="CIFAR-10 labeled split: stratified 80/20 from training images",
+                split_description=_labeled_split_description(len(train_rids)),
             )
             datasets["labeled_split"] = labeled.split.rid
             datasets["labeled_training"] = labeled.training.rid
@@ -373,7 +509,7 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
                     element_table="Image",
                     include_tables=["Image", "Execution_Image_Image_Classification"],
                     row_per="Execution_Image_Image_Classification",
-                    split_description="Small CIFAR-10 labeled split: stratified 400/100 from training",
+                    split_description=_small_labeled_split_description(len(train_rids)),
                 )
             else:
                 small_labeled = split_dataset(
@@ -388,7 +524,7 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
                     element_table="Image",
                     include_tables=["Image", "Execution_Image_Image_Classification"],
                     row_per="Execution_Image_Image_Classification",
-                    split_description="Small CIFAR-10 labeled split: stratified from training",
+                    split_description=_small_labeled_split_description(len(train_rids)),
                 )
             datasets["small_labeled_split"] = small_labeled.split.rid
             datasets["small_labeled_training"] = small_labeled.training.rid

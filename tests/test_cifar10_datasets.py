@@ -91,3 +91,140 @@ def test_stratified_rid_sample_empty_inputs_return_empty():
 
     assert stratified_sample_rids([], [], sample_size=5, seed=42) == []
     assert stratified_sample_rids(["A"], ["x"], sample_size=0, seed=42) == []
+
+
+# --- _build_dataset_descriptions ------------------------------------------
+# Regression coverage for curator/03 (2026-05-26 e2e): dataset descriptions
+# must report the actual member count for the run, not the Toronto defaults.
+
+
+def test_dataset_descriptions_reflect_num_images_500():
+    """At --num-images 500 the assets phase yields 250 train + 250 test."""
+    from scripts._cifar10_datasets import _build_dataset_descriptions
+
+    d = _build_dataset_descriptions(
+        train_count=250,
+        test_count=250,
+        small_train_count=250,
+        small_test_count=250,
+    )
+
+    assert "250" in d["training"]
+    assert "labeled images" in d["training"]
+    assert "250" in d["testing"]
+    assert "500" in d["complete"]
+    assert "250" in d["complete"]
+    assert "250" in d["small_training"]
+    assert "250" in d["small_testing"]
+    # None of the Toronto-default counts should appear.
+    for desc in d.values():
+        assert "50,000" not in desc
+        assert "10,000" not in desc
+
+
+def test_dataset_descriptions_reflect_num_images_1000():
+    """At --num-images 1000 the assets phase yields 500 train + 500 test.
+
+    The small variant caps at SMALL_*_SIZE = 500, so small_* equals the
+    full train/test pool. The description must still report the actual
+    count, not a Toronto-default placeholder.
+    """
+    from scripts._cifar10_datasets import _build_dataset_descriptions
+
+    d = _build_dataset_descriptions(
+        train_count=500,
+        test_count=500,
+        small_train_count=500,
+        small_test_count=500,
+    )
+
+    assert "500" in d["training"]
+    assert "500" in d["testing"]
+    assert "1,000" in d["complete"]
+    for desc in d.values():
+        assert "50,000" not in desc
+        assert "10,000" not in desc
+
+
+def test_dataset_descriptions_reflect_toronto_default():
+    """At full Toronto sizes the descriptions still use formatted commas."""
+    from scripts._cifar10_datasets import _build_dataset_descriptions
+
+    d = _build_dataset_descriptions(
+        train_count=50_000,
+        test_count=10_000,
+        small_train_count=500,
+        small_test_count=500,
+    )
+
+    assert "50,000" in d["training"]
+    assert "10,000" in d["testing"]
+    assert "60,000" in d["complete"]
+    assert "500" in d["small_training"]
+    assert "500" in d["small_testing"]
+
+
+def test_dataset_descriptions_cover_all_toronto_keys():
+    """Every Toronto-family dataset created in stage 3 has a description."""
+    from scripts._cifar10_datasets import _build_dataset_descriptions
+
+    d = _build_dataset_descriptions(
+        train_count=400,
+        test_count=100,
+        small_train_count=400,
+        small_test_count=100,
+    )
+    expected_keys = {
+        "complete",
+        "split",
+        "training",
+        "testing",
+        "small_split",
+        "small_training",
+        "small_testing",
+    }
+    assert set(d.keys()) == expected_keys
+    # Each description should be non-empty and contain a digit (a count).
+    for key, desc in d.items():
+        assert desc, key
+        assert any(ch.isdigit() for ch in desc), (key, desc)
+
+
+def test_labeled_split_description_reports_partition_sizes():
+    from scripts._cifar10_datasets import _labeled_split_description
+
+    desc = _labeled_split_description(250)
+    assert "200" in desc
+    assert "50" in desc
+    assert "seed=42" in desc
+    assert "80/20" in desc
+
+
+def test_labeled_split_description_full_training_set():
+    from scripts._cifar10_datasets import _labeled_split_description
+
+    desc = _labeled_split_description(50_000)
+    assert "40,000" in desc
+    assert "10,000" in desc
+
+
+def test_small_labeled_split_description_uses_400_100_at_or_above_500():
+    from scripts._cifar10_datasets import _small_labeled_split_description
+
+    desc = _small_labeled_split_description(500)
+    assert "400/100" in desc
+    assert "seed=42" in desc
+
+    desc_big = _small_labeled_split_description(50_000)
+    assert "400/100" in desc_big
+
+
+def test_small_labeled_split_description_falls_back_below_500():
+    from scripts._cifar10_datasets import _small_labeled_split_description
+
+    desc = _small_labeled_split_description(250)
+    # Fallback path is 80/20 of training_count, seed=123.
+    assert "200" in desc
+    assert "50" in desc
+    assert "seed=123" in desc
+    assert "400/100" not in desc
