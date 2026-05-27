@@ -1,4 +1,4 @@
-# End-to-End Multi-Persona Platform Test
+# End-to-End Multi-Persona Platform Scenario
 
 **Author:** Carl Kesselman (with Claude)
 **Date:** 2026-05-20
@@ -7,195 +7,190 @@
 
 ---
 
-## 1. What this test is for
+## 1. What this document is
 
-The DerivaML platform (deriva-ml core library + the two MCP servers +
-the two Claude Code skill plugins + this model template) is meant to
-support several distinct kinds of work, each done by a different kind
-of user. The May 2026 single-agent platform-fitness run (see the prior
-spec) shook out 19 bugs and got the stack into shape; the platform is
-now stable enough that the question shifts from "does it work?" to
-"what's it like to *use* it?"
+This is the **scenario** half of a two-part exercise. It describes
+the work three persona agents do end-to-end on a shared catalog —
+audit and curate, model and train, analyse and report. The
+**evaluation** half — what counts as a finding, what makes a
+good `tacit-knowledge.md`, whether the catalog matches what the
+skills said happened, whether the personas reached for the right
+skills — lives in a separate evaluator rubric (`evaluator.md`)
+that runs *after* the three personas finish. Keeping the two halves
+separate is deliberate: the personas should do their work the way a
+real user would, without writing-to-the-test. The evaluator looks
+cold at the artifacts those personas produced and forms its
+findings independently.
 
-This test answers that question by putting **multiple persona agents**
-through end-to-end workflows on a shared catalog. Each persona acts
-like a real user with real goals; each surfaces friction — anything
-that gets in their way, whether it's a bug, a missing skill, a
-confusing description, a misleading error, or a documentation gap.
-
-The output is a friction map per persona, captured as structured
-findings during the run.
-
-### Primary goals
-
-1. **Characterize the user experience per persona.** Where is the
-   platform smooth? Where is it rough? Friction is the unit of
-   measurement.
-2. **Test `tacit-knowledge.md` as a real knowledge-transfer
-   artifact.** Each persona writes to it during their work; the
-   next persona reads from it before starting. Gaps in the handoff
-   are findings — about the file, the prior persona's writing, or
-   the `capture-tacit-knowledge` skill itself.
-3. **Confirm what the indirect channel (skills + MCP tools) reports
-   matches the catalog's actual state.** Each persona's normal work
-   uses skills and MCP tools, but before declaring their arc done
-   they must verify directly (deriva-ml Python API, raw ermrest)
-   that the catalog actually contains what the tools said happened.
-   Disagreement is a finding — and historically the most valuable
-   kind. See §3.4.
-4. **Surface bugs and rough spots** *as a byproduct* of the personas
-   doing their work. The personas are not bug hunters; they're users.
-   Bugs they hit are findings; bugs they don't hit aren't relevant
-   to this test.
+This scenario document tells each persona what kind of professional
+they are, what they tend to care about, and what they have to work
+with. It does **not** tell them what entries to write where, what
+checks to perform before declaring done, or what their deliverable
+must contain. Those decisions belong to the persona and to whichever
+of their skills naturally fire during the work. Where a skill reaches
+the persona to do something, that's the skill's responsibility — not
+this document's.
 
 ### Non-goals
 
 - Coverage of every model config / experiment combination.
 - Performance benchmarking.
 - Multi-host / cluster scenarios — `localhost` only.
-- Inline bug-fixing during persona arcs. Findings are *captured*, not
-  *resolved*, mid-arc. A separate fix-pass agent (post-run, or
-  between phases in interactive mode) handles resolution.
+- Inline bug-fixing during persona arcs. The evaluator's findings
+  feed a separate fix-pass workflow.
 
 ---
 
 ## 2. Personas
 
-Three personas exercise distinct slices of the platform. Each has a
-**goal** (what they're trying to accomplish), **skills they should
-reach for**, and **success criteria** (how we know they got there).
+Three personas — a Curator, a Modeler, and an Analyst — run
+sequentially against a shared catalog. Each section below describes
+the kind of professional the persona is and what they typically
+care about. It does **not** prescribe what work they do, in what
+order, or what artifacts they produce; those follow from the
+persona's interests and from the catalog state they encounter.
 
 ### 2.1 The Curator
 
-> *"Someone handed me a freshly-bootstrapped catalog of image data.
-> My job is to understand what's in it, make sure the canonical
-> datasets and ground-truth labels are sane, create the dataset
-> variants downstream users will actually train on, and document
-> the catalog's shape for them. I don't train models; I curate."*
+The Curator is a domain or data person who has been handed a
+freshly-bootstrapped catalog. Their orientation is **exploratory
+and skeptical**: they want to *understand what's in the catalog*,
+check that the data makes sense, notice what's missing or
+surprising, and prepare what they find for the people who'll work
+with it next. They aren't doing modelling — they're characterising
+the substrate everyone else will build on.
 
-**Inputs (set up by Phase 0 bootstrap, before this persona starts):**
-- A fresh catalog at `localhost` named `e2e-test-<YYYYMMDD>`.
-- Domain schema populated by `load-cifar10` (Image table, vocabularies,
-  built-in datasets, `Image_Classification` ground-truth feature
-  values for labeled partitions).
-- `src/configs/deriva.py` `default_deriva` already points at the new
-  catalog id; `src/configs/datasets.py` already carries the
-  loader-produced RIDs. Both edits are `[E2E-DROP]` commits on the
-  shared `e2e-test/<YYYY-MM-DD>` branch (see §3.5).
-- `tacit-knowledge.md` has a single "Bootstrap" entry from Phase
-  0 noting what was created and how.
+What a Curator typically wants to know:
 
-**Goal:** Audit the bootstrapped catalog, verify it's in shape for
-downstream personas, then *add value* on top of it: create at least
-one curated dataset variant (a subset or a new split) that exercises
-the dataset-lifecycle skill, and document the catalog's shape and
-the curation rationale for downstream personas.
+- What datasets exist, what's in each, how they relate to each
+  other.
+- Whether the ground-truth labels are sensible (class balance,
+  obvious errors, gaps).
+- Whether the canonical splits (training / testing / labeled /
+  small / etc.) actually represent what their names imply.
+- Whether anything in the catalog needs attention before downstream
+  work — missing data, oddities, things that don't pass a smell
+  test.
+- What downstream personas (the modeler, the analyst) might need
+  that doesn't yet exist.
 
-**Primary skills/tools:** `dataset-lifecycle`, `create-feature` (in
-query mode), `manage-vocabulary`, `capture-tacit-knowledge`.
+The Curator might end up creating a new dataset variant, fixing
+class-balance issues by curating a stratified subset, adding a
+vocabulary term that turns out to be missing, or writing down a
+gotcha they noticed about how a particular partition was
+constructed. They might also conclude the catalog is in good shape
+as-is and leave it alone. Both are reasonable outcomes — the
+exploration itself is the work.
 
-**Success criteria:**
-- Curator has inspected the built-in datasets and confirmed their
-  shape matches what the spec said Phase 0 would produce. Any
-  mismatch is a Phase 0 finding, not a Curator finding.
-- `Image_Classification` ground-truth values are present for the
-  labeled partitions; curator has spot-checked a sample.
-- At least one new dataset (a curated subset or new split) created
-  via `dataset-lifecycle`, with a real motivation that a downstream
-  persona would care about (not "to exercise the API").
-- `tacit-knowledge.md` contains entries explaining: what the
-  curator inherited and what their assessment of it is, what new
-  dataset was created and why, what downstream consumers should know.
-- A "handoff summary" to the next persona at the bottom of the
-  curator's notes: what's ready, what's pinned, gotchas.
+**What they typically reach for:** `dataset-lifecycle` for inspecting
+and creating datasets; `manage-vocabulary` for vocabulary work;
+`browse-erd` and `using-deriva-mcp` for catalog exploration;
+direct deriva-ml Python for checks that don't have a skill route;
+`capture-tacit-knowledge` for recording what they decided and why.
 
----
+### 2.2 The Modeler
 
-### 2.2 The Model Developer
+The Modeler is an ML practitioner who wants to **try things and
+see if they work**. They aren't aiming for a publishable result;
+they're stress-testing the modelling pipeline against the data the
+Curator handed them. They want to confirm that training runs
+launch cleanly, that the pipeline produces something that looks
+like learning, and that the outputs land in the catalog the way
+they should. The platform itself is half the subject of their
+inquiry — does it support a normal modelling workflow without
+getting in the way?
 
-> *"I want to train a model on the curator's data and find out which
-> architecture or hyperparameter setting works best. I care about
-> reproducibility (so I can rerun the winner) and about not breaking
-> anything the analyst depends on downstream."*
+What a Modeler typically wants to know:
 
-**Goal:** Train two model variants against the curator's datasets,
-run a multirun parameter sweep, and leave the resulting executions
-(with predictions and weights) for the analyst to compare. Document
-which configs were tried and why.
+- Which datasets in the catalog are appropriate for training (vs
+  for held-out evaluation, vs unlabeled).
+- Whether the training pipeline runs end-to-end against a real
+  dataset, not just a fixture.
+- What happens when they vary hyperparameters — does the output
+  reflect the variation, or do all runs look the same?
+- Whether the predictions, weights, and training logs that come
+  out the other end land in the catalog with provenance the next
+  persona can use.
+- Whether reproducibility-affecting features (seeds, deterministic
+  ops) actually work the way they're advertised.
 
-**Primary skills/tools:** `execution-lifecycle`, `run-notebook`
-(if a notebook entry-point feels natural), `configure-experiment`,
-`write-hydra-config`, `compare-model-runs` (optional, in a "did my
-new variant beat the baseline?" sense), `capture-tacit-knowledge`.
+The Modeler will typically run a few training executions with
+different parameters — a smoke run on a small dataset, a couple
+more substantive runs on bigger ones — and confirm that the
+results differentiate. They might add an experiment config if the
+existing ones don't cover what they want to try. They aren't
+trying to win a benchmark; they're trying to convince themselves
+the pipeline works.
 
-**Success criteria:**
-- At least two distinct training runs completed, with weights and
-  predictions uploaded as `Execution_Asset` rows.
-- At least one multirun (e.g., `quick_vs_extended` or `lr_sweep`)
-  completed; parent and child executions correctly linked.
-- New experiment config registered in `src/configs/experiments.py`
-  (on the shared e2e branch) if the developer needed one beyond the
-  existing ones.
-- `tacit-knowledge.md` contains entries explaining: which
-  variants and why, which seed strategy, what success looked like.
-- Handoff summary: which executions the analyst should look at,
-  which prediction assets feed the analysis, any caveats.
-
----
+**What they typically reach for:** `execution-lifecycle` and
+`configure-experiment` for running training; `write-hydra-config`
+for new variants; `model-development-workflow` and `new-model` for
+broader orientation; `compare-model-runs` to look at what they
+produced; `capture-tacit-knowledge` for decisions.
 
 ### 2.3 The Analyst
 
-> *"I want to look at the model developer's runs and figure out
-> which one's best, build a few plots, and write up the result. I
-> don't train models; I consume them."*
+The Analyst is a domain expert. They want to **understand what
+the models are doing** — what they got right, what they got
+wrong, where the confusion lies. They aren't an ML person; they
+aren't going to retrain anything. They consume what the Modeler
+produced and form a judgment about it. Their natural mode is
+inquiry: form a hypothesis, look at the data, see if the picture
+matches the hypothesis, repeat.
 
-**Goal:** Compare the developer's training runs (ranking by
-accuracy / AUC / etc.), produce an analysis notebook (ROC, confusion
-matrix, or similar), and write a short markdown report a reviewer
-could read in 5 minutes. As part of the analysis, exercise the
-**dataset denormalize** path (`deriva_ml_denormalize_dataset` via
-MCP and/or the corresponding deriva-ml Python API) to materialise a
-wide/flat view of the dataset the developer trained on and use it
-to drive the comparison — this is the test's deliberate exercise of
-the denormalize surface.
+What an Analyst typically wants to know:
 
-**Primary skills/tools:** `compare-model-runs`, `run-notebook`,
-`execution-lifecycle` (for executing the notebook with provenance),
-`dataset-lifecycle` (specifically the denormalize / wide-table
-section), `capture-tacit-knowledge`.
+- Which of the Modeler's runs performed best, and by what measure
+  (top-1 accuracy isn't always the right question).
+- Where the models are confident and right, where they're
+  confident and wrong, where they're uncertain.
+- How performance varies across classes (or other domain-relevant
+  partitions).
+- Whether the model's behavior matches their domain intuitions —
+  classes that should be confusable being confused, classes that
+  shouldn't be confused being separable.
+- Whether the catalog supports the kind of analysis they want to
+  do, or whether the data shape gets in the way.
 
-**Success criteria:**
-- A ranking of the developer's executions by at least one metric.
-- One executed analysis notebook (e.g., `notebooks/roc_analysis.ipynb`
-  or a new one) producing plot asset(s) + a summary CSV asset.
-- **Denormalize exercised end-to-end:** the persona calls
-  `deriva_ml_denormalize_dataset` (or the deriva-ml Python equivalent)
-  on at least one of the developer's training/evaluation datasets,
-  uses the resulting wide table in the analysis (e.g., to join
-  predictions to ground-truth labels for ROC / confusion matrix),
-  and verifies the wide table's shape and contents against the
-  direct-channel dataset members (§3.4) — row count, label
-  distribution, and join keys must match. Disagreement is a finding
-  filed against the denormalize surface specifically.
-- A short markdown report under `docs/reports/` (created by this
-  persona) summarizing the comparison, what's in the catalog now,
-  any caveats, AND a brief subsection on the denormalize experience
-  — was it discoverable, did the output match expectations, did the
-  column naming / element-type ordering match what the persona
-  needed for the analysis.
-- `tacit-knowledge.md` contains entries explaining: which runs
-  were compared and why, what metric was chosen, how surprises
-  (if any) were interpreted, and the rationale for the denormalize
-  call (which element type was treated as the "root", why).
+The Analyst will typically rank the Modeler's runs by one or more
+metrics, build some pictures (ROC curves, confusion matrices,
+per-class breakdowns), and write up what they found in a form a
+non-ML collaborator could read. They'll touch the data the Modeler
+trained on directly — joining predictions to ground truth,
+denormalizing dataset members for plotting, reconciling what the
+catalog says against what the prediction files say.
 
----
+**What they typically reach for:** `compare-model-runs` for
+ranking; `run-notebook` for analysis pipelines; `execution-lifecycle`
+for capturing the analysis with provenance; `dataset-lifecycle`
+(especially the denormalize section) for materialising joined
+views; `capture-tacit-knowledge` for interpretive judgments.
+
+### 2.4 Inputs the Curator inherits
+
+Phase 0 (§5) bootstraps a fresh catalog before the Curator starts.
+At that point:
+
+- A catalog exists at `localhost` named `e2e-test-<YYYYMMDD>`.
+- The domain schema is populated by `load-cifar10` (Image table,
+  vocabularies including `Image_Class`, the built-in datasets,
+  `Image_Classification` ground-truth feature values for labeled
+  partitions).
+- `src/configs/deriva.py` in the e2e worktree has `default_deriva`
+  pointing at the new catalog id (an `[E2E-DROP]` commit).
+- `src/configs/datasets.py` carries the loader-produced RIDs
+  (also `[E2E-DROP]`).
+- `tacit-knowledge.md` has a single "Bootstrap" entry recording
+  what was created and the sibling versions of the platform stack.
 
 ### Persona ordering and dependencies
 
-Curator → Developer → Analyst. Strictly sequential. The developer
-cannot start until the curator has produced datasets the developer
-can train on; the analyst cannot start until the developer has
-produced runs the analyst can compare.
+Curator → Modeler → Analyst. Strictly sequential. The Modeler
+cannot start until the Curator has finished (the Modeler may want
+to use datasets the Curator created); the Analyst cannot start
+until the Modeler has finished (the Analyst needs runs to compare).
+Each persona inherits whatever state the previous one left in the
+catalog, in the worktree, and in `tacit-knowledge.md`.
 
 ---
 
@@ -211,11 +206,10 @@ the next persona. This mode is for first-time runs and runs where
 the user wants to verify the personas are behaving sensibly.
 
 **Autonomous mode.** All three personas run their arcs back-to-back
-without checkpoints. At the end, the orchestrator produces a
-consolidated friction map and findings report for the user to read.
-This mode is for repeat runs once the user trusts the personas, for
-overnight execution, or for batch comparison of multiple platform
-versions.
+without checkpoints. The evaluator runs after the personas finish
+and produces its evaluation report. This mode is for repeat runs
+once the user trusts the personas, for overnight execution, or for
+batch comparison of multiple platform versions.
 
 The mode is selected once, at session start, by the user. It does
 not change mid-run. (If the user is interactively monitoring and
@@ -246,115 +240,35 @@ escalate. The rules differ by mode.
 | Which existing dataset/feature/config to use for an obvious task | Decide | Decide |
 | Reasonable parameter choice (split ratio, learning rate, epoch count) within typical range | Checkpoint summary | Decide; note the choice in `tacit-knowledge.md` |
 | Pick between two equally-valid skills | Checkpoint summary | Decide |
-| Create a new dataset / feature / config not strictly required by the success criteria | Checkpoint, ask first | Decide if it serves the persona's goal; note rationale |
+| Create a new dataset / feature / config that serves the persona's professional motivation | Checkpoint, ask first | Decide if it serves the persona's interests; note rationale |
 | Destructive operations (delete catalog, drop schema, force-push, rm -rf working dir) | Always ask | Always ask — abort the persona if blocked |
 | Schema migrations (new column, FK change, drop table) | Always ask | Always ask — abort the persona if blocked |
 | Fix a bug encountered mid-arc | Always ask | Never. File a finding and route around if possible. |
-| Skip a success criterion because the platform won't support it | Checkpoint, explain | File a finding with "blocked at" detail; proceed if possible |
+| Stop the arc because the platform won't support what the persona wants | Checkpoint, explain | File a finding; produce whatever summary the persona can with what's been done |
 
 The bright lines: destructive operations and schema migrations always
 require explicit user authorization, regardless of mode. Persona
 agents never fix bugs mid-arc — that's a separate fix-pass.
 
-### 3.3 Per-persona workflow
+### 3.3 What a persona's arc looks like
 
-Each persona, regardless of mode, follows the same arc:
+Each persona enters their arc with three pieces of context: the
+project's `CLAUDE.md`, their own section of this document, and the
+state of the worktree (including `tacit-knowledge.md`) the previous
+persona left behind. Beyond that, the persona's *skills* drive
+how they work — what to consult before acting, when to record
+something, how to verify their assumptions. This document
+deliberately does not prescribe a fixed checklist; an arc that
+goes well looks like a competent professional doing their job,
+not like a script being executed.
 
-1. **Read context.** Project's CLAUDE.md, the persona's own brief in
-   this spec, and (critically) `tacit-knowledge.md` if it
-   exists. The previous persona's handoff is in that file. Surface
-   any handoff gaps as findings immediately.
-2. **State the plan.** Persona writes a 5-bullet plan of what they're
-   about to do. In interactive mode, this is shown to the user as
-   the entry checkpoint. In autonomous mode, it's the persona's
-   own first decision-log entry.
-3. **Do the work.** Persona executes their plan, reaching for the
-   skills and tools listed in §2 first. Friction at every step
-   gets captured (§4).
-4. **Capture rationale.** As decisions are made, persona writes
-   them to `tacit-knowledge.md` via `capture-tacit-knowledge`.
-   At minimum: one entry per major decision (dataset choice, split
-   strategy, model config selection, metric choice).
-5. **Cross-channel verification.** Before declaring the arc done,
-   the persona verifies that the catalog *actually* contains what
-   their skills and tools *said* they created. See §3.4. Disagreement
-   is a finding.
-6. **Write handoff.** At end of arc, persona appends a "handoff
-   summary" section to `tacit-knowledge.md` named for the
-   next persona, describing what's ready and what's pinned. This
-   is the explicit knowledge-transfer step.
-7. **Produce arc summary.** A markdown summary of what was done,
-   findings raised, decisions captured, and success-criteria
-   status (which met, which not, why). In interactive mode this
-   is the exit checkpoint; in autonomous mode it feeds the final
-   consolidated report.
+At the end of their arc, the persona produces a short summary of
+what they did. Whatever else they leave behind (catalog state,
+config edits, files in the worktree, entries in
+`tacit-knowledge.md`, files under `findings/`) is determined by
+the work, not by this document.
 
-### 3.4 Cross-channel verification
-
-The single most important methodology principle from the May 2026
-run: **the catalog's actual state and what the skills/MCP tools
-report about its state must agree.** When they don't agree, it's
-usually the skill/MCP side that's wrong, and the discrepancy is
-exactly the kind of friction this test exists to surface.
-
-Each persona's normal work uses the **indirect channel** — skills
-and MCP tools, the surface a real user would see. Before declaring
-their arc done, the persona must check the **direct channel** —
-deriva-ml Python API or raw ermrest, with no skill or MCP indirection
-— and confirm the catalog state matches the indirect channel's
-reports.
-
-**What to verify** depends on the persona; minimums:
-
-- **Curator:** every dataset they reported creating, every dataset
-  type assigned, every member added — visible via `ml.find_datasets`,
-  `ml.lookup_dataset(rid).list_dataset_members()`, with counts
-  matching what the skill said.
-- **Developer:** every Execution row reported as committed, every
-  Execution_Asset uploaded — visible via `ml.find_executions`,
-  `ml.lookup_execution(rid).list_assets()`, with counts and statuses
-  matching.
-- **Analyst:** every plot, summary CSV, or notebook asset reported
-  uploaded — visible via direct asset queries. Predictions used in
-  the analysis match what the developer's executions actually
-  produced (cross-persona check). **Denormalize output verified
-  against direct channel:** the wide table returned by
-  `deriva_ml_denormalize_dataset` is reconciled against the dataset's
-  members as seen via `ml.lookup_dataset(rid).list_dataset_members()`
-  and the underlying feature-value query — row count, the set of
-  member RIDs, and label distribution must agree. If the wide table
-  is missing rows, has duplicated rows, or carries labels that don't
-  match the ground-truth feature values, that's a high-severity
-  finding against the denormalize surface, filed even if the
-  analyst's downstream deliverables happen to still be producible.
-
-**What to do on disagreement:**
-
-1. Write a finding (§4) at the exact point of disagreement. Capture
-   both the skill/MCP report AND the direct-channel query result
-   verbatim.
-2. If the persona's deliverable depends on the catalog actually being
-   in the state the skill reported, the persona is blocked. Note in
-   the arc summary which success criterion failed and why.
-3. If the deliverable is unaffected (the discrepancy is in metadata
-   the persona didn't need), proceed; the finding documents the
-   discrepancy for the fix-pass.
-
-**Tie-breaker channel:** if direct (deriva-ml Python) and indirect
-(MCP / skill) disagree and `deriva-ml` is in both code paths (which
-it is for most catalog operations), the persona should drop one
-level lower and use raw `ermrest_catalog.get(...)` or
-`DatapathBuilder` with no deriva-ml helpers to break the tie. This
-identifies whether the bug is in deriva-ml itself or in the layer
-above it.
-
-This step is mandatory regardless of mode. Personas don't get to
-skip it because they "feel good about the work" — the May 2026 run
-caught multiple high-severity bugs precisely because the indirect
-channel reported success while the direct channel revealed silent
-failures.
-
-### 3.5 Multi-agent setup
+### 3.4 Multi-agent setup
 
 Each persona runs as its own Agent-tool invocation with a dedicated
 system prompt drawn from §2. **All three personas share a single git
@@ -369,7 +283,7 @@ git worktree add ../deriva-ml-model-template-e2e \
     -b e2e-test/<YYYY-MM-DD>
 ```
 
-This worktree is created in Phase 0 step 0 (§6.2) before any persona
+This worktree is created in Phase 0 step 0 (§5.2) before any persona
 runs. All persona work — config edits, `tacit-knowledge.md`
 appends, findings under `findings/<persona>/`, helper scripts,
 commits with `[E2E-DROP]` markers — happens here, on this branch.
@@ -382,164 +296,65 @@ per-persona worktrees was much higher: each persona's
 `tacit-knowledge.md`, config edits, and findings lived in a
 separate working tree, and the orchestrator had to merge between
 branches to carry the handoff forward. That made the knowledge-
-transfer artifact — the whole point of §5 — implicit in the
-orchestrator's merging discipline rather than naturally available to
-the next persona. Single-worktree restores the handoff as the
+transfer artifact (`tacit-knowledge.md`) implicit in the
+orchestrator's merging discipline rather than naturally available
+to the next persona. Single-worktree restores the handoff as the
 straightforward chain it should be: persona N writes,
 persona N+1 reads from the same files.
 
 **Concurrent variant (future).** If a future run ever wants to
-exercise concurrent personas (e.g., Curator on labeling while
-Developer trains on an earlier dataset version), reintroduce
+exercise concurrent personas (e.g., Curator on labeling while the
+Modeler trains on an earlier dataset version), reintroduce
 per-persona worktrees and treat each merge as an explicit
 synchronization point. Out of scope here.
 
 ---
 
-## 4. Capturing findings
+## 4. Findings written during an arc
 
-A finding is *anything that got in the persona's way*: a bug, a
-broken skill route, a missing tool, a confusing error message, a doc
-gap, a workflow that felt longer than it needed to be. Findings are
-captured immediately at point of friction, not retrospectively.
+When something gets in a persona's way mid-work — a bug, a confusing
+error message, a tool that wasn't there, a skill that didn't route
+to what they needed, an output that doesn't match what they
+expected — the persona may record it as a finding so the
+evaluator (and the eventual fix-pass) can find it later. Personas
+don't have to file findings; they're an in-arc convenience for
+"this is friction I want to remember without losing my place."
+The evaluator's pass will discover findings of its own based on
+the artifacts the personas produce, and is the authoritative
+source for what counts as a finding for the overall run.
 
-### 4.1 File layout
-
-Findings live in `findings/<persona>/<NN>-<slug>.md` in the persona's
-worktree. Numbered for ordering; slugged for readability.
-
-```
-findings/
-  curator/
-    01-dataset-types-not-discoverable.md
-    02-add-term-error-message-cryptic.md
-  developer/
-    01-multirun-parent-execution-dry-run-warning.md
-  analyst/
-    01-compare-model-runs-no-prediction-csv-pattern.md
-```
-
-### 4.2 Finding-file template
+Findings live at `findings/<persona>/<NN>-<slug>.md` in the
+shared worktree. The format is short and free-form — enough for
+the evaluator (or a fix-pass agent) to know what happened and
+where to look:
 
 ```markdown
 # <Short title>
 
-**Persona:** Curator | Developer | Analyst
+**Persona:** Curator | Modeler | Analyst
 **Phase:** <what the persona was trying to do>
-**Severity:** Blocker | High | Medium | Low | Polish
-**Component:** <repo or skill name, if known>
 
 ## What happened
 
-<Free-form: what the persona was doing, what they expected,
-what actually occurred. Include exact commands, error messages,
-file paths, RIDs.>
+<What was being attempted; what was expected; what actually
+occurred. Include exact commands, error messages, file paths,
+RIDs as available.>
 
 ## Reproduction
 
-<Exact steps. RIDs are catalog-specific; describe how a future
-reader would re-find the relevant entity (e.g., "the latest
-training execution against dataset cifar10_labeled_training_localhost").>
+<Steps a future reader could use to re-create the situation.>
 
-## Impact on the persona's work
+## Notes
 
-<Did it block them? Did they route around it? How much time did
-it cost? Did it affect a deliverable in §2 success criteria?>
-
-## Suggested classification
-
-<Bug | Missing feature | Skill issue (triggering / routing /
-behavior / missing) | Doc gap | Tool gap | Polish.>
-
-## Notes for the fix-pass
-
-<Anything you noticed about scope, related code, things to verify
-when fixing. Keep brief.>
+<Anything else relevant — workarounds tried, related code, hunches
+about scope. Keep brief.>
 ```
 
-### 4.3 Promotion to GitHub issues
+Severity and component classifications are *not* set by the
+persona — those are evaluation judgments, made later by the
+evaluator (with full context across personas) or the fix-pass.
 
-Persona agents do not file GitHub issues during the run. The local
-files are the durable artifact. After the run, the user reviews the
-findings collection and decides which to promote to issues, which
-to fix inline, and which to discard.
-
-The fix-pass agent (or the user) handles promotion. A small helper
-script under `scripts/` could automate the promotion step but is
-not part of this spec.
-
-### 4.4 The friction map (final report)
-
-After all three personas finish, the orchestrator produces a
-consolidated report at `findings/REPORT-<YYYY-MM-DD>.md`:
-
-```markdown
-# E2E Multi-Persona Friction Map — <date>
-
-## Per-persona summary
-
-### Curator (N findings)
-- 01-<slug>: <one-line summary> — <severity>
-- ...
-
-### Developer (N findings)
-- ...
-
-### Analyst (N findings)
-- ...
-
-## Patterns
-
-<Cross-cutting observations: friction the same persona hit twice,
-friction multiple personas hit in different forms, places the
-platform asked the user to know something they shouldn't have to.>
-
-## Handoff quality
-
-<Did each persona understand the prior persona's intent from
-`tacit-knowledge.md`? Specific examples of what carried over
-well vs. what was unclear.>
-
-## Success-criteria scorecard
-
-| Persona | Criteria met | Criteria missed | Notes |
-|---|---|---|---|
-
-## Recommended action
-
-<Suggestion to the user: which findings look like bug-fixes,
-which look like design discussions, which look like one-line doc
-fixes. Not prescriptive — the user decides.>
-```
-
----
-
-## 5. `tacit-knowledge.md` as test artifact
-
-The file lives in the project root and is tracked in git. Each
-persona is expected to:
-
-- **Read** the file at startup, before doing any work, to inherit
-  prior personas' context.
-- **Write** to it via `capture-tacit-knowledge` at decision
-  points throughout their arc.
-- **Append a handoff section** at end-of-arc with explicit
-  instructions for the next persona.
-
-The "did the handoff work?" assessment is part of each persona's
-arc summary. Specific questions to answer in the summary:
-
-- What entries did the prior persona write that I actually used?
-- What was unclear or missing?
-- Did I have to go to the catalog to recover context that should
-  have been in the file?
-- Was there ambiguity I had to resolve by guessing?
-
-Gaps go in `findings/` like any other friction.
-
----
-
-## 6. Bootstrap (Phase 0)
+## 5. Bootstrap (Phase 0)
 
 Run once, by the orchestrator (or the user) before launching the
 curator. None of this is persona work — this is infrastructure setup
@@ -568,19 +383,19 @@ spec calls it out so future readers don't relitigate the question:
   — treat Phase 0 as "the data-engineering hat" the same human (or
   a different one) wears before the curation hat goes on. The
   abstraction holds either way.
-- **Bootstrap failure modes are still surfaced.** Phase 0 step 4
-  runs the same cross-channel verification (§3.4) that personas do.
-  If `load-cifar10` breaks the catalog or the MCP surface lies about
-  what it produced, the discrepancy is a Phase 0 finding before any
-  persona starts.
+- **Bootstrap failure modes are still surfaced.** Phase 0 part E
+  (step 9 below) is a fail-fast sanity gate on the catalog the
+  bootstrap produced. If `load-cifar10` breaks the catalog or
+  produces obviously wrong state, that's a Phase 0 finding before
+  any persona starts.
 
-### 6.1 What Phase 0 produces (the persona inputs)
+### 5.1 What Phase 0 produces (the persona inputs)
 
 By the time Phase 0 is done, the following is true:
 
 - A single shared git worktree exists at
   `../deriva-ml-model-template-e2e` on branch `e2e-test/<YYYY-MM-DD>`,
-  cut from `main` of this repo. All persona work happens here (§3.5).
+  cut from `main` of this repo. All persona work happens here (§3.4).
 - A fresh catalog exists at `localhost` named `e2e-test-<YYYYMMDD>`.
 - The catalog has the cifar10 domain schema populated by `load-cifar10`
   (Image table, vocabularies including `Image_Class`, the built-in
@@ -598,15 +413,15 @@ By the time Phase 0 is done, the following is true:
   at run-start.
 - The dev-localhost MCP container is rebuilt against the current
   sibling versions and Claude Code's MCP server connection is
-  restarted. The **OAuth flow is completed as step 1 of §6.2** —
+  restarted. The **OAuth flow is completed as step 1 of §5.2** —
   it's the first action Phase 0 performs so the orchestrator fails
   fast if auth can't be established. `claude mcp list` should
   report `dev-localhost: ... - ✓ Connected` after step 1, and the
   `deriva_ml_*` tools should be callable. Without this, Phase 0
-  part E (cross-channel verification) and every persona's indirect-
-  channel work is blocked.
+  part E (catalog sanity check) and every persona's MCP-tool work
+  is blocked.
 
-### 6.2 Phase 0 steps (in order)
+### 5.2 Phase 0 steps (in order)
 
 **Preflight first, then authentication.** P0 begins with a sync
 audit (step 0) and an MCP-auth handshake (step 1). Both are fail-
@@ -637,8 +452,8 @@ established, no further P0 work is reachable.
       its origin/main.
 
    b. **Stale local branches.** For each repo above, list local
-      branches whose upstream is `gone` (merged + branch deleted
-      upstream). They are harmless but accumulate, and
+      branches whose upstream is `gone` (PR was merged + branch
+      deleted on GitHub). They are harmless but accumulate, and
       `git fetch --prune` will mark them:
       ```
       git -C <repo> for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads \
@@ -670,7 +485,7 @@ established, no further P0 work is reachable.
       drift" — a stand-in for "is the venv on the new contract".
 
    e. **Claude Code plugin freshness.** The skill docs that
-      Curator / Developer / Analyst will lean on must match the
+      Curator / Modeler / Analyst will lean on must match the
       API they describe.
       ```
       claude plugin list | grep deriva
@@ -922,28 +737,21 @@ established, no further P0 work is reachable.
    session against the new catalog. Commit on
    `e2e-test/<YYYY-MM-DD>` with an `[E2E-DROP]` marker.
 
-9. **Phase 0 part E — validate (cross-channel).** Run the same
-   cross-channel verification (§3.4) that personas run — both via
-   direct deriva-ml inspection AND via the MCP tools
-   (`deriva_ml_list_datasets`, `deriva_ml_list_features`,
-   `deriva_ml_list_vocabulary_terms`). The two channels must agree
-   on:
-   - Catalog exists at the expected name + the numeric catalog id
-     recorded in `deriva.py`.
-   - The expected dataset hierarchy is present, and the RIDs recorded
-     in `datasets.py` resolve via both channels.
-   - `Image_Classification` feature values are populated for the
-     labeled partitions (count > 0).
-   - Class distribution is balanced across all 10 CIFAR-10 classes
-     (the loader should produce a uniform 10-class distribution; if
-     the run sees a bird+ship-dominant skew, the loader has
-     regressed and that's a Phase 0 finding against `load-cifar10`).
+9. **Phase 0 part E — confirm the catalog is usable.** Quick
+   sanity check that the bootstrap produced what was expected:
+   the catalog exists at the expected name and id; the canonical
+   dataset hierarchy is reachable; `Image_Classification` feature
+   values are populated for the labeled partitions; the class
+   distribution is approximately uniform across the 10 CIFAR-10
+   classes (a severely skewed distribution — e.g., bird+ship
+   dominating — indicates the loader has regressed).
 
-   If the two channels disagree, that's a Phase 0 finding (likely an
-   MCP-side bug, given the May 2026 pattern). If either channel
-   fails any of the listed checks, that's also a Phase 0 finding. The
-   test either aborts or proceeds with the finding documented and
-   the Curator's success criteria adjusted accordingly. User decides.
+   This is a fail-fast gate on bootstrap, not the parity check the
+   evaluator will eventually run on the personas' work. If
+   something at this step looks badly wrong (no datasets, all-null
+   features, severe class skew), file a Phase 0 finding against
+   `load-cifar10` and stop — running personas against a broken
+   catalog learns nothing.
 
 10. **Seed `tacit-knowledge.md`** with the "Bootstrap" entry — a
    short note recording what was created in parts A-C, what the
@@ -960,12 +768,12 @@ established, no further P0 work is reachable.
 12. **Mode selection.** Ask the user — interactive or autonomous?
     (See §3.1.)
 
-13. **Launch curator** in the shared e2e worktree with their persona
-    prompt. (Developer and Analyst launch later, sequentially, in the
-    *same* worktree — there are no per-persona worktrees in this
-    revision of the spec; see §3.5.)
+13. **Launch the Curator** in the shared e2e worktree with their
+    persona prompt. (Modeler and Analyst launch later, sequentially,
+    in the *same* worktree — there are no per-persona worktrees in
+    this revision of the document; see §3.4.)
 
-### 6.3 What's *not* Phase 0
+### 5.3 What's *not* Phase 0
 
 - `load-cifar10` itself. The script lives in `src/scripts/load_cifar10.py`
   and is treated as platform code, not test code. If it breaks during
@@ -979,64 +787,48 @@ established, no further P0 work is reachable.
 
 ---
 
-## 7. Wrap-up
+## 6. Wrap-up (mechanical)
 
-When all three personas finish (or the user aborts):
+When the three personas have finished, the scenario is over. The
+**evaluator** (a separate agent, driven by its own rubric document)
+runs next: it reads the e2e branch, the catalog state, the
+`tacit-knowledge.md` chain, the `findings/` directory, and any
+reports the personas produced, and writes its own evaluation under
+`docs/reports/<YYYY-MM-DD>-evaluation.md`. This scenario document
+ends at "three personas done"; the evaluation is its own pass.
 
-1. **Verify final state of catalog** via direct deriva-ml inspection.
-   Persona findings + the catalog state should agree on what's in
-   the catalog.
-2. **Generate the friction map** at `findings/REPORT-<YYYY-MM-DD>.md`
-   per §4.4.
-3. **User reviews and decides** per-finding disposition:
-   - Promote to GitHub issue (and which repo).
-   - Fix inline now via a fix-pass agent.
-   - Defer (note in the report).
-   - Discard (note in the report with reason).
-4. **Cherry-pick genuine template fixes** from the shared
+The mechanical wrap-up of the worktree happens after the
+evaluator's pass, not before it — the evaluator needs the artifacts
+in place to do its work:
+
+1. **Cherry-pick template fixes** from the shared
    `e2e-test/<YYYY-MM-DD>` branch back to `main` of the model
-   template. Test-mutation commits (anything tagged `[E2E-DROP]`,
-   e.g., the `deriva.py` and `datasets.py` repointing commits) are
-   dropped, not cherry-picked.
-5. **Worktree teardown** with explicit user confirmation: `git
+   template. `[E2E-DROP]`-tagged commits (the catalog-id and RID
+   repointing commits) stay on the branch; only genuine improvements
+   to the template get picked back.
+2. **Push or archive the e2e branch** for the historical record.
+3. **Worktree teardown** with explicit user confirmation: `git
    worktree remove ../deriva-ml-model-template-e2e`, then
    `git branch -D e2e-test/<YYYY-MM-DD>`.
-6. **Catalog disposition** with explicit user confirmation: delete
+4. **Catalog disposition** with explicit user confirmation: delete
    or preserve.
 
 ---
 
-## 8. What the report should let the user do
+## 7. Things this document deliberately does not cover
 
-The friction map at the end of the run is the test's actual output.
-A successful run is one where the user can answer, in 15 minutes of
-reading the report:
-
-- For each persona, what was the worst thing about being them?
-- Which findings are technical bugs and which are platform design
-  questions?
-- What's the smallest set of changes that would meaningfully
-  improve the next user's experience?
-- Is the platform ready for an external user, or do we have more
-  rough-edge polishing first?
-
-If the report doesn't support those questions, the test format
-itself is broken and that's its own finding worth investigating.
-
----
-
-## 9. Things that are NOT in this spec
-
-- **What specific findings will look like.** That's the test's
-  output. Pre-specifying would defeat the purpose.
-- **How to fix any specific bug.** The fix-pass is a separate
-  workflow.
+- **Evaluation criteria and findings classification.** Those belong
+  to the evaluator's rubric (`evaluator.md`), not the scenario.
+- **What a "good" run looks like.** Same — that's the evaluator's
+  call. The scenario produces artifacts; the evaluator judges them.
+- **Inline bug-fixing.** Findings flow to a fix-pass after the
+  evaluator's report lands.
 - **Multi-host scenarios, performance benchmarks, schema migration
   exercises.** Out of scope; tracked elsewhere.
-- **Concurrent persona execution.** Sequential only for this run.
-  Concurrent execution is a future variant once the sequential
-  baseline reveals the cross-persona friction patterns.
-- **Persona other than the three named.** Platform integrator,
+- **Concurrent persona execution.** Sequential only. Concurrent
+  execution is a future variant once the sequential baseline
+  reveals the cross-persona friction patterns.
+- **Personas other than the three named.** Platform integrator,
   reviewer, ops, etc. — each is worth a run, but not this run.
 
 ---
@@ -1045,13 +837,13 @@ itself is broken and that's its own finding worth investigating.
 
 | Question | Answer |
 |---|---|
-| Where does this spec live? | `docs/test-plans/2026-05-20-e2e-multipersona.md` |
-| Where do findings go? | `findings/<persona>/<NN>-<slug>.md` in the shared e2e worktree |
-| Where does the persona handoff happen? | `tacit-knowledge.md` (project root, in the shared e2e worktree) |
-| Who creates the catalog? | Phase 0 bootstrap (§6), via `load-cifar10` — *before* any persona runs |
+| Where does this scenario live? | `docs/test-plans/2026-05-20-e2e-multipersona.md` |
+| Where does the evaluator's rubric live? | `docs/test-plans/evaluator.md` (separate document) |
+| Where do persona findings go? | `findings/<persona>/<NN>-<slug>.md` in the shared e2e worktree |
+| Where does the persona-to-persona handoff happen? | `tacit-knowledge.md` (project root, in the shared e2e worktree) |
+| Who creates the catalog? | Phase 0 bootstrap (§5), via `load-cifar10` — *before* any persona runs |
 | What's the catalog name? | `e2e-test-<YYYYMMDD>` (chosen at run start) |
-| Cross-channel verification? | Each persona must verify, before declaring arc complete, that direct deriva-ml inspection of the catalog matches what the skills/MCP tools said happened. Disagreement is a finding (§3.4). |
-| Mode flag? | Interactive (checkpoint per persona) or Autonomous (final report only); chosen at start |
-| Branch / worktree? | Single shared branch `e2e-test/<YYYY-MM-DD>` cut from `main`, checked out at `../deriva-ml-model-template-e2e`. All three personas run sequentially in this one worktree (see §3.5). |
-| Final artifact? | `findings/REPORT-<YYYY-MM-DD>.md` |
-| Who fixes bugs surfaced? | A fix-pass agent (post-run or between phases in interactive). Personas never fix mid-arc. |
+| Mode flag? | Interactive (checkpoint per persona) or Autonomous; chosen at start |
+| Branch / worktree? | Single shared branch `e2e-test/<YYYY-MM-DD>` cut from `main`, checked out at `../deriva-ml-model-template-e2e`. All three personas run sequentially in this one worktree (see §3.4). |
+| Who writes the evaluation? | The evaluator agent, after the personas finish. Output: `docs/reports/<YYYY-MM-DD>-evaluation.md`. |
+| Who fixes bugs surfaced? | A fix-pass agent, after the evaluator's report. Personas never fix mid-arc. |
