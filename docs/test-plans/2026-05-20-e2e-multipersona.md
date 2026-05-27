@@ -637,8 +637,8 @@ established, no further P0 work is reachable.
       its origin/main.
 
    b. **Stale local branches.** For each repo above, list local
-      branches whose upstream is `gone` (PR was merged + branch
-      deleted on GitHub). They are harmless but accumulate, and
+      branches whose upstream is `gone` (merged + branch deleted
+      upstream). They are harmless but accumulate, and
       `git fetch --prune` will mark them:
       ```
       git -C <repo> for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads \
@@ -935,7 +935,9 @@ established, no further P0 work is reachable.
    - `Image_Classification` feature values are populated for the
      labeled partitions (count > 0).
    - Class distribution is balanced across all 10 CIFAR-10 classes
-     (post-#15 fix; not the pre-fix bird+ship-dominant skew).
+     (the loader should produce a uniform 10-class distribution; if
+     the run sees a bird+ship-dominant skew, the loader has
+     regressed and that's a Phase 0 finding against `load-cifar10`).
 
    If the two channels disagree, that's a Phase 0 finding (likely an
    MCP-side bug, given the May 2026 pattern). If either channel
