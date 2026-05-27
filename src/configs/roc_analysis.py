@@ -103,3 +103,14 @@ notebook_config(
     defaults={"assets": "roc_lr_batch_grid", "datasets": "no_datasets"},
     description="ROC analysis: LR x batch size grid (2x2)",
 )
+
+# Analyst e2e 2026-05-27c — Y1M (TX0 only) vs YDT (TX0+XEM Validation).
+notebook_config(
+    "roc_analyst_2026_05_27c",
+    config_class=ROCAnalysisConfig,
+    defaults={"assets": "analyst_2026_05_27c", "datasets": "no_datasets"},
+    description=(
+        "Analyst e2e 2026-05-27c: ROC + confusion matrices for Y1M (TX0 only) "
+        "vs YDT (TX0+XEM Validation lane). 10-epoch predictions on TXJ."
+    ),
+)

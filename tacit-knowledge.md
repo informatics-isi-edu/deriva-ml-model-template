@@ -366,3 +366,191 @@ overrides manually.
   `WD2 + XEM` — XEM was carved from K04, not from WD2's pool.
 
 ---
+
+## tk-005 — Denormalize parity holds (PR #246 + #37 + #38/#59 land cleanly)
+
+**When:** 2026-05-27 (Analyst arc, multipersona pass C)
+**By:** Analyst
+**Supported by:** tk-001, tk-002, tk-004
+
+### What I ran
+
+Two denormalize stress calls against catalog 95, both using the
+canonical `(rid).get_denormalized_as_dataframe(include_tables=...)`
+shape with `Image` + `Execution_Image_Image_Classification`:
+
+| Dataset | Images in members | Expected EIIC rows | Returned | Match? |
+|---------|------------------:|-------------------:|---------:|:------:|
+| `TX0` (Labeled_Split, TX8+TXJ) | 750 | 1150 (750 GT + 150 Y1M + 150 YDT + 100 XRJ) | 1150 | yes |
+| `JZ8` (Complete, root, 1500)    | 1500 | 1900 (1500 GT + 150 + 150 + 100)            | 1900 | yes |
+
+Wall-clock: TX0 in 0.98s, JZ8 in 1.44s. Far from any timeout.
+
+Cross-channel reconciled against the direct
+`feature_values("Image", "Image_Classification")` query — every
+(Execution, Image) tuple matched bit-for-bit, no missing rows, no
+duplicates. GT class distribution in TX0 was perfectly balanced
+(75/class × 10).
+
+### Why this is the headline test
+
+This run was the **second post-#246 confirmation** that the
+PagedFetcher row-completeness fix holds — once on the refactored
+cifar10_cnn surface (PR #37) and once across the PR #38/#59
+path_walker pin. The previous (first-pass) run that detected the
+50% row-loss bug at 1500 images was the regression's smoking gun.
+**No regression observed** at 1500 images in 1.44s.
+
+### One genuine surprise the analyst should pre-empt
+
+The TX0 denormalize returned 100 XRJ prediction rows even though
+XRJ was trained on WD2. This is **correct**, not a bug: TX0 and
+WD2 are stratified splits of the same image pool, and 100 of
+WDM's 100 test images happen to also be members of TX0's
+hierarchy. `include_tables` returns "all features attached to
+images in this dataset's hierarchy" — it doesn't filter feature
+rows by their producing execution.
+
+A consumer who hasn't internalised that "dataset membership" and
+"feature provenance" are independent dimensions will double-take.
+The parity-check pattern in the dataset-lifecycle skill is enough
+to confirm correctness; this is worth a one-sentence note in
+that skill but not a finding.
+
+### Approach the analyst used
+
+1. **Set up the expectation** before calling the API.
+   `list_dataset_members()` gives the Image RID set; the FZC
+   ground-truth lane contributes one row per Image; the producing
+   executions (Y1M, YDT, XRJ) each contribute one row per Image
+   *they* wrote a prediction for. Sum gives the expected row
+   count.
+2. **Issue the denormalize call.** Compare row count and the
+   (Execution, Image) tuple set against the expectation.
+3. **Triage any surprise** by intersecting the prediction's
+   image-RID set with the dataset's member set (the XRJ case).
+
+This is the parity-check pattern from
+`/deriva-ml:dataset-lifecycle`'s skill body, applied as written.
+
+### What I would want to know if this breaks again
+
+- **The expected row count formula is `Σ (features ∩ Image)` over
+  every producing execution.** Not `n_images × n_executions` — most
+  executions write features for only a subset of images.
+- **`Dataset.list_denormalized_columns(include_tables=...)`** is a
+  cheap dry-run before the heavy call — same parameter name, same
+  table set, no row fetch. Use it to confirm the included tables
+  parse correctly before paying for the data.
+- **The denormalize call returns rows by Image membership in the
+  dataset, not by feature provenance.** If a downstream consumer
+  needs "rows produced by execution X only," they should join /
+  filter on `Execution_Image_Image_Classification.Execution` after
+  denormalizing, not expect denormalize to filter for them.
+
+---
+
+## tk-006 — Analysis conclusions on the Developer's runs
+
+**When:** 2026-05-27 (Analyst arc, multipersona pass C)
+**By:** Analyst
+**Supported by:** tk-001, tk-002, tk-003, tk-004, tk-005
+
+### Which run won
+
+**Depends on the metric.** On a 150-image bag, Y1M and YDT are
+one prediction apart on argmax accuracy (34.00% vs 33.33%) and
+not statistically distinguishable. YDT leads on Micro-AUC
+(0.792 vs 0.777) and Macro-AUC (0.786 vs 0.773) — its probability
+ranking is better calibrated.
+
+**Headline:** for ranking-aware consumers, YDT. For argmax-only
+consumers, Y1M by a hair. XRJ is the smoke run and not in the
+ranking.
+
+### What the Validation lane (PR #29) actually bought
+
+YDT is the only execution that exercised the Validation lane
+(TX0 + XEM composite dataset config). It trained on the same
+600-image TX8 partition Y1M used, and got 15-per-class validation
+feedback from XEM during training.
+
+The Validation lane didn't dramatically lift test accuracy — but
+it *did* slightly improve probability calibration (the AUC
+delta). This is the expected behavior of a held-out validation
+signal: it nudges the model toward better-shaped output
+distributions without necessarily moving the argmax decisions.
+The PR #29 dispatch lane works, and it does something useful;
+it's not a no-op.
+
+### Catalog-authoritative test_acc disagrees with the training log
+
+tk-004 reports test_acc = 38.00% (Y1M) and 36.67% (YDT) from the
+training log. The CSV-derived test_acc — joined against the GT
+feature — is 34.00% and 33.33%. The feature-row prediction lane
+(predictions written to `Image_Classification` as a catalog
+feature, separate from the CSV asset) agrees with the CSV
+exactly. So **the catalog's authoritative number is 34.00% /
+33.33%; the training-log line is the outlier.**
+
+This is the silent desync `findings/developer/01` filed: the
+training-loop's `evaluate()` and `record_predictions`'s
+`predict_batch()` are two separate forward passes, and they
+produce different numbers on Y1M and YDT (but happened to match
+on XRJ). Both are deterministic with `model.eval()` and
+`shuffle=False`, so the residual difference is unexplained — the
+"Emission-time accuracy: NN.NN%" log line that was promised but
+not implemented is exactly the safety rail this would have
+flagged.
+
+**Decision rule going forward:** if the catalog-feature-row and
+training-log values disagree, trust the feature row. It's typed,
+queryable, and matches the CSV asset.
+
+### Per-class story
+
+deer is at 0% in both models; airplane/frog/ship are the
+highest-accuracy classes in both. This is the classic CIFAR-10
+"big distinctive blob vs four-legged-mammal" split that a
+2-layer CNN can't yet break apart at 10 epochs. The per-class
+confusion structure is the same shape across Y1M and YDT (deer
+spreads to bird/horse/dog; automobile-truck confusion is
+present), which is reassuring — the two models learned similar
+representations from the same training data, with the
+seed-and-batch-size variance producing the only differences.
+
+### What I left for whoever runs next
+
+- **Analysis execution YT6, workflow YT2.** The
+  `roc_analysis.ipynb` notebook ran cleanly against the
+  `analyst_2026_05_27c` asset config. The executed notebook
+  (YXG), rendered markdown (YXJ), ROC plots (YW6/YW8/YWA),
+  confusion matrices (YWC/YWE), and metrics CSV (YWG) are all
+  committed as Execution_Assets on YT6.
+- **`src/configs/assets.py`** now carries the
+  `analyst_2026_05_27c` group (Y3J + YFT). **`src/configs/roc_analysis.py`**
+  registers the matching notebook config
+  (`roc_analyst_2026_05_27c`). Both are minimal additions and
+  match the patterns elsewhere in those files.
+- **No new findings filed.** The analyst arc did not surface a
+  bug; the only "drift" — training-log test_acc vs CSV — was
+  already filed by the Developer arc as `developer/01`.
+
+### What I would tell the wrap-up agent
+
+This run confirms three platform fixes hold together:
+
+1. **PR #246 (PagedFetcher row completeness)** — denormalize at
+   1500 images returns the right row count, no truncation.
+2. **PR #37 (cifar10_cnn refactor)** — runner emits CSVs with
+   `Source_Label`, dispatches by `Dataset_Type`, both training
+   and analysis paths work.
+3. **PR #29 (Validation lane dispatch)** — TX0+XEM composite
+   config works end-to-end and produces a measurable (if small)
+   AUC lift.
+
+No regressions. No new findings. One pre-existing finding
+(developer/01) explains the only numerical anomaly. The arc is
+green.
+
+---

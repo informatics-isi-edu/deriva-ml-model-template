@@ -48,6 +48,24 @@ asset_store([], name="default_asset")
 asset_store([], name="no_assets")
 
 # -----------------------------------------------------------------------------
+# 2026-05-27c Analyst arc — Y1M + YDT comparison (TX0 test predictions).
+#
+# Y3J = prediction_probabilities.csv from Y1M (TX0, seed=123, 10 epochs).
+# YFT = prediction_probabilities.csv from YDT (TX0+XEM, seed=7, 10 epochs).
+# Both produce 150-row predictions on the TXJ test bag, so they are
+# directly comparable.
+# -----------------------------------------------------------------------------
+asset_store(
+    with_description(
+        ["Y3J", "YFT"],
+        "Analyst e2e 2026-05-27c: Y1M (TX0 only, seed=123) vs YDT "
+        "(TX0+XEM Validation lane, seed=7). Both 10-epoch test predictions "
+        "on TXJ (150 images).",
+    ),
+    name="analyst_2026_05_27c",
+)
+
+# -----------------------------------------------------------------------------
 # Add per-experiment asset configs below as you generate them.
 # Examples (commented out — uncomment and replace RIDs after running):
 # -----------------------------------------------------------------------------
