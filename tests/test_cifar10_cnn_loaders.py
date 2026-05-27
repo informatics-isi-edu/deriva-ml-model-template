@@ -41,3 +41,58 @@ def test_empty_datasets_raises_clear_error() -> None:
     assert "no input datasets" in message.lower() or "empty" in message.lower(), (
         f"Expected the error to mention empty/no datasets; got: {message!r}"
     )
+
+
+# -----------------------------------------------------------------------------
+# Tests for the role-dispatch table introduced in Task 5.
+# These reference _LANE_CONFIGS and _make_loader, which are added in Task 5;
+# the tests live here so they run as part of the same test file.
+# -----------------------------------------------------------------------------
+
+from unittest.mock import MagicMock
+
+from models.cifar10_cnn import (
+    _LANE_CONFIGS,
+    _ROLE_TRAINING,
+    _ROLE_TESTING,
+    _ROLE_VALIDATION,
+    _make_loader,
+)
+
+
+def test_lane_configs_cover_all_leaf_roles() -> None:
+    """Every leaf role has an entry in the dispatch table.
+
+    If a new role is added in _LEAF_ROLES without a matching
+    _LANE_CONFIGS entry, _make_loader will KeyError at runtime.
+    Catch that early.
+    """
+    assert _ROLE_TRAINING in _LANE_CONFIGS
+    assert _ROLE_TESTING in _LANE_CONFIGS
+    assert _ROLE_VALIDATION in _LANE_CONFIGS
+
+
+def test_training_lane_shuffles_with_seeded_generator() -> None:
+    """Training lane: shuffle=True, seeded generator when seed is set."""
+    cfg = _LANE_CONFIGS[_ROLE_TRAINING]
+    assert cfg.shuffle is True
+    assert cfg.use_seeded_generator is True
+    assert cfg.missing == "skip"
+
+
+def test_testing_lane_keeps_unlabeled_rows_no_shuffle() -> None:
+    """Testing lane: missing='unknown' so we keep unlabeled rows for
+    later prediction recording; shuffle=False; no seeded generator."""
+    cfg = _LANE_CONFIGS[_ROLE_TESTING]
+    assert cfg.shuffle is False
+    assert cfg.use_seeded_generator is False
+    assert cfg.missing == "unknown"
+
+
+def test_validation_lane_skips_unlabeled_no_shuffle() -> None:
+    """Validation lane: shuffle=False, skip unlabeled (loss/accuracy
+    are undefined for unlabeled rows). No seeded generator."""
+    cfg = _LANE_CONFIGS[_ROLE_VALIDATION]
+    assert cfg.shuffle is False
+    assert cfg.use_seeded_generator is False
+    assert cfg.missing == "skip"
