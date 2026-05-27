@@ -144,6 +144,22 @@ datasets_store(
     name="cifar10_small_labeled_testing",
 )
 
+# Composite: TX0 labeled Split (Train+Test) + XEM Validation slice.
+# Developer arc (2026-05-27c) — exercises the PR #29 Validation dispatch
+# lane: build_loaders flattens TX0 to TX8 (Training) + TXJ (Testing),
+# then routes XEM to the val_loader so the training loop reports
+# per-epoch val_loss / val_acc. K04 stays untouched as held-out test.
+datasets_store(
+    with_description(
+        [
+            DatasetSpecConfig(rid="TX0", version="0.1.0.post1.dev1"),
+            DatasetSpecConfig(rid="XEM", version="0.1.0.post1.dev1"),
+        ],
+        "Labeled split (TX0: 600/150) + Validation slice (XEM: 150).",
+    ),
+    name="cifar10_train_with_validation",
+)
+
 # Curator-added Validation slice (carved from K04, seed=20260527).
 # 150 stratified labeled images (15/class) for early stopping / model
 # selection during training; leaves K04 untouched as the held-out test

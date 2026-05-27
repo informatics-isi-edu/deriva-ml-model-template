@@ -198,3 +198,171 @@ class, stratified deterministically via
   override: `datasets=cifar10_validation_150`.
 
 ---
+
+## tk-004 — Developer arc: three executions, refactored runner exercised
+
+**When:** 2026-05-27 (Developer arc, multipersona pass C)
+**By:** Developer
+**Supported by:** tk-001, tk-002, tk-003
+
+### What was run
+
+Three training executions against catalog 95 via
+`uv run deriva-ml-run` (with `DERIVA_ML_ALLOW_DIRTY=true`). All
+three drove the refactored `cifar10_cnn.py` (PR #37): one
+`build_loaders` dispatch + one shared `evaluate()` + one
+`predict_batch` → `record_predictions` split with `Source_Label`
+tagging.
+
+### Ranked executions (by final-epoch test_acc)
+
+| Rank | Exec RID | Dataset(s) in       | Model variant                   | seed | epochs | train_acc | test_acc | val_acc | Source_Label CSV |
+|-----:|----------|---------------------|---------------------------------|-----:|-------:|----------:|---------:|--------:|------------------|
+| 1    | **Y1M**  | TX0 (Labeled_Split) | cifar10_quick (32/64, bs=128)   | 123  | 10     | 58.83%    | **38.00%** | —     | `epoch_10`       |
+| 2    | **YDT**  | TX0 + XEM (Val)     | default_model (32/64, bs=64)    | 7    | 10     | 65.00%    | 36.67%   | 34.67%  | `epoch_10`       |
+| 3    | **XRJ**  | WD2 (Small_Labeled) | cifar10_quick (32/64, bs=128)   | 42   | 3      | 30.25%    | 24.00%   | —       | `epoch_3`        |
+
+All three uploaded weights (`cifar10_cnn_weights.pt`),
+`training_log.txt`, and `prediction_probabilities.csv` as
+`Execution_Asset` rows. CSV `Source_Label` populated correctly
+(`epoch_3` / `epoch_10`). Status = `Uploaded` for all three.
+Workflow RID = `XRC` (shared, registered by deriva-ml-run on first
+call).
+
+Wall-clock training time: XRJ ~1s, Y1M ~4s, YDT ~4s. None
+approached the 5-minute finding threshold.
+
+### Decision log
+
+**Datasets — why each:**
+
+- **WD2 (Run 1 / XRJ):** smoke test. Quickest possible loop to
+  confirm the refactored runner builds DataLoaders, trains, saves,
+  and uploads. WD2 is also the `default_dataset` per tk-001, so
+  this exercises the zero-override path.
+- **TX0 (Run 2 / Y1M):** mid-data scale (600 train / 150 test).
+  Larger than WD2 (more signal for the test_acc ranking) but still
+  fast (~4s wall-clock). Picked TX0 over JZJ because it's
+  stratified + labeled on both sides — clean comparison with Run 3.
+- **TX0 + XEM (Run 3 / YDT):** exercise the PR #29 Validation
+  dispatch lane (D01). XEM was newly carved by the Curator (tk-003)
+  precisely for this. Composed via a new
+  `cifar10_train_with_validation` Hydra config in
+  `src/configs/datasets.py` — DatasetSpecConfig accepts a list,
+  so `[TX0, XEM]` in one entry produces a single execution with
+  both bags. `build_loaders` then flattens TX0 (Split) to
+  TX8+TXJ and routes XEM to the val_loader. Per-epoch `val_acc`
+  surfaces in the training log (it does NOT drive save-best —
+  that's intentional per the refactor's design).
+
+**Hyperparameters — why these:**
+
+- Three different seeds (42 / 123 / 7) to confirm the
+  byte-reproducibility surface added by D02 — same model, three
+  different RNG trajectories, three different test_acc curves.
+  Not designed to pick a winner — designed to confirm seeds
+  actually do something.
+- Held architecture nearly constant (32/64 channels). Y1M and YDT
+  differ only in dataset, seed, batch size, and the val_loader
+  presence — that lets the analyst attribute differences to the
+  Validation lane vs the underlying model.
+- Epoch budget: 3 for the smoke, 10 for the two main runs.
+  Sufficient to see test_acc lift off the floor (24% → 38% across
+  the three runs) without burning analyst's time. Longer runs are
+  available via `+experiment=cifar10_extended` but unnecessary
+  for the platform-stress goal.
+
+**Composite dataset config (Run 3):**
+
+`cifar10_train_with_validation` in `src/configs/datasets.py` is
+the multi-input pattern from tk-003. Single store entry, two
+DatasetSpecConfigs in the list. `build_loaders` does the rest.
+This is the canonical shape for any future "train + val" run on
+this catalog.
+
+### Cross-channel verification
+
+Verified MCP ↔ direct deriva-ml agree on every claim:
+
+| Check | MCP | Direct | Match |
+|---|---|---|---|
+| XRJ status | Uploaded | Uploaded | yes |
+| Y1M status | Uploaded | Uploaded | yes |
+| YDT status | Uploaded | Uploaded | yes |
+| XRJ inputs | WD2 | [WD2] | yes |
+| Y1M inputs | TX0 | [TX0] | yes |
+| YDT inputs | TX0 + XEM | [TX0, XEM] | yes |
+| YDT lineage parents (data-flow) | XDM (XEM creator) + TW0 (TX0 splitter) | n/a | resource-only |
+| Asset count / exec | 9 (3 Execution_Asset + 6 metadata) | 9 | yes |
+| Source_Label in CSV | n/a (not surfaced in MCP) | populated (`epoch_3`/`epoch_10`) | yes |
+
+MCP `deriva_ml_get_lineage(YDT, depth=1)` cleanly walked back to
+both XDM (the Curator's XEM-creator execution) and TW0 (the
+upstream TX0 splitter) — provenance graph is intact.
+
+### Findings
+
+One filed: `findings/developer/01-emission-time-accuracy-missing.md`
+— low severity, cosmetic. The "Emission-time accuracy: NN.NN%"
+log line the prompt promised does not actually exist in the
+refactored runner; `record_predictions` only prints
+`Recorded N predictions (source_label='epoch_K')`. The analyst
+can still reconcile test_acc vs CSV by joining the CSV's
+`Predicted_Class` against `Image_Classification` ground truth,
+but the in-process redundant channel is absent.
+
+Tangential observation (in the finding, not a separate file):
+YDT's execution `description` reads `"Simple model run"` because
+it used a bare Hydra-override chain instead of `+experiment=...`.
+Not a bug — just a documentation gap for users who compose
+overrides manually.
+
+### Handoff to the Analyst
+
+- **Focus on Y1M and YDT** for the ranking + ROC. XRJ is the
+  smoke run and its 3-epoch curve sits well below the others; it's
+  in the table for completeness, not for headline ranking.
+- **For denormalize exercise**, the cleanest targets are:
+  - **TX0** (the Y1M input + half of YDT's input) — labeled
+    Split, 600+150 images, two dataset_types (Training, Testing,
+    Labeled).
+  - **JZ8** (the 1500-image root) — biggest, exercises PR #246
+    PagedFetcher completeness fix at 1500 rows.
+- **Source_Label is in the CSV, NOT in the catalog feature row.**
+  `record_predictions` documents this explicitly
+  (`cifar10_cnn.py:407-408`): "The catalog feature row does NOT
+  carry Source_Label (would require a schema migration); CSV is
+  the source-label surface." If the analyst needs to filter
+  prediction features by run, they should use the CSV asset, not
+  the `Image_Classification` feature table.
+- **YDT's val_acc trajectory** is in the training_log.txt
+  (asset YFR). It rises 22% → 34.67% over 10 epochs — modest but
+  reflects the small (150-image) Validation set. The analyst
+  doesn't need to do anything with this; it's there as evidence
+  the Validation lane works.
+- **For ROC notebook execution**, both Y1M and YDT produce 150-row
+  test predictions on the same TXJ test bag (Y1M directly, YDT
+  via TX0's child). Their CSVs are directly comparable.
+- **Wire executions into `src/configs/assets.py`?** No — for this
+  arc the analyst pulls assets via `lookup_execution(rid)`
+  rather than asset_RID, so wiring is unnecessary. Could be
+  added if a follow-up notebook needs to test-load weights.
+
+### What I would want to know if this arc breaks again
+
+- **PR #29 dispatch lane** absolutely works — TX0 (Split) +
+  XEM (Validation) coexist cleanly. The only ambiguity is
+  *which* test bag wins when a Split contains a Testing partition
+  AND a separate Validation bag is also present; build_loaders
+  picks the first matching role per bag, and Split-children
+  inherit their parent's order. For (TX0=[TX8 Train, TXJ Test],
+  XEM=Val) the test_loader is TXJ. Good.
+- **The composite dataset config pattern is `[Spec1, Spec2]` in
+  one `datasets_store` entry**, not two separate entries. This
+  isn't obvious from the existing examples — every other entry
+  has a 1-element list.
+- **WD2 has no Validation child by design** (Small_Labeled_Split
+  was carved before XEM existed). Don't try to compose
+  `WD2 + XEM` — XEM was carved from K04, not from WD2's pool.
+
+---
