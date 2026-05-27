@@ -19,15 +19,21 @@ That work has three natural phases, each owned by one persona:
 2. **Build models against the data.** Try alternative model
    variants and alternative parameterisations. Confirm that the
    modelling pipeline produces a result the next person can use.
-3. **Evaluate what the models actually do.** Look at predictions
-   against ground truth, build pictures (ROC curves, confusion
-   matrices, per-class breakdowns), and summarise the findings in a
-   form a non-ML collaborator can read.
+3. **Evaluate what the models actually do.** Compare predictions
+   against ground truth — which means assembling a single wide
+   table of *image plus ground-truth label plus what each model
+   said about it* before any picture can be drawn. Build pictures
+   from that table (ROC curves, confusion matrices, per-class
+   breakdowns), and summarise the findings in a form a non-ML
+   collaborator can read.
 
 The team's collective deliverable is a coherent story: this is
 what was in the catalog, this is what we built on top of it, this
-is what it tells us. Each persona owns one phase; together they
-produce the story end-to-end.
+is what it tells us. The story includes the joined wide table
+itself — a domain expert reading the analysis should be able to
+open it in any tool and re-derive any number in the report. Each
+persona owns one phase; together they produce the story
+end-to-end.
 
 ### What this document is
 
