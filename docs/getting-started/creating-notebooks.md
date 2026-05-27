@@ -79,7 +79,12 @@ notebook_config(
 
 ## Step 2: Create the Notebook
 
-Create your notebook in the `notebooks/` directory. Use the `run_notebook()` API for initialization:
+Create your notebook in the `notebooks/` directory. Name the file to match the
+config you registered in step 1 — DerivaML's convention is that notebook
+`X.ipynb` uses `notebook_config("X", ...)`. For this example, save the notebook
+as `notebooks/my_analysis.ipynb`.
+
+Use the `run_notebook()` API for initialization:
 
 ```python
 # Cell 1: Initialization
@@ -90,7 +95,12 @@ from deriva_ml.execution import run_notebook
 # - Connecting to DerivaML
 # - Creating workflow and execution
 # - Downloading input datasets
-ml, execution, config = run_notebook("my_analysis")
+#
+# run_notebook() derives the config name from the notebook's filename
+# (my_analysis.ipynb -> "my_analysis"). Pass an explicit name (e.g.
+# run_notebook("my_analysis")) only when the notebook filename and
+# config name diverge.
+ml, execution, config = run_notebook()
 
 # Access configuration values
 print(f"Threshold: {config.threshold}")

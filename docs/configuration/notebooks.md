@@ -25,7 +25,7 @@ Initializes a notebook with a single call:
 ```python
 from deriva_ml.execution import run_notebook
 
-ml, execution, config = run_notebook("my_notebook")
+ml, execution, config = run_notebook()
 ```
 
 This single call:
@@ -35,6 +35,22 @@ This single call:
 4. Creates a workflow and execution
 5. Downloads input datasets
 6. Returns ready-to-use objects
+
+#### Config name resolution
+
+By DerivaML convention, notebook `X.ipynb` uses the config registered as
+`notebook_config("X", ...)`. `run_notebook()` derives the config name from
+the calling notebook's filename, so you don't pass it explicitly. The
+explicit form is still supported and is the right fallback when the notebook
+filename and config name diverge:
+
+```python
+# Equivalent to run_notebook() when called from my_notebook.ipynb.
+ml, execution, config = run_notebook("my_notebook")
+```
+
+Pass an explicit name only when the notebook filename and config name
+disagree (rare).
 
 ## Configuration Patterns
 
@@ -89,10 +105,10 @@ notebook_config(
 ### Using the Configuration
 
 ```python
-# In your notebook
+# In your notebook (my_analysis.ipynb)
 from deriva_ml.execution import run_notebook
 
-ml, execution, config = run_notebook("my_analysis")
+ml, execution, config = run_notebook()
 
 # Access standard fields (from BaseConfig)
 print(f"Connected to: {config.deriva_ml.hostname}")
@@ -167,10 +183,9 @@ notebook_config(
 # notebooks/roc_analysis.ipynb - Cell 1
 from deriva_ml.execution import run_notebook
 
-ml, execution, config = run_notebook(
-    "roc_analysis",
-    workflow_type="ROC Analysis Notebook"
-)
+# Config name is auto-derived from the notebook filename
+# (roc_analysis.ipynb -> "roc_analysis").
+ml, execution, config = run_notebook(workflow_type="ROC Analysis Notebook")
 
 print(f"Show per-class curves: {config.show_per_class}")
 print(f"Confidence threshold: {config.confidence_threshold}")

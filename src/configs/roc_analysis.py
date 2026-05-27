@@ -2,12 +2,18 @@
 
 This module defines the hydra-zen configuration for the ROC curve analysis notebook.
 
+By DerivaML convention, notebook ``X.ipynb`` uses the config registered as
+``notebook_config("X", ...)``. ``run_notebook()`` derives the config name from
+the calling notebook's filename, so the explicit string is only needed when
+the notebook filename and config name diverge.
+
 Usage:
     In notebook:
 
         from deriva_ml.execution import run_notebook
 
-        ml, execution, config = run_notebook("roc_analysis")
+        ml, execution, config = run_notebook()
+        # Config name auto-derived from notebook filename (roc_analysis.ipynb).
         # Ready to use!
         # - config.assets: probability file RIDs
         # - config.show_per_class: whether to show individual class curves
