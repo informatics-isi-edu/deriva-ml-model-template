@@ -2,10 +2,10 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Fix three issues in `src/models/cifar10_cnn.py` in one PR: (1) fail loudly with a clear message when `execution.datasets` is empty so the user understands the misconfig (closes #49 partially); (2) replace three `getattr`-with-default anti-patterns with direct attribute access (per PR #70 rule); (3) simplify `build_loaders` by extracting a role-dispatch table and two small helpers.
+**Goal:** Fix three issues in `src/models/cifar10_cnn.py` in one PR: (1) fail loudly with a clear message when `execution.datasets` is empty so the user understands the misconfig (closes #49); (2) replace three `getattr`-with-default anti-patterns with direct attribute access (per PR #70 rule); (3) simplify `build_loaders` by extracting a role-dispatch table and two small helpers.
 
 **Architecture:**
-- The empty-datasets check runs at the *start* of `build_loaders` (just after flattening) and raises the same `RuntimeError` shape the existing `require_training` rail uses. This is upstream of the existing per-bag warning loop, so the user gets a clear "no datasets at all" message instead of the deeper "no Training bag after flattening" message — distinct failures, distinct diagnoses. Catalog still gets a failed execution row (full prevention requires a deriva-ml `pre_check` hook — that's a follow-up; see #49 for issue-side note).
+- The empty-datasets check runs at the *start* of `build_loaders` (before the flatten loop) and raises a clear `RuntimeError` that names the typical cause (empty placeholder registry in `src/configs/datasets.py`). Upstream of the existing per-bag warning loop, so the user gets a distinct diagnosis for "no datasets at all" vs the deeper "no Training bag after flattening." The catalog will record a failed execution row — that's **honest provenance**: the user did invoke this command, and recording it that way is correct. No mechanism is needed to prevent the catalog write.
 - The `build_loaders` refactor extracts a module-level `_LANE_CONFIGS: dict[str, _LaneConfig]` dispatch table plus two helpers `_flatten_to_leaves` and `_make_loader`. The main function shrinks from ~80 body LOC to ~30 and the per-role conditionals (`missing=`, `shuffle=`, `generator=`) move to one declarative place.
 - The three `getattr` sites at `cifar10_cnn.py:254`, `:326`, `:367` get direct attribute access. The fourth `getattr` site (`load_cifar10.py:122`, on `argparse.Namespace`) is the legitimate "genuinely schemaless" case the deriva-ml-context skill blesses; left alone.
 
@@ -317,12 +317,12 @@ as a clear actionable RuntimeError rather than falling through to the
 deeper "No bag with Dataset_Type=Training" rail (which reads as if a
 deeper schema mismatch is at fault).
 
-The catalog will still record the failed execution because deriva-ml
-creates the execution row before calling the model function; full
-prevention requires a deriva-ml-side pre_check hook (issue #49
-partial fix; full upstream prevention noted as follow-up).
+The catalog will still record the failed execution — that's honest
+provenance, not a bug to be prevented. The user-facing problem is
+"why did my run fail," solved by the clearer error message; the
+"failed run is recorded" behaviour is correct.
 
-Closes #49 (in part).
+Closes #49.
 EOF
 )"
 ```
@@ -767,27 +767,29 @@ Expected: no issues.
 **Files:**
 - None modified locally — this is a GitHub-side comment.
 
-The original #49 framing ("validate before opening Execution") turned out to be wrong: the runner doesn't open the execution, deriva-ml does (in `run_model` at `runner.py:597`, before the model function is invoked). The PR can't entirely prevent the catalog write without a deriva-ml change.
+The original #49 framing ("validate before opening Execution") turned out to be wrong on the code path: the runner doesn't open the execution, deriva-ml does (in `run_model` at `runner.py:597`, before the model function is invoked). But more importantly, on reflection the goal *should* be a clear error message, not catalog-write prevention. A failed execution row is honest provenance: the user invoked the command, the run failed at config-resolution time, recording it that way is the correct behaviour.
 
-Add a comment to issue #49 acknowledging the framing correction and tracking the follow-up.
+Add a comment to issue #49 acknowledging the framing correction and closing the door on the catalog-write-prevention sub-goal.
 
 - [ ] **Step 1: Post a comment on issue #49**
 
 ```bash
 cd /Users/carl/GitHub/DerivaML/deriva-ml-model-template
 gh issue comment 49 --body "$(cat <<'EOF'
-**Framing correction on this issue, posted alongside the PR that resolves it in part.**
+**Framing correction on this issue, posted alongside the PR that resolves it.**
 
-After looking at the code paths involved (`deriva-ml/src/deriva_ml/execution/runner.py:597`), the "validate before opening Execution" framing in the original issue text turned out to be incorrect: the runner (`cifar10_cnn`) doesn't open the execution itself. `run_model` in deriva-ml does, via `ml_instance.create_execution(...)`, BEFORE invoking the model function. By the time `cifar10_cnn` runs, the catalog row already exists.
+The original issue framed the goal as "validate before opening Execution" — i.e., prevent the catalog from recording a failed execution row when the input dataset list resolves to empty. After looking at the code paths (`deriva-ml/src/deriva_ml/execution/runner.py:597`) and thinking it through, that framing was off in two ways:
 
-That means a runner-side fix can detect the misconfig early enough to give a clear error, but it can't prevent the catalog write entirely. Full upstream prevention requires either:
+1. **Mechanically:** the runner (`cifar10_cnn`) doesn't open the execution itself. `run_model` in deriva-ml does, via `ml_instance.create_execution(...)`, before invoking the model function. So a runner-side fix can't prevent the catalog write — only a deriva-ml change (or a Hydra-compose-time validator) could.
+2. **More importantly:** the catalog write isn't the bug. A failed execution row is **honest provenance** — the user did invoke `deriva-ml-run` with the given config, and recording that fact in the catalog (as a failed row, distinguishable from successful ones by status and lack of output assets) is the right thing for the platform to do. Hiding failed runs would be a small lie about what happened. The friction the user actually experiences is *understanding why their run failed*; that's solved by a clear, actionable error message at the runner's entry point.
 
-- A deriva-ml-side `pre_check` hook on `run_model` that runs caller-provided validation between `ExecutionConfiguration` build and `create_execution()` (small but cross-repo change), OR
-- A Hydra config-resolution-time validator that refuses empty `datasets_store([], name=...)` registries at compose time (heavier machinery: custom OmegaConf resolver).
+The PR landing alongside this comment does that:
 
-The PR that lands now (alongside this comment) does the runner-side fix: an upstream empty-list check at the top of `build_loaders` with a clear diagnostic message. The catalog will still record the failed execution, but the user gets an actionable error instead of falling through to the deeper "No bag with Dataset_Type=Training" rail. The `getattr` cleanup and `build_loaders` refactor folded in as called out.
+- Adds an upstream empty-list check at the top of `build_loaders` with a message that names the typical cause (placeholder registry in `src/configs/datasets.py`).
+- Replaces three `getattr`-with-default anti-patterns at `cifar10_cnn.py:254, :326, :367` with direct attribute access (per the PR #70 rule from deriva-ml-skills).
+- Refactors `build_loaders` to use a declarative `_LANE_CONFIGS` dispatch table, factors out `_flatten_to_leaves` and `_make_loader`. Public surface unchanged.
 
-**Follow-up:** the catalog-write prevention story is genuinely a deriva-ml-side concern. Will track that as a separate issue against deriva-ml if/when it becomes worth doing — for the model-template specifically, the runner-side fix is sufficient because misconfigs are caught quickly enough that catalog pollution is bounded.
+This closes #49. The catalog-write-prevention sub-goal is explicitly *not* something we're pursuing — failed-execution rows are correct behaviour, and the user-facing fix is the clear error message.
 EOF
 )"
 ```
@@ -822,7 +824,7 @@ gh pr create --title "fix(cifar10_cnn): empty-datasets check + getattr cleanup +
 
 Three folded changes in `src/models/cifar10_cnn.py`:
 
-1. **Empty-datasets early failure (closes #49 in part).** When `execution.datasets` is empty (typical cause: a Hydra `datasets=<group>` override that resolved to a placeholder empty registry in `src/configs/datasets.py`), `build_loaders` now raises a clear `RuntimeError` at the very top with an actionable message. Previously the failure fell through to the deeper "No bag with Dataset_Type=Training" rail at L362-378, which made the misconfig harder to diagnose. See the framing-correction comment on #49 for why this is a partial fix (catalog pollution prevention needs a deriva-ml change).
+1. **Empty-datasets early failure (closes #49).** When `execution.datasets` is empty (typical cause: a Hydra `datasets=<group>` override that resolved to a placeholder empty registry in `src/configs/datasets.py`), `build_loaders` now raises a clear `RuntimeError` at the very top with an actionable message. Previously the failure fell through to the deeper "No bag with Dataset_Type=Training" rail at L362-378, which made the misconfig harder to diagnose. The catalog will record a failed execution row — that's honest provenance, not a bug to prevent. See #49 comment for the framing.
 
 2. **Three `getattr`-with-default sites replaced with direct attribute access.** Per PR #70 in deriva-ml-skills, `getattr(obj, "name", default)` on typed domain objects (FeatureRecord, DatasetBag) masks contract changes. Three sites at `cifar10_cnn.py:254, :326, :367`. The fourth `getattr` site in the codebase (`load_cifar10.py:122` on `argparse.Namespace`) is the legitimate "genuinely schemaless" case and is left as-is.
 
@@ -866,7 +868,7 @@ Expected: the PR's URL is printed; `state=OPEN`.
 - ✅ Issue #49 carries a framing-correction comment acknowledging the partial fix.
 - ✅ PR opened with clear test-plan.
 
-## Out of scope (carried forward)
+## Out of scope (explicit)
 
-- **Catalog-write prevention for the empty-datasets case.** That needs either a deriva-ml `pre_check` hook on `run_model`, or a custom OmegaConf resolver to validate at Hydra-compose time. Both are larger changes than this PR; the issue follow-up will track whichever direction is taken.
+- **Preventing the failed execution row from being recorded in the catalog.** Not pursued — failed-execution rows are honest provenance (the user invoked the command, the run failed at config-resolution time, the catalog correctly records that). The user-facing problem is "why did my run fail," which the clear error message solves.
 - **The other friction items from the seed-sweep arc** (bag-cache reuse across multirun children, multirun parent description not auto-composed, tee-output dirty-tree poison). Those live in deriva-ml issue #251 and the friction findings file; not touched here.
