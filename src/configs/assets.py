@@ -48,24 +48,49 @@ asset_store([], name="default_asset")
 asset_store([], name="no_assets")
 
 # -----------------------------------------------------------------------------
-# Add per-experiment asset configs below as you generate them.
-# Examples (commented out — uncomment and replace RIDs after running):
+# [E2E-DROP] 2026-05-27-d Modeler arc outputs (catalog 96, workflow XDG, WD2 split).
+#
+# Three differentiated training runs on cifar10_small_labeled_split (WD2):
+#   - XDP (cifar10_quick): 3 epochs, 32->64ch.  Test acc 24%.  Smoke.
+#   - XPR (default_model):  10 epochs, 32->64ch. Test acc 38%.  Moderate baseline.
+#   - XZT (cifar10_extended): 50 epochs, 64->128ch + dropout 0.25 + wd 1e-4.
+#       Test acc 41% (overfit: train acc 100% / test 41%).
+#
+# Output asset triples (weights / training_log / prediction_probabilities) per
+# execution.  RIDs verified via direct deriva-ml + MCP cross-channel.
 # -----------------------------------------------------------------------------
 
-# asset_store(["<rid_quick>", "<rid_extended>"], name="roc_quick_vs_extended")
-#
-# asset_store(
-#     with_description(
-#         ["<rid_quick>"],
-#         "Pre-trained weights from cifar10_quick.",
-#     ),
-#     name="quick_weights",
-# )
-#
-# asset_store(
-#     with_description(
-#         ["<rid_extended>"],
-#         "Pre-trained weights from cifar10_extended.",
-#     ),
-#     name="extended_weights",
-# )
+# Prediction-probability CSVs — feed the roc_analysis notebook's
+# `roc_quick_vs_extended` config.  Order: quick, default, extended.
+asset_store(
+    with_description(
+        ["XFM", "XRP", "Y1R"],
+        "Prediction probabilities from the three WD2 runs "
+        "(XDP/quick, XPR/default, XZT/extended). Order matches the "
+        "3-run comparison the Analyst should plot.",
+    ),
+    name="roc_quick_vs_extended",
+)
+
+# Model weights from each run — for test-only / inference re-runs.
+asset_store(
+    with_description(
+        ["XFG"],
+        "Weights from XDP (cifar10_quick, 3 epochs, 32->64ch).",
+    ),
+    name="quick_weights",
+)
+asset_store(
+    with_description(
+        ["XRJ"],
+        "Weights from XPR (default_model, 10 epochs, 32->64ch).",
+    ),
+    name="default_weights",
+)
+asset_store(
+    with_description(
+        ["Y1M"],
+        "Weights from XZT (cifar10_extended, 50 epochs, 64->128ch, regularized).",
+    ),
+    name="extended_weights",
+)

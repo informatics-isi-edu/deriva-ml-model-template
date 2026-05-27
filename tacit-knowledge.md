@@ -136,3 +136,105 @@ sufficient. This entry documents the rule that prevents the most
 likely silent mistake.
 
 ---
+
+### tk-003 — Modeler arc: three differentiated runs on the WD2 small-labeled split
+**When:** 2026-05-27T07:30:00+00:00
+**By:** Carl Kesselman (https://localhost/auth/realms/deriva/ec40f483-26ae-4a8b-aa24-5155ca94cb22)
+**Supported by:** tk-001 (catalog audit — labels and class balance verified clean),
+tk-002 (leakage map — pinned the choice of WD2 as a safe within-family pair).
+
+Ran three training executions to (a) confirm the pipeline produces
+differentiated output as hyperparameters vary, and (b) hand the
+Analyst a 3-run comparison on identical test images so ROC curves
+and confusion matrices line up directly. All three executions share
+workflow `XDG` (`CIFAR-10 2-Layer CNN`, commit
+`4b7f48bdd368…`), all status `Uploaded`, all input dataset = `WD2`
+(`cifar10_small_labeled_split`, 400 train / 100 test).
+
+| Exec | model_config | Epochs | Arch | Reg | Train acc | Test acc | Weights size |
+|------|--------------|-------:|-----:|-----|----------:|---------:|-------------:|
+| `XDP` | `cifar10_quick` | 3 | 32→64ch, 128h | none | 30.25% | **24.00%** | 6.5 MB |
+| `XPR` | `default_model` | 10 | 32→64ch, 128h | none | 59.00% | **38.00%** | 6.5 MB |
+| `XZT` | `cifar10_extended` | 50 | 64→128ch, 256h | dropout 0.25, wd 1e-4 | 100.00% | **41.00%** | 26 MB |
+
+(Test-accuracy column is the emission-time reading at the final
+epoch from the model's own training log; the Analyst should
+re-derive it from the prediction CSV joined to ground-truth, per
+the `record_test_predictions` docstring.)
+
+**Output asset RIDs** (`weights` / `training_log` / `prediction_probabilities`):
+
+| Exec | weights | log | pred_probs |
+|------|--------|-----|-----------|
+| `XDP` | `XFG` | `XFJ` | `XFM` |
+| `XPR` | `XRJ` | `XRM` | `XRP` |
+| `XZT` | `Y1M` | `Y1P` | `Y1R` |
+
+Asset RIDs verified by cross-channel read: direct `deriva-ml`
+`PathBuilder` query on `Execution_Asset_Execution` matched the MCP
+`deriva_ml_get_execution` summary for all three RIDs.
+
+**Variation took.** The runs *do* differentiate — XPR clearly
+beats XDP (more epochs → +14pp test acc, expected). XZT's
+behaviour is the textbook overfit signature: 100% training
+accuracy and only +3pp over XPR on held-out, with training/test
+loss diverging hard around epoch 15 (train→0.01, test→3.8). The
+larger arch (4× more parameters: 26 MB vs 6.5 MB weights file) plus
+50 epochs blew past WD2's 400-image train pool. That's a useful
+signal for the Analyst — and a warning that on this catalog size,
+the "extended" config is **not** automatically the best choice.
+
+**Why WD2 for all three (not a sweep over multiple datasets):** the
+Analyst's stock comparison surface is ROC curves and confusion
+matrices, both of which require predictions on a *common* test
+partition to be meaningfully comparable. Holding the dataset
+constant and varying only the model_config is the cleanest
+controlled experiment the catalog supports. Cross-dataset
+comparisons would have introduced confounds the Analyst would
+then have to factor out by hand.
+
+**Why no `cifar10_default` experiment as-is:** the stock
+`cifar10_default` experiment in `experiments.py` pairs the
+`default_model` config with `cifar10_small_training` (K0W) alone
+— a single Training-typed dataset with no companion Testing bag.
+That trains a model but emits no test predictions and is therefore
+invisible to the Analyst's notebook. The (`model_config=default_model`,
+`datasets=cifar10_small_labeled_split`) override on the CLI is the
+combination an Analyst-facing run actually wants. The stock
+experiment is fine as a debug-only path; for any comparison run,
+override `datasets=` to a Split.
+
+**Friction noted, not fixed:**
+- The XPR description in the catalog reads "Simple model run" —
+  the generic `BaseConfig.description` default. When you compose
+  a run from `model_config=` + `datasets=` CLI overrides without
+  `+experiment=…`, the description doesn't pick up the variant
+  intent. The training_log embedded in the execution asset bundle
+  *does* carry the hyperparameters, so provenance is recoverable;
+  but `deriva_ml_list_executions` output is harder to skim across a
+  mixed batch. **Workaround:** pass an explicit
+  `description='...'` override or define an experiment config
+  before any production run. Not severe enough to block the arc.
+- Default Hydra mode emits a screen of `InsecureRequestWarning`s
+  from every HTTPS call to the self-signed localhost cert. Each
+  successful asset upload also re-prints the warning. Cosmetic.
+
+**Wiring for the Analyst:** populated `src/configs/assets.py`:
+- `roc_quick_vs_extended` → `["XFM", "XRP", "Y1R"]` in
+  (quick, default, extended) order — matches the notebook's
+  expected slot list and feeds the existing `roc_quick_vs_extended`
+  notebook config without further edits.
+- `quick_weights` → `XFG`, `default_weights` → `XRJ`,
+  `extended_weights` → `Y1M` for any test-only inference re-runs.
+
+**For the Analyst:**
+- Start with `roc_quick_vs_extended` — three runs, one held-out
+  set, ready to plot.
+- The "extended" config is *not* the best model here; XPR
+  (`default_model`) generalizes about as well at a fraction of the
+  cost. Per-class breakdowns and confusion matrices on XZT will
+  probably show severe overfit-to-rare-class behaviour.
+- Ground-truth labels are in the `Image_Classification` feature on
+  `Image` (one per row, per tk-001).
+
+---
