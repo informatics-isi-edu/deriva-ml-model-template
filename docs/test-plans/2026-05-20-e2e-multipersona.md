@@ -7,29 +7,45 @@
 
 ---
 
-## 1. What this document is
+## 1. What the team is doing
 
-This is the **scenario** half of a two-part exercise. It describes
-the work three persona agents do end-to-end on a shared catalog —
-audit and curate, model and train, analyse and report. The
-**evaluation** half — what counts as a finding, what makes a
-good `tacit-knowledge.md`, whether the catalog matches what the
-skills said happened, whether the personas reached for the right
-skills — lives in a separate evaluator rubric (`evaluator.md`)
-that runs *after* the three personas finish. Keeping the two halves
-separate is deliberate: the personas should do their work the way a
-real user would, without writing-to-the-test. The evaluator looks
-cold at the artifacts those personas produced and forms its
-findings independently.
+A three-person team is handed a catalog with some initial data and
+asked to take it from raw arrival to a usable analytical result.
+That work has three natural phases, each owned by one persona:
 
-This scenario document tells each persona what kind of professional
-they are, what they tend to care about, and what they have to work
-with. It does **not** tell them what entries to write where, what
-checks to perform before declaring done, or what their deliverable
-must contain. Those decisions belong to the persona and to whichever
-of their skills naturally fire during the work. Where a skill reaches
-the persona to do something, that's the skill's responsibility — not
-this document's.
+1. **Understand the data.** Check that it's clean. Notice
+   limitations, peculiarities, gaps, things that don't pass a smell
+   test. Prepare what's there for the people downstream.
+2. **Build models against the data.** Try alternative model
+   variants and alternative parameterisations. Confirm that the
+   modelling pipeline produces a result the next person can use.
+3. **Evaluate what the models actually do.** Look at predictions
+   against ground truth, build pictures (ROC curves, confusion
+   matrices, per-class breakdowns), and summarise the findings in a
+   form a non-ML collaborator can read.
+
+The team's collective deliverable is a coherent story: this is
+what was in the catalog, this is what we built on top of it, this
+is what it tells us. Each persona owns one phase; together they
+produce the story end-to-end.
+
+### What this document is
+
+This document is the **scenario** half of a two-part exercise. It
+describes the work the team does — who the personas are, what
+they have to work with, how they hand off — without prescribing
+how they do it. Each persona's *skills* drive the work; this
+document just gives them the setting and the motivation.
+
+The **evaluation** half — what counts as a finding, whether the
+catalog matches what the skills claimed happened, whether the
+team produced a useful story, whether the personas reached for
+the right skills — lives in a separate evaluator rubric that
+runs *after* the team finishes. Keeping the halves separate is
+deliberate: the personas should do their work the way a real
+team would, without writing-to-the-test. The evaluator looks
+cold at the artifacts the team produced and forms its findings
+independently.
 
 ### Non-goals
 
