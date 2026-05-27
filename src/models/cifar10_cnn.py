@@ -297,6 +297,25 @@ def build_loaders(
         intentional for a demo. Plug early stopping in here if you
         want it.
     """
+    # Fail fast on the misconfig case: a Hydra `datasets=foo` group
+    # that resolved to an empty list. This typically means the
+    # placeholder registries in src/configs/datasets.py weren't
+    # filled in for the current catalog. The execution row in the
+    # catalog will already be open by the time we get here (deriva-ml
+    # creates it before invoking the model function), so this is the
+    # earliest the runner itself can catch it. Full upstream
+    # prevention would need a deriva-ml pre_check hook.
+    if not execution.datasets:
+        raise RuntimeError(
+            "Execution has no input datasets. This typically means a "
+            "Hydra `datasets=<group>` override resolved to an empty list "
+            "(e.g. a placeholder `datasets_store([], name=...)` in "
+            "src/configs/datasets.py that wasn't filled in for this "
+            "catalog). Fill in the dataset RIDs for the catalog you're "
+            "running against, or pass a different `datasets=<group>` "
+            "override."
+        )
+
     # Expand Split parents to their children.
     bags: list[DatasetBag] = []
     for bag in execution.datasets:
