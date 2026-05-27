@@ -1,0 +1,4 @@
+Rank,Exec_RID,Variant,Pred_RID,Pred_rows,Matched_to_GT,Accuracy_pct,Expected_pct,Delta_pct
+1,YAP,"cifar10_regularized (TX0+XEM, 10 ep, seed 2026)",YCP,150,150,36.0,37.33,-1.33
+2,XYG,"cifar10_default (TX0, 10 ep, seed 123)",Y0E,150,150,34.67,42.0,-7.33
+3,XNE,"cifar10_quick (WD2, 3 ep, seed 42)",XQC,100,100,24.0,24.0,0.0

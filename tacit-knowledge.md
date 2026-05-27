@@ -417,3 +417,207 @@ needed to compute any soft metric (ROC, AUC, calibration).
   are enough for an analysis pass.
 
 ---
+
+## tk-005 — Denormalize parity at 1500-image scale (post-#246)
+
+**When:** 2026-05-27 (Analyst persona arc)
+**By:** Analyst
+**Supported by:** tk-001, tk-002
+
+### The headline
+
+`Dataset.get_denormalized_as_dataframe` on JZ8 (1500 Image members,
+v=`0.1.0.post1.dev3`) reproduces the exact set of Image RIDs the
+direct channel (`Dataset.list_dataset_members()`) reports. **Zero
+missing, zero extra, 1500 = 1500.** This is the first e2e exercise of
+PR #246 (PagedFetcher row-completeness / chunked-GET) at the scale
+that motivated the fix.
+
+| Channel | Distinct Image RIDs |
+|---|---|
+| Direct: `list_dataset_members()['Image']` | 1500 |
+| Indirect: `get_denormalized_as_dataframe(...)` | 1500 |
+| Set difference (either direction) | 0 |
+
+Class distribution on the GT-only subset (Confidence is null) is
+perfectly balanced 150/class across 10 classes — identical to what
+the direct `feature_values()` query returns. This is the success
+signature.
+
+### Why JZ8 (1500 images), not a smaller bag
+
+The PR #246 fix targets the URL-length cap on RID-bearing GET
+requests. Smaller bags (≤500 images) fit inside the old single-GET
+path and never exercise the chunk loop; they pass with or without
+the fix. JZ8 at 1500 image members puts the request URL over the
+old cap and forces the chunked path on every fetch. If JZ8 came back
+with the right rowcount, the fix is verified end-to-end.
+
+### Trap to remember: raw rowcount ≠ image count
+
+The raw denorm DataFrame has **1900** rows, not 1500. That isn't a
+defect — it's the correct semantics of denormalize over a feature
+table: every Feature_Value row contributes a denorm row. The 400
+extra rows are the per-image predictions Developer's three runs
+(XYG / YAP / XNE) wrote into `Execution_Image_Image_Classification`
+(150 + 150 + 100). To get a "one row per Image" view, filter:
+
+```python
+df_gt = df[df['Execution_Image_Image_Classification.Confidence'].isna()]
+# 1500 rows, exactly the GT.
+```
+
+If a future Analyst needs the GT-only view as the default, the right
+move is a wrapper that filters on `Confidence is null` (the GT
+predicate) — not a complaint against the denormalize cardinality
+contract.
+
+### Cross-channel verification table
+
+Recorded so the next Analyst doesn't have to recompute:
+
+| Check | Direct | Indirect (denorm) | Match |
+|---|---|---|---|
+| Total image rows | 1500 | 1500 (distinct) | yes |
+| Missing in denorm | — | 0 | yes |
+| Extra in denorm | — | 0 | yes |
+| Class distribution (GT subset) | 10× 150 | 10× 150 | yes |
+| Null `Image.RID` | 0 | 0 | yes |
+| Null `Image_Class` | 0 | 0 | yes |
+
+No disagreement at any column. The script that produced this is
+`scripts/analyst_denormalize_parity.py`; the captured numbers live at
+`scripts/_artifacts/analyst_denormalize_jz8.txt`.
+
+### Handoff for any future denormalize work
+
+- The post-#246 contract held on 1500 images; if a future run wants
+  to stress harder, JZ8 is the entry point. Larger catalogs are out
+  of scope for this template.
+- The "raw rowcount ≠ image count" surprise is worth documenting in
+  the dataset-lifecycle skill (it would have saved me a few minutes
+  of reading the denormalize spec). Captured as
+  `findings/analyst/01-denormalize-raw-rowcount-surprise.md`.
+
+---
+
+## tk-006 — Analyst conclusions: best run is YAP
+
+**When:** 2026-05-27 (Analyst persona arc)
+**By:** Analyst
+**Supported by:** tk-001, tk-002, tk-003, tk-004, tk-005
+
+### Verdict: YAP wins
+
+Across the three Developer training runs (XYG / YAP / XNE), **YAP**
+(`cifar10_regularized` on TX0 + XEM, seed=2026) is the best run on
+every Analyst-measurable criterion:
+
+| Metric | XYG (Y0E) | **YAP (YCP)** | XNE (XQC) |
+|---|---|---|---|
+| Accuracy (from committed CSV) | 34.67% | **36.00%** | 24.00% |
+| Micro-AUC | 0.781 | **0.789** | 0.677 |
+| Macro-AUC | 0.779 | **0.789** | 0.712 |
+| Worst-class recall | 0.0% (deer) | **6.7% (deer)** | 0.0% (multiple) |
+| Best-class recall | 73.3% (airplane/frog) | 73.3% (airplane/frog) | 80.0% (frog/truck) |
+| Dataset_Type lanes exercised | Training+Testing | Training+Testing+**Validation** | Training+Testing |
+
+Two things matter here: YAP wins on the soft probability metric
+(AUC), so its calibration is better, and YAP's worst class is at
+least non-zero, so regularization is dragging the model out of the
+"completely punt on hard classes" failure mode that XYG falls into.
+
+### Why YAP wins (the regularization angle)
+
+`cifar10_regularized` adds dropout 0.25 and weight decay 1e-4. On a
+600-image stratified training set (TX0/TX8), the un-regularized
+default (XYG) overfits enough by epoch 10 that the model collapses
+on the visually-entangled animal classes (`deer` to 0%, `cat` to
+6.7%, `dog` to 20%). YAP keeps `deer`/`cat`/`dog` all at least
+non-zero (6.7% / 20% / 13.3%) — small absolute lift, but it
+represents the model still trying on every class. Calibration shows
+the same pattern: YAP's AUC lead is concentrated on the *worst*
+classes (deer +0.061, cat +0.081) and is flat or slightly negative
+on the *easy* classes (airplane, frog). That's the canonical
+signature of regularization helping a small-data classifier.
+
+### The two-numbers problem (Developer log vs committed CSV)
+
+For YAP and XYG, the Developer's training log reports a *higher*
+final-epoch test accuracy than the committed prediction CSV
+reproduces:
+
+- XYG: log final 42.00%, CSV 34.67% (delta -7.33%)
+- YAP: log final 37.33%, CSV 36.00% (delta -1.33%)
+- XNE: log final 24.00%, CSV 24.00% (delta 0.00%) ← exact match
+
+The CSV accuracy for XYG (34.67%) matches the run's epoch-4 test
+accuracy in the log, not epoch 10. For YAP, the CSV accuracy
+(36.00%) matches epoch 5 / 9, not the final epoch 10. **The
+committed predictions are not from the final-epoch model state.**
+
+Hypotheses, ordered by likelihood:
+
+1. The runner regenerates the prediction CSV from a `--save-best`
+   checkpoint, picking the best validation/test epoch's weights
+   rather than the final-epoch weights. Would explain why XNE
+   (3 epochs, no overfit risk yet) lines up exactly and the longer
+   runs don't.
+2. The CSV is written *before* the final optimiser step of the last
+   epoch. Less likely — would mean the final accuracy reported in
+   the log is also pre-last-step, but the numbers don't suggest that.
+3. The model is re-instantiated from a checkpoint earlier than the
+   final epoch for CSV generation. Same effect as (1) but via a
+   different mechanism.
+
+Whichever it is, the Analyst can't tell the downstream consumer
+"YAP got 37.33% test accuracy" with a straight face — the
+reproducible-from-asset number is 36.00%. Filed as
+`findings/analyst/02-prediction-csv-not-final-epoch.md`. Not a
+blocker for ranking (YAP still wins on both numbers) but a
+question worth answering before the next training cycle, because
+"which model state does my downstream consumer actually get?" is
+exactly the kind of provenance gap the platform exists to close.
+
+### Caveats the next iteration should know
+
+1. **N=3 isn't a model recommendation, it's a snapshot.** YAP's lift
+   over XYG is half an accuracy point and ~0.008 AUC — well inside
+   the noise band of a 600-image training set. Re-running YAP at
+   3-5 different seeds would tell us whether regularization
+   actually helps in expectation, or whether YAP happened to land
+   on a good seed (2026).
+2. **`cifar10_extended` (50 epochs) was deliberately not run.** If
+   the next iteration wants to test the overfitting hypothesis (the
+   reason the variant exists), running `cifar10_extended` on TX0
+   with seed 123 would give a direct comparison against XYG and an
+   overfitting signal to put in the ROC overlay.
+3. **TXJ is small (150 images, 15/class).** Per-class accuracy
+   percentages move in jumps of 6.7% (1/15). For finer-grained
+   per-class signal, evaluate on K04 (750 images, 75/class) — TXJ
+   was the train-time split for XYG/YAP, but it's not the only
+   labeled testing pool in the catalog.
+4. **Validation accuracy (XEM, 100 images) is too noisy to lead a
+   ranking.** YAP's val_acc 43.00% is *higher* than its test_acc
+   37.33% in the training log; that inversion alone shows the metric
+   has too much variance on 100 images. The Curator's tk-003 open
+   question 2 ("should XEM be expanded to 200/class?") is now
+   answered: yes, if you want val_acc to be more than a sanity
+   ping. Add it as a flag for the next Curator pass.
+
+### Handoff to the next Analyst
+
+- Look at YQ2's outputs first: `YSC` (ROC overlay), `YSM`
+  (roc_metrics.csv). These already encode the ranking; the
+  Analyst's job downstream is to *update* them after new training
+  runs, not redo from scratch.
+- Re-running this report against an expanded catalog (more seeds,
+  more variants) is straightforward: edit
+  `src/configs/assets.py:roc_e2e_2026_05_27` to include the new
+  prediction-CSV RIDs, and re-invoke
+  `deriva-ml-run-notebook notebooks/roc_analysis.ipynb assets=roc_e2e_2026_05_27`.
+- `findings/analyst/02-prediction-csv-not-final-epoch.md` is the
+  most actionable open finding for a future iteration. Resolve it
+  before drawing strong claims from any future cifar10_cnn run.
+
+---

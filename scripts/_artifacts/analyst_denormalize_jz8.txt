@@ -1,0 +1,73 @@
+# Denormalize parity check — JZ8 v0.1.0.post1.dev3
+# Catalog: localhost:93, deriva-ml v1.39.4 (post-#246 fix)
+
+[1] Direct: ds.list_dataset_members()
+  member-type buckets: ['Dataset', 'File', 'Image']
+    Dataset: 0
+    File: 0
+    Image: 1500
+  direct Image RID count: 1500
+
+[2] Indirect: ds.get_denormalized_as_dataframe(...)
+  shape: (1900, 12)
+  columns: ['Execution_Image_Image_Classification.RID', 'Execution_Image_Image_Classification.Execution', 'Execution_Image_Image_Classification.Image', 'Execution_Image_Image_Classification.Feature_Name', 'Execution_Image_Image_Classification.Image_Class', 'Execution_Image_Image_Classification.Confidence', 'Image.RID', 'Image.URL', 'Image.Filename', 'Image.Description', 'Image.Length', 'Image.MD5']
+
+[3] Row-count parity:
+  denorm distinct Image RIDs: 1500
+  direct  distinct Image RIDs: 1500
+  missing (in direct, not denorm): 0
+  extra   (in denorm, not direct): 0
+  PARITY (row set equal): True
+
+[4] Null audit per column:
+  Execution_Image_Image_Classification.RID: 0 (0.0%)
+  Execution_Image_Image_Classification.Execution: 0 (0.0%)
+  Execution_Image_Image_Classification.Image: 0 (0.0%)
+  Execution_Image_Image_Classification.Feature_Name: 0 (0.0%)
+  Execution_Image_Image_Classification.Image_Class: 0 (0.0%)
+  Execution_Image_Image_Classification.Confidence: 1500 (78.9%)
+  Image.RID: 0 (0.0%)
+  Image.URL: 0 (0.0%)
+  Image.Filename: 0 (0.0%)
+  Image.Description: 1900 (100.0%)
+  Image.Length: 0 (0.0%)
+  Image.MD5: 0 (0.0%)
+
+[5] Class distribution parity:
+  denorm class distribution (Execution_Image_Image_Classification.Image_Class):
+    airplane: 215
+    automobile: 163
+    bird: 185
+    cat: 167
+    deer: 160
+    dog: 167
+    frog: 256
+    horse: 176
+    ship: 175
+    truck: 236
+  direct class distribution (feature_values for JZ8 image set):
+    airplane: 150
+    automobile: 150
+    bird: 150
+    cat: 150
+    deer: 150
+    dog: 150
+    frog: 150
+    horse: 150
+    ship: 150
+    truck: 150
+  PARITY (class dist equal): False
+
+[6] Balance check:
+  all-classes-equal (denorm): False (counts: {160, 256, 163, 167, 236, 175, 176, 215, 185})
+
+[7] Verdict:
+{
+  "row_count_parity": true,
+  "no_missing_rows": true,
+  "no_extra_rows": true,
+  "row_count_denorm": 1500,
+  "row_count_direct": 1500,
+  "n_columns": 12,
+  "any_null_columns": 2
+}

@@ -69,3 +69,22 @@ asset_store([], name="no_assets")
 #     ),
 #     name="extended_weights",
 # )
+
+# -----------------------------------------------------------------------------
+# 2026-05-27 e2e Analyst arc: prediction CSVs from Developer's three runs.
+#
+#   Y0E — XYG (cifar10_default, TX0, 10 ep, seed=123)
+#   YCP — YAP (cifar10_regularized, TX0+XEM, 10 ep, seed=2026)
+#   XQC — XNE (cifar10_quick,    WD2, 3 ep, seed=42)
+#
+# Override the default roc_analysis config with this group:
+#   uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb \
+#       assets=roc_e2e_2026_05_27
+# -----------------------------------------------------------------------------
+asset_store(
+    with_description(
+        ["Y0E", "YCP", "XQC"],
+        "2026-05-27 e2e: prediction probabilities from XYG, YAP, XNE.",
+    ),
+    name="roc_e2e_2026_05_27",
+)
