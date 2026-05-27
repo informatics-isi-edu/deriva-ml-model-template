@@ -180,28 +180,31 @@ def record_test_predictions(
     probability distribution per image as an ``Execution_Asset`` for
     downstream ROC analysis.
 
-    **Provenance contract (analyst/02 from 2026-05-27 e2e run).** The
-    predictions emitted here come from whatever state the model is in
-    *at this moment* — typically the final-epoch state in training mode,
-    or the loaded-weights state in evaluation mode. To make that
-    knowable downstream, this function:
+    **Provenance contract.** The predictions emitted here come from
+    whatever state the model is in *at this moment* — typically the
+    final-epoch state in training mode, or the loaded-weights state
+    in evaluation mode. To make that knowable downstream, this
+    function:
 
-    1. Tags every catalog feature row and CSV row with ``source_label``
-       (e.g. ``"epoch_10"`` in training mode, ``"evaluation"`` in eval
-       mode). The Analyst can read this column to know which model
-       state produced each prediction.
+    1. Tags every CSV row with ``source_label`` (e.g. ``"epoch_10"``
+       in training mode, ``"evaluation"`` in eval mode). Downstream
+       consumers can read this column to know which model state
+       produced each prediction. The catalog
+       ``Image_Classification`` feature row does NOT carry this
+       label (would require a schema migration); CSV is the
+       authoritative source-label surface.
     2. Recomputes accuracy from the exact same logits used to emit
        predictions (when the test loader yields ground-truth labels)
        and logs the result. This number is guaranteed to match what
-       the committed CSV would reproduce when joined against ground
-       truth, even if the surrounding training-loop log surfaced a
-       different epoch-time number. Analysts who download the CSV
-       and re-compute will see this number.
+       a consumer will reproduce by downloading the committed CSV
+       and joining against ground truth, even if the surrounding
+       training-loop log surfaced a different epoch-time number.
 
-    The recomputed accuracy is also returned in the function's printed
-    summary so the training log itself flags any divergence between
-    "final-epoch test_acc inside the training loop" and "test_acc at
-    the moment predictions were emitted."
+    The recomputed accuracy is also printed in the runner output as
+    "Emission-time accuracy: NN.NN%", so the training log itself
+    flags any divergence between "final-epoch test_acc inside the
+    training loop" and "test_acc at the moment predictions were
+    emitted."
 
     Args:
         model: Trained PyTorch model.
@@ -232,11 +235,11 @@ def record_test_predictions(
 
     # Track ground-truth-aware accuracy from the same logits we emit.
     # If the test loader has GT labels (label != -1), this number is
-    # the accuracy the Analyst will recompute when joining the
-    # committed CSV against the ground-truth feature. By printing it
-    # here we close the provenance loop: the training log shows the
-    # epoch-time accuracy AND the prediction-emission accuracy, so
-    # any divergence is visible without leaving the runner output.
+    # the accuracy a downstream consumer will recompute when joining
+    # the committed CSV against the ground-truth feature. By printing
+    # it here we close the provenance loop: the training log shows
+    # the epoch-time accuracy AND the prediction-emission accuracy,
+    # so any divergence is visible without leaving the runner output.
     emit_correct = 0
     emit_total_labeled = 0
 
@@ -287,8 +290,8 @@ def record_test_predictions(
             msg += (
                 f"\n    Emission-time accuracy: {emit_acc:.2f}% "
                 f"({emit_correct}/{emit_total_labeled}). "
-                f"This is what the Analyst will recompute from the "
-                f"committed CSV. Compare against the {source_label} "
+                f"This is what a downstream consumer will recompute "
+                f"from the committed CSV. Compare against the {source_label} "
                 f"line of the training log — any divergence means the "
                 f"two accuracies were measured on different model state."
             )
