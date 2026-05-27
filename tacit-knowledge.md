@@ -15,3 +15,165 @@ considered, what was rejected and why, and any background context a future
 reader would need to evaluate whether the decision still holds.
 
 ---
+
+<a id="tk-001"></a>
+### tk-001 — Substrate audit: catalog ships with clean, perfectly balanced GT ([dataset JZ8 v0.1.0.post1.dev3](https://localhost/id/2/JZ8@355-KW8K-DXSC))
+**When:** 2026-05-27T17:06:00+00:00
+**By:** Carl Kesselman (carl@isi.edu)
+
+Audited the freshly-bootstrapped catalog ([catalog 2](https://localhost/chaise/recordset/#2),
+`e2e-test-20260527e`) before any modelling work. Question: does the data make sense, and are
+there any hidden land mines for the Modeler and Analyst?
+
+The result was a clean substrate. Worth recording because the cleanliness is
+*specific to a freshly-loaded catalog* — most of these claims will not survive
+the first training execution (see [tk-003](#tk-003) for the Image_Classification
+convention).
+
+Findings (audit-time snapshot, not durable beyond the next mutation):
+
+- **Image_Classification ground-truth layer is whole and unambiguous.** 1500
+  feature value rows on the [Image table](https://localhost/id/2/Image), exactly
+  one row per Image RID, every row written by the loader execution
+  [FZC](https://localhost/id/2/FZC). `Confidence` is NULL on every GT row (the
+  loader doesn't set it — ground truth has no confidence). 10 classes, each with
+  exactly 150 images. No `<unlabeled>` images and no images with multiple GT
+  rows.
+- **Canonical split is a clean partition.** [JZT v0.1.0.post1.dev2](https://localhost/id/2/JZT@355-KW8K-DXSC)
+  (Training, 750) ∪ [K04 v0.1.0.post1.dev2](https://localhost/id/2/K04@355-KW8K-DXSC)
+  (Testing, 750) equals [JZ8](https://localhost/id/2/JZ8@355-KW8K-DXSC) (Complete,
+  1500), with zero overlap. Each partition is internally class-balanced (75 per
+  class on each side). The loader populated these from the canonical Toronto
+  CIFAR-10 distribution so this is the source-faithful split.
+- **All derived splits are well-formed.** TX8/TXJ and WDA/WDM (the labeled
+  stratified families) are disjoint and entirely subset of JZT; K0W/K16 (the
+  Small Toronto family) are disjoint and respect the JZT/K04 partition. All
+  derived splits are per-class balanced.
+
+Implications for collaborators: the Modeler can train against any of the labeled
+training partitions without auditing class balance themselves; the Analyst can
+treat ground-truth as the loader-execution rows (filter `Confidence IS NULL` or
+by execution RID [FZC](https://localhost/id/2/FZC)) and get a clean 1500-image
+GT layer. Class imbalance is not a concern at this scale of catalog. The
+*pattern* that makes these claims durable — the loader vs. prediction
+write-side of the Image_Classification feature — lives in [tk-003](#tk-003);
+the raw counts above will silently rot the first time a model writes
+predictions, so reach for [tk-003](#tk-003) when reading this feature in any
+post-training session.
+
+---
+
+<a id="tk-002"></a>
+### tk-002 — Two small-variant families, two different test-partition sources ([dataset TX0 v0.1.0.post1.dev1](https://localhost/id/2/TX0@355-KW8K-DXSC))
+**When:** 2026-05-27T17:06:30+00:00
+**By:** Carl Kesselman (carl@isi.edu)
+**Supported by:** [tk-001](#tk-001) (substrate audit established the partition shape this entry distinguishes)
+
+The catalog ships with two parallel small-variant Split families, and they are
+**not interchangeable** for evaluation purposes. The distinction is which side
+of the canonical Toronto split the test partition was sampled from. The
+template's [CIFAR10.md](CIFAR10.md) §"Dataset Types" notes this distinction;
+this entry pins it to the actual RIDs in *this* catalog and spells out the
+modelling consequence.
+
+**Family A — sampled from real Toronto train/test** ([dataset K0M v0.1.0.post1.dev1](https://localhost/id/2/K0M@355-KW8K-DXSC),
+Split parent):
+- K0W (Training, 500): K0W ⊆ JZT — drawn from the official 750 training images.
+- K16 (Testing, 500): K16 ⊆ K04 — drawn from the official 750 testing images.
+- Test partition is **genuinely held out** from training images.
+
+**Family B — stratified 80/20 split *of the training side only*** ([dataset WD2 v0.1.0.post1.dev1](https://localhost/id/2/WD2@355-KW8K-DXSC)
+and [dataset TX0 v0.1.0.post1.dev1](https://localhost/id/2/TX0@355-KW8K-DXSC),
+both Split parents):
+- WDA (Training, 400) + WDM (Testing, 100): both ⊆ JZT.
+- TX8 (Training, 600) + TXJ (Testing, 150): both ⊆ JZT.
+- WDA ∩ WDM = ∅ and TX8 ∩ TXJ = ∅, so each family is internally valid as a
+  hold-out for *its own* training partition — but the "test" partitions
+  WDM and TXJ are **drawn from the same image pool as the Toronto training
+  set**. They do **not** represent the canonical CIFAR-10 testing partition
+  (K04).
+
+Implications for collaborators:
+
+- **For pipeline-validation runs and fast iteration** (the modelling-pipeline
+  question the Modeler may want to answer): either family is fine. The point
+  there is "does the training loop converge against a coherent
+  training/testing pair," and both families give a coherent pair.
+- **For results that should generalize to held-out data the model has never
+  seen, including ROC analysis against ground truth not in the training
+  pool**: use Family A (`cifar10_small_split` = K0M) or, at full scale, the
+  canonical [JZJ](https://localhost/id/2/JZJ@355-KW8K-DXSC) split (Training=JZT,
+  Testing=K04). The default-pinned `default_dataset` and `cifar10_quick`
+  experiment both currently point at Family B
+  ([WD2](https://localhost/id/2/WD2@355-KW8K-DXSC)) — that's a reasonable
+  smoke-test default but not a held-out evaluation default. The Analyst doing
+  ROC work should pick consciously and the Modeler should produce predictions
+  against at least one Family-A or canonical-split dataset if Analyst-grade
+  evaluation is in scope.
+
+Weighed alternatives:
+
+- **Curate a new "really held-out" labeled small split** (e.g., a stratified
+  subset of K04 paired with stratified K0W). Considered, declined for this
+  arc: K0M (Family A) already covers this need at 500/500 — both partitions
+  are class-balanced and disjoint from each other. Adding a third labeled
+  small family would dilute the catalog without solving a real problem. If
+  the Modeler decides they need a tighter analogue of WDA/WDM with K04-side
+  test images, that's their call to make from a position of knowing what
+  they're modelling.
+- **Re-tag WD2/TX0 with a more specific Dataset_Type** (e.g., a new
+  `Training_Holdout_Split` term) so consumers dispatching on type can tell
+  them apart from real held-out splits. Declined for this arc: the existing
+  `Dataset_Type` vocabulary doesn't model "what side of a parent split this
+  came from," and adding a term just for this catalog would be an
+  over-correction without a downstream consumer asking for it. The
+  description on each dataset already names the seed and source partition
+  (see `cifar10_labeled_split` description — "stratified 80/20 from training
+  images, seed=42"). The Modeler reads descriptions before training; this
+  entry makes sure they don't have to read all 13 to find the distinction.
+
+---
+
+<a id="tk-003"></a>
+### tk-003 — Convention — Image_Classification is dual-purpose (ground truth + predictions)
+**When:** 2026-05-27T17:07:00+00:00
+**By:** Carl Kesselman (carl@isi.edu)
+**Supported by:** [tk-001](#tk-001) (audit established the loader-execution shape this convention scopes)
+
+The [Image_Classification feature on Image](https://localhost/id/2/Execution_Image_Image_Classification)
+is written by two distinct kinds of execution and the rows are **not**
+distinguishable by table membership alone:
+
+- The **loader execution** ([FZC](https://localhost/id/2/FZC)) wrote 1500
+  ground-truth rows with `Confidence IS NULL` (one per Image RID, the canonical
+  Toronto label).
+- **Training/prediction executions** (none yet at the time of writing this
+  entry) will write rows with `Confidence` populated — typically one row per
+  (Image, Execution) pair, so the same image will carry multiple label rows
+  after each training run.
+
+Implications for collaborators:
+
+- **When reading this feature as ground truth**, filter by execution
+  (`Execution == 'FZC'`) or by `Confidence IS NULL`. Either is correct *now*;
+  the execution filter is more durable (NULL `Confidence` is a loader-side
+  convention that could change with a future loader version).
+- An unfiltered `ml.feature_values("Image", "Image_Classification")` returns
+  GT + every recorded prediction interleaved. After the Modeler runs even one
+  training execution, that's already not what you want for evaluation.
+- The `newest` selector is **not** a safe substitute for "ground truth" — it
+  resolves to "whichever execution last wrote a row for this image," which
+  after training is the most recent prediction, not the GT.
+- Dataset-level auditing that counts rows in this feature table will need to
+  scope by execution too — a parity check like "1500 rows, no duplicates"
+  was true at audit time but goes false after the first training run. The
+  durable shape is "1500 rows scoped to execution [FZC](https://localhost/id/2/FZC),
+  one per image" — that count survives.
+
+Why this convention exists: the catalog reuses one Feature_Name across the
+GT and prediction roles instead of carving out a separate `Image_GT` feature.
+That makes provenance cleaner (every label row, whether GT or prediction,
+traces to a producing execution) at the cost of needing this filter discipline
+on the read side. The right place to filter is in the consumer code, not by
+splitting the feature.
+
