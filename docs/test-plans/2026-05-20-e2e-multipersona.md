@@ -252,20 +252,17 @@ agents never fix bugs mid-arc — that's a separate fix-pass.
 
 ### 3.3 What a persona's arc looks like
 
-Each persona enters their arc with three pieces of context: the
-project's `CLAUDE.md`, their own section of this document, and the
-state of the worktree (including `tacit-knowledge.md`) the previous
-persona left behind. Beyond that, the persona's *skills* drive
-how they work — what to consult before acting, when to record
-something, how to verify their assumptions. This document
-deliberately does not prescribe a fixed checklist; an arc that
-goes well looks like a competent professional doing their job,
-not like a script being executed.
+Each persona enters their arc with the project's `CLAUDE.md`,
+their own section of this document, and whatever the previous
+persona left in the catalog and the worktree. The persona's
+*skills* drive how they work from there — what to consult, when
+to record something, how to verify their assumptions. This
+document deliberately does not prescribe a checklist; an arc
+that goes well looks like a competent professional doing their
+job, not like a script being executed.
 
 At the end of their arc, the persona produces a short summary of
-what they did. Whatever else they leave behind (catalog state,
-config edits, files in the worktree, entries in
-`tacit-knowledge.md`, files under `findings/`) is determined by
+what they did. Whatever else they leave behind is determined by
 the work, not by this document.
 
 ### 3.4 Multi-agent setup
