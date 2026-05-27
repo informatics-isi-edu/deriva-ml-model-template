@@ -4,6 +4,7 @@ These tests use minimal mock objects rather than a real Execution because
 the failure paths we care about are entirely upstream of bag download —
 the function reads execution.datasets and decides what to do.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -11,7 +12,13 @@ from typing import Any
 
 import pytest
 
-from models.cifar10_cnn import build_loaders
+from models.cifar10_cnn import (
+    _LANE_CONFIGS,
+    _ROLE_TESTING,
+    _ROLE_TRAINING,
+    _ROLE_VALIDATION,
+    build_loaders,
+)
 
 
 @dataclass
@@ -45,19 +52,9 @@ def test_empty_datasets_raises_clear_error() -> None:
 
 # -----------------------------------------------------------------------------
 # Tests for the role-dispatch table introduced in Task 5.
-# These reference _LANE_CONFIGS and _make_loader, which are added in Task 5;
+# These reference _LANE_CONFIGS, which is added in Task 5;
 # the tests live here so they run as part of the same test file.
 # -----------------------------------------------------------------------------
-
-from unittest.mock import MagicMock
-
-from models.cifar10_cnn import (
-    _LANE_CONFIGS,
-    _ROLE_TRAINING,
-    _ROLE_TESTING,
-    _ROLE_VALIDATION,
-    _make_loader,
-)
 
 
 def test_lane_configs_cover_all_leaf_roles() -> None:

@@ -33,6 +33,7 @@ from __future__ import annotations
 import csv
 import random
 import warnings
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -189,12 +190,14 @@ def predict_batch(
             probabilities = F.softmax(model(inputs), dim=1)
             confidences, predicted = probabilities.max(1)
             for i, rid in enumerate(rids):
-                out.append({
-                    "rid": rid,
-                    "predicted_class": class_names[predicted[i].item()],
-                    "confidence": confidences[i].item(),
-                    "probs": probabilities[i].cpu().numpy(),
-                })
+                out.append(
+                    {
+                        "rid": rid,
+                        "predicted_class": class_names[predicted[i].item()],
+                        "confidence": confidences[i].item(),
+                        "probs": probabilities[i].cpu().numpy(),
+                    }
+                )
     return out
 
 
@@ -236,8 +239,8 @@ def _bag_role(bag: DatasetBag) -> str | None:
     A bag's ``Dataset_Type`` is a set of catalog vocabulary terms (one or
     more of ``Training``/``Testing``/``Validation``/``Split``/qualifiers
     like ``Labeled``). We pick the first leaf role found; ``Split`` is
-    handled by the caller (it expands to its children, then this is
-    called on each child).
+    handled upstream by ``_flatten_to_leaves`` (it expands to children,
+    then this is called on each child).
     """
     roles = {t.lower() for t in bag.dataset_types}
     for role in _LEAF_ROLES:
@@ -264,6 +267,97 @@ def _rid_collate(
     return images, labels, rids
 
 
+@dataclass(frozen=True)
+class _LaneConfig:
+    """Per-role DataLoader policy.
+
+    Adding a new role (a new vocabulary term in ``_LEAF_ROLES``) is one
+    entry here plus one line in ``build_loaders``' return tuple.
+    """
+
+    missing: str
+    """``bag.as_torch_dataset`` policy for elements with no feature
+    value. ``'skip'`` drops them (training/validation: loss/accuracy
+    are undefined without labels); ``'unknown'`` keeps them with a
+    sentinel target (testing: we still want to record predictions on
+    unlabeled rows)."""
+
+    shuffle: bool
+    """Whether the DataLoader shuffles between epochs. Only training."""
+
+    use_seeded_generator: bool
+    """Whether to give the DataLoader a seeded ``torch.Generator`` for
+    reproducible shuffle order. Only matters when ``shuffle=True``."""
+
+
+_LANE_CONFIGS: dict[str, _LaneConfig] = {
+    _ROLE_TRAINING: _LaneConfig(
+        missing="skip",
+        shuffle=True,
+        use_seeded_generator=True,
+    ),
+    _ROLE_TESTING: _LaneConfig(
+        missing="unknown",
+        shuffle=False,
+        use_seeded_generator=False,
+    ),
+    _ROLE_VALIDATION: _LaneConfig(
+        missing="skip",
+        shuffle=False,
+        use_seeded_generator=False,
+    ),
+}
+
+
+def _flatten_to_leaves(execution: Execution) -> list[DatasetBag]:
+    """Walk ``execution.datasets``, expand any ``Split`` parent to its
+    leaf children. Non-Split bags pass through.
+    """
+    leaves: list[DatasetBag] = []
+    for bag in execution.datasets:
+        roles = {t.lower() for t in bag.dataset_types}
+        if _ROLE_SPLIT in roles:
+            leaves.extend(bag.list_dataset_children())
+        else:
+            leaves.append(bag)
+    return leaves
+
+
+def _make_loader(
+    bag: DatasetBag,
+    role: str,
+    batch_size: int,
+    seed: int | None,
+) -> DataLoader:
+    """Build one DataLoader for one bag's role-specific lane.
+
+    Looks up the role's policy in ``_LANE_CONFIGS``. Adding a new role
+    means adding an entry there; this function doesn't need to change.
+    """
+    cfg = _LANE_CONFIGS[role]
+    dataset = bag.as_torch_dataset(
+        element_type="Image",
+        sample_loader=_load_image,
+        transform=_TRANSFORM,
+        targets=["Image_Classification"],
+        target_transform=_target_to_class_idx,
+        missing=cfg.missing,
+    )
+    generator = None
+    if cfg.use_seeded_generator and seed is not None:
+        generator = torch.Generator()
+        generator.manual_seed(seed)
+    # macOS DataLoader: num_workers=0 to avoid fork() + MPS deadlock.
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=cfg.shuffle,
+        num_workers=0,
+        collate_fn=_rid_collate,
+        generator=generator,
+    )
+
+
 def build_loaders(
     execution: Execution,
     batch_size: int,
@@ -273,10 +367,13 @@ def build_loaders(
     """Walk ``execution.datasets`` and build DataLoaders by ``Dataset_Type``.
 
     The harness:
-      1. Flatten any ``Split`` parents to their children.
-      2. For each leaf bag, look at its ``Dataset_Type`` and route to the
-         matching DataLoader (training / testing / validation).
-      3. If ``require_training`` is set and no Training bag was found,
+
+      1. Fail fast if ``execution.datasets`` is empty (misconfig: a
+         Hydra ``datasets=<group>`` override resolved to an empty list).
+      2. Flatten any ``Split`` parent bag to its children.
+      3. For each leaf bag, look up its role and build a DataLoader
+         from the role's lane policy (``_LANE_CONFIGS``).
+      4. If ``require_training`` is set and no Training bag was found,
          raise — fail loudly rather than silently produce a non-training
          "training run".
 
@@ -296,15 +393,20 @@ def build_loaders(
         a per-epoch metric but doesn't drive save-best — that's
         intentional for a demo. Plug early stopping in here if you
         want it.
+
+    Raises:
+        RuntimeError: If ``execution.datasets`` is empty (step 1), or
+            if ``require_training=True`` and no Training-typed bag is
+            present after flattening (step 4).
     """
-    # Fail fast on the misconfig case: a Hydra `datasets=foo` group
+    # Fail fast on the misconfig case: a Hydra `datasets=<group>` group
     # that resolved to an empty list. This typically means the
-    # placeholder registries in src/configs/datasets.py weren't
-    # filled in for the current catalog. The execution row in the
-    # catalog will already be open by the time we get here (deriva-ml
-    # creates it before invoking the model function), so this is the
-    # earliest the runner itself can catch it. Full upstream
-    # prevention would need a deriva-ml pre_check hook.
+    # placeholder registries in src/configs/datasets.py weren't filled
+    # in for the current catalog. The execution row in the catalog
+    # will already be open by the time we get here (deriva-ml creates
+    # it before invoking the model function), so this is the earliest
+    # the runner itself can catch it. Full upstream prevention would
+    # need a deriva-ml pre_check hook.
     if not execution.datasets:
         raise RuntimeError(
             "Execution has no input datasets. This typically means a "
@@ -316,77 +418,33 @@ def build_loaders(
             "override."
         )
 
-    # Expand Split parents to their children.
-    bags: list[DatasetBag] = []
-    for bag in execution.datasets:
-        roles = {t.lower() for t in bag.dataset_types}
-        if _ROLE_SPLIT in roles:
-            bags.extend(bag.list_dataset_children())
-        else:
-            bags.append(bag)
-
-    def _build(bag: DatasetBag, missing: str):
-        return bag.as_torch_dataset(
-            element_type="Image",
-            sample_loader=_load_image,
-            transform=_TRANSFORM,
-            targets=["Image_Classification"],
-            target_transform=_target_to_class_idx,
-            missing=missing,
-        )
-
-    # macOS DataLoader: num_workers=0 to avoid fork() + MPS deadlock.
+    leaves = _flatten_to_leaves(execution)
     loaders: dict[str, DataLoader] = {}
-    for bag in bags:
+    for bag in leaves:
         role = _bag_role(bag)
         if role is None:
             warnings.warn(
-                f"Bag {bag.dataset_rid} has no "
-                f"recognized Dataset_Type role (looked for one of "
-                f"{list(_LEAF_ROLES)} in {list(bag.dataset_types)!r}). "
-                f"Skipping.",
+                f"Bag {bag.dataset_rid} has "
+                f"Dataset_Type={list(bag.dataset_types)!r}; no recognised "
+                f"role among {list(_LEAF_ROLES)}. Skipping.",
                 RuntimeWarning,
                 stacklevel=2,
             )
             continue
+        loaders[role] = _make_loader(bag, role, batch_size, seed)
+        print(f"  {role.capitalize()} samples: {len(loaders[role].dataset)}")
 
-        # Test bags keep unlabeled rows (so we can still record
-        # predictions on them); training and validation skip them
-        # (loss/accuracy are undefined without labels).
-        missing = "unknown" if role == _ROLE_TESTING else "skip"
-        dataset = _build(bag, missing)
-
-        # Only the training loader shuffles, and only it gets a seeded
-        # generator. Test/val use shuffle=False.
-        generator = None
-        if role == _ROLE_TRAINING and seed is not None:
-            generator = torch.Generator()
-            generator.manual_seed(seed)
-
-        loaders[role] = DataLoader(
-            dataset,
-            batch_size=batch_size,
-            shuffle=(role == _ROLE_TRAINING),
-            num_workers=0,
-            collate_fn=_rid_collate,
-            generator=generator,
-        )
-        print(f"  {role.capitalize()} samples: {len(dataset)}")
-
-    train_loader = loaders.get(_ROLE_TRAINING)
-    test_loader = loaders.get(_ROLE_TESTING)
-    val_loader = loaders.get(_ROLE_VALIDATION)
-
-    if require_training and train_loader is None:
+    if require_training and _ROLE_TRAINING not in loaders:
         # Safety rail: fail loudly when the primary input is missing.
-        # Don't let a Validation-only execution masquerade as a
-        # successful training run.
-        seen = [
-            f"  - {b.dataset_rid}: "
-            f"Dataset_Type={list(b.dataset_types)!r}"
-            for b in bags
-        ]
-        diag = "\n".join(seen) if seen else "  (no input bags)"
+        # Distinct from the empty-datasets check at the top: here we
+        # had bags but none dispatched to the Training lane.
+        diag = (
+            "\n".join(
+                f"  - {b.dataset_rid}: Dataset_Type={list(b.dataset_types)!r}"
+                for b in leaves
+            )
+            or "  (no input bags after flattening)"
+        )
         raise RuntimeError(
             "No bag with Dataset_Type=Training found in execution input. "
             "Cannot train. Input bags after flattening Split parents:\n"
@@ -395,7 +453,12 @@ def build_loaders(
             "(see src/configs/datasets.py)."
         )
 
-    return train_loader, test_loader, val_loader, list(CIFAR10_CLASS_NAMES)
+    return (
+        loaders.get(_ROLE_TRAINING),
+        loaders.get(_ROLE_TESTING),
+        loaders.get(_ROLE_VALIDATION),
+        list(CIFAR10_CLASS_NAMES),
+    )
 
 
 def record_predictions(
@@ -449,7 +512,9 @@ def record_predictions(
         print("  WARNING: No predictions to record")
         return
 
-    ImageClassification = ml_instance.feature_record_class("Image", "Image_Classification")
+    ImageClassification = ml_instance.feature_record_class(
+        "Image", "Image_Classification"
+    )
     feature_records = [
         ImageClassification(
             Image=p["rid"],
@@ -460,8 +525,7 @@ def record_predictions(
     ]
     execution.add_features(feature_records)
     print(
-        f"  Recorded {len(feature_records)} predictions "
-        f"(source_label={source_label!r})"
+        f"  Recorded {len(feature_records)} predictions (source_label={source_label!r})"
     )
     if emission_accuracy is not None:
         acc, n_labeled = emission_accuracy
@@ -484,10 +548,9 @@ def record_predictions(
             "Source_Label records the model state (e.g. epoch_N, evaluation)."
         ),
     )
-    fieldnames = (
-        ["Image_RID", "Source_Label", "Predicted_Class", "Confidence"]
-        + [f"prob_{c}" for c in class_names]
-    )
+    fieldnames = ["Image_RID", "Source_Label", "Predicted_Class", "Confidence"] + [
+        f"prob_{c}" for c in class_names
+    ]
     with csv_file.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
@@ -625,9 +688,13 @@ def cifar10_cnn(
     mode = "Test-only" if test_only else "Training"
     print(f"CIFAR-10 CNN {mode}")
     print(f"  Host: {ml_instance.host_name}, Catalog: {ml_instance.catalog_id}")
-    print(f"  Architecture: conv1={conv1_channels}, conv2={conv2_channels}, hidden={hidden_size}")
+    print(
+        f"  Architecture: conv1={conv1_channels}, conv2={conv2_channels}, hidden={hidden_size}"
+    )
     if not test_only:
-        print(f"  Training: lr={learning_rate}, epochs={epochs}, batch_size={batch_size}, seed={seed}")
+        print(
+            f"  Training: lr={learning_rate}, epochs={epochs}, batch_size={batch_size}, seed={seed}"
+        )
 
     # Seed BEFORE building the model so weight init is reproducible.
     seed_everything(seed)
@@ -684,7 +751,10 @@ def cifar10_cnn(
         print("\nRecording test predictions to catalog...")
         predictions = predict_batch(model, test_loader, class_names, device)
         record_predictions(
-            predictions, class_names, execution, ml_instance,
+            predictions,
+            class_names,
+            execution,
+            ml_instance,
             source_label="evaluation",
             emission_accuracy=(test_acc, n_labeled),
         )
@@ -715,12 +785,16 @@ def cifar10_cnn(
         print(f"  Validation batches: {len(val_loader)}")
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    optimizer = optim.Adam(
+        model.parameters(), lr=learning_rate, weight_decay=weight_decay
+    )
 
     print("\nTraining...")
     training_log: list[dict[str, Any]] = []
     for epoch in range(1, epochs + 1):
-        train_loss, train_acc = train_one_epoch(model, train_loader, optimizer, criterion, device)
+        train_loss, train_acc = train_one_epoch(
+            model, train_loader, optimizer, criterion, device
+        )
         entry: dict[str, Any] = {
             "epoch": epoch,
             "train_loss": train_loss,
@@ -785,7 +859,10 @@ def cifar10_cnn(
         _, emit_acc, n_emit = evaluate(model, test_loader, device)
         predictions = predict_batch(model, test_loader, class_names, device)
         record_predictions(
-            predictions, class_names, execution, ml_instance,
+            predictions,
+            class_names,
+            execution,
+            ml_instance,
             source_label=f"epoch_{epochs}",
             emission_accuracy=(emit_acc, n_emit),
         )
