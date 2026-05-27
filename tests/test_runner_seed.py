@@ -1,12 +1,12 @@
 """Tests for the ``cifar10_cnn`` byte-reproducible-training seed knob.
 
 Covers the D02 fix: ``cifar10_cnn(..., seed=42)`` and the
-``_seed_everything`` helper that seeds Python ``random``, NumPy, and
+``seed_everything`` helper that seeds Python ``random``, NumPy, and
 PyTorch (CPU + CUDA if present).
 
 The end-to-end ``cifar10_cnn`` entry point requires a live DerivaML
 execution, so these tests exercise the reproducibility contract at the
-SimpleCNN-construction level via ``_seed_everything`` directly. That's
+SimpleCNN-construction level via ``seed_everything`` directly. That's
 the same code path ``cifar10_cnn`` walks at the start of every run, so
 byte-identical weight init is the load-bearing guarantee.
 """
@@ -19,7 +19,7 @@ import random
 import numpy as np
 import torch
 
-from models.cifar10_cnn import SimpleCNN, _seed_everything
+from models.cifar10_cnn import SimpleCNN, seed_everything
 
 
 def _state_dict_hash(model: torch.nn.Module) -> str:
@@ -40,9 +40,9 @@ def _build_model_after_seed(seed: int) -> torch.nn.Module:
     """Seed RNGs with ``seed`` and build a fresh SimpleCNN.
 
     Mirrors the exact order ``cifar10_cnn`` performs:
-    ``_seed_everything(seed)`` first, then ``SimpleCNN(...)``.
+    ``seed_everything(seed)`` first, then ``SimpleCNN(...)``.
     """
-    _seed_everything(seed)
+    seed_everything(seed)
     return SimpleCNN()
 
 
@@ -57,7 +57,7 @@ def test_same_seed_produces_identical_weights():
     h2 = _state_dict_hash(_build_model_after_seed(42))
     assert h1 == h2, (
         "SimpleCNN weight init is not reproducible from the seed — "
-        "_seed_everything() failed to cover every RNG that nn.Module "
+        "seed_everything() failed to cover every RNG that nn.Module "
         "default-init pulls from."
     )
 
@@ -77,31 +77,31 @@ def test_different_seeds_produce_different_weights():
     )
 
 
-def test_seed_everything_covers_python_random():
-    """``_seed_everything`` must seed Python's ``random`` module too.
+def testseed_everything_covers_python_random():
+    """``seed_everything`` must seed Python's ``random`` module too.
 
     DerivaML dataset bag adapters reach for ``random`` for stratified
     sampling and shuffles. Without this, a CIFAR-10 run would be
     reproducible-in-PyTorch but vary in batch composition.
     """
-    _seed_everything(42)
+    seed_everything(42)
     a = (random.random(), random.randint(0, 1000))
-    _seed_everything(42)
+    seed_everything(42)
     b = (random.random(), random.randint(0, 1000))
     assert a == b
 
 
-def test_seed_everything_covers_numpy():
-    """``_seed_everything`` must seed NumPy's global RNG too.
+def testseed_everything_covers_numpy():
+    """``seed_everything`` must seed NumPy's global RNG too.
 
     ``record_test_predictions`` builds a per-image probability array
     via ``.cpu().numpy()`` and any downstream sklearn/numpy step (ROC
     analysis, stratified sampling in ``_cifar10_datasets.py``) will
     pull from this RNG.
     """
-    _seed_everything(42)
+    seed_everything(42)
     a = np.random.rand(4).tolist()
-    _seed_everything(42)
+    seed_everything(42)
     b = np.random.rand(4).tolist()
     assert a == b
 
