@@ -386,6 +386,7 @@ def record_predictions(
     execution: Execution,
     ml_instance: DerivaML,
     source_label: str,
+    emission_accuracy: tuple[float, int] | None = None,
 ) -> None:
     """Write predictions to the catalog as feature rows + a CSV asset.
 
@@ -406,6 +407,25 @@ def record_predictions(
 
     The catalog feature row does NOT carry ``Source_Label`` (would
     require a schema migration); CSV is the source-label surface.
+
+    Args:
+        predictions: Output of :func:`predict_batch`.
+        class_names: List of class names in index order. Used to label
+            CSV probability columns.
+        execution: DerivaML execution context.
+        ml_instance: DerivaML instance for catalog access.
+        source_label: Provenance tag describing which model state these
+            predictions reflect (e.g. ``"epoch_10"``, ``"evaluation"``).
+        emission_accuracy: Optional ``(accuracy_pct, n_labeled)`` tuple
+            from a ground-truth-aware :func:`evaluate` on the same
+            loader these predictions came from. When provided, the
+            accuracy is printed alongside the "Recorded N predictions"
+            line. This is the number a downstream consumer will
+            reproduce by joining the committed CSV against the
+            ground-truth feature — printing it here closes the
+            provenance loop: if it diverges from the training log's
+            same-epoch ``test_acc``, the divergence is visible at
+            training time rather than from CSV archaeology later.
     """
     if not predictions:
         print("  WARNING: No predictions to record")
@@ -425,6 +445,18 @@ def record_predictions(
         f"  Recorded {len(feature_records)} predictions "
         f"(source_label={source_label!r})"
     )
+    if emission_accuracy is not None:
+        acc, n_labeled = emission_accuracy
+        if n_labeled > 0:
+            print(
+                f"    Emission-time accuracy: {acc:.2f}% "
+                f"({n_labeled} labeled samples). "
+                f"This is what a downstream consumer will recompute "
+                f"from the committed CSV joined against the ground-truth "
+                f"feature. Compare against the {source_label} line of "
+                f"training_log.txt — any divergence means the two "
+                f"accuracies were measured on different model state."
+            )
 
     csv_file = execution.asset_file_path(
         MLAsset.execution_asset,
@@ -633,7 +665,11 @@ def cifar10_cnn(
 
         print("\nRecording test predictions to catalog...")
         predictions = predict_batch(model, test_loader, class_names, device)
-        record_predictions(predictions, class_names, execution, ml_instance, source_label="evaluation")
+        record_predictions(
+            predictions, class_names, execution, ml_instance,
+            source_label="evaluation",
+            emission_accuracy=(test_acc, n_labeled),
+        )
 
         # Compact evaluation summary as a sibling asset.
         results_file = execution.asset_file_path(
@@ -719,12 +755,21 @@ def cifar10_cnn(
     # Final-epoch predictions on the test bag, tagged with the epoch
     # that produced them so a downstream reader can correlate against
     # the matching line of training_log.txt.
+    #
+    # Also re-evaluate on the same loader so we can print an
+    # emission-time accuracy alongside the recorded predictions. This
+    # is the number a downstream consumer reproduces from the
+    # committed CSV; if it diverges from the final-epoch test_acc in
+    # the training log, the desync is visible right here rather than
+    # surfacing later when someone joins the CSV against ground truth.
     if test_loader is not None:
         print("\nRecording test predictions to catalog...")
+        _, emit_acc, n_emit = evaluate(model, test_loader, device)
         predictions = predict_batch(model, test_loader, class_names, device)
         record_predictions(
             predictions, class_names, execution, ml_instance,
             source_label=f"epoch_{epochs}",
+            emission_accuracy=(emit_acc, n_emit),
         )
 
     print("\nTraining complete!")
