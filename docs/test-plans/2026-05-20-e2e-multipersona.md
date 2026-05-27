@@ -280,8 +280,8 @@ Where to look instead:
   worktree mechanics, wrap-up.** See
   [`e2e-orchestrator.md`](e2e-orchestrator.md).
 - **Evaluation criteria, findings classification, what a "good"
-  run looks like.** See `evaluator.md` (separate document — the
-  evaluator's rubric).
+  run looks like.** See [`e2e-evaluator.md`](e2e-evaluator.md) —
+  the evaluator's rubric.
 - **Inline bug-fixing during persona arcs.** Findings flow to a
   fix-pass after the evaluator's report lands.
 - **Multi-host scenarios, performance benchmarks, schema migration
@@ -301,7 +301,7 @@ Where to look instead:
 | Where does this scenario live? | `docs/test-plans/2026-05-20-e2e-multipersona.md` |
 | Where does Phase 0 bootstrap live? | `docs/test-plans/e2e-bootstrap.md` |
 | Where does the orchestrator live? | `docs/test-plans/e2e-orchestrator.md` |
-| Where does the evaluator's rubric live? | `docs/test-plans/evaluator.md` (separate document) |
+| Where does the evaluator's rubric live? | `docs/test-plans/e2e-evaluator.md` |
 | Where do persona findings go? | `findings/<persona>/<NN>-<slug>.md` in the shared e2e worktree |
 | Where does the persona-to-persona handoff happen? | `tacit-knowledge.md` (project root, in the shared e2e worktree) |
 | What's the catalog name? | `e2e-test-<YYYYMMDD>` (chosen at run start) |

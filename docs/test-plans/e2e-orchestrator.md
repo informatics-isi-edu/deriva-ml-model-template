@@ -185,11 +185,11 @@ user's review. **Autonomous mode:** proceed.
 ### 5.6 Launch the evaluator
 
 Once the three persona arcs are done, spawn the evaluator agent
-(see `evaluator.md` — not yet written; this is a forward
-reference). The evaluator runs **cold** — it sees the artifacts
-the personas produced but not the prompts that drove them. Its
-output is `docs/reports/<YYYY-MM-DD>-evaluation.md` in the e2e
-worktree, plus any new files under `findings/` it judges worth
+(see [`e2e-evaluator.md`](e2e-evaluator.md) for its rubric). The
+evaluator runs **cold** — it sees the artifacts the personas
+produced but not the prompts that drove them. Its output is
+`docs/reports/<YYYY-MM-DD>-evaluation.md` in the e2e worktree,
+plus any new files under `findings/evaluator/` it judges worth
 filing.
 
 The evaluator is **not** optional. It's the test's actual output.
