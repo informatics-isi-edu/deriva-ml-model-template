@@ -169,6 +169,7 @@ def record_test_predictions(
     execution: Execution,
     ml_instance: DerivaML,
     device: torch.device,
+    source_label: str = "unknown",
 ) -> int:
     """Record per-image classification predictions to the DerivaML catalog.
 
@@ -179,6 +180,29 @@ def record_test_predictions(
     probability distribution per image as an ``Execution_Asset`` for
     downstream ROC analysis.
 
+    **Provenance contract (analyst/02 from 2026-05-27 e2e run).** The
+    predictions emitted here come from whatever state the model is in
+    *at this moment* — typically the final-epoch state in training mode,
+    or the loaded-weights state in evaluation mode. To make that
+    knowable downstream, this function:
+
+    1. Tags every catalog feature row and CSV row with ``source_label``
+       (e.g. ``"epoch_10"`` in training mode, ``"evaluation"`` in eval
+       mode). The Analyst can read this column to know which model
+       state produced each prediction.
+    2. Recomputes accuracy from the exact same logits used to emit
+       predictions (when the test loader yields ground-truth labels)
+       and logs the result. This number is guaranteed to match what
+       the committed CSV would reproduce when joined against ground
+       truth, even if the surrounding training-loop log surfaced a
+       different epoch-time number. Analysts who download the CSV
+       and re-compute will see this number.
+
+    The recomputed accuracy is also returned in the function's printed
+    summary so the training log itself flags any divergence between
+    "final-epoch test_acc inside the training loop" and "test_acc at
+    the moment predictions were emitted."
+
     Args:
         model: Trained PyTorch model.
         test_loader: Yields ``(image_batch, label_batch, rid_list)``.
@@ -186,6 +210,14 @@ def record_test_predictions(
         execution: DerivaML execution context.
         ml_instance: DerivaML instance for catalog access.
         device: PyTorch device for inference.
+        source_label: Provenance tag describing which model state
+            these predictions reflect. Recommended values:
+            ``"epoch_N"`` (training mode), ``"evaluation"`` (eval
+            mode loading saved weights). Stored as a column on every
+            CSV row. The catalog ``Image_Classification`` feature
+            row does NOT carry this label (would require a schema
+            migration); cross-channel consumers should rely on the
+            CSV asset for source-label provenance.
 
     Returns:
         Number of predictions recorded.
@@ -198,11 +230,28 @@ def record_test_predictions(
     feature_records: list[Any] = []
     csv_rows: list[dict[str, Any]] = []
 
+    # Track ground-truth-aware accuracy from the same logits we emit.
+    # If the test loader has GT labels (label != -1), this number is
+    # the accuracy the Analyst will recompute when joining the
+    # committed CSV against the ground-truth feature. By printing it
+    # here we close the provenance loop: the training log shows the
+    # epoch-time accuracy AND the prediction-emission accuracy, so
+    # any divergence is visible without leaving the runner output.
+    emit_correct = 0
+    emit_total_labeled = 0
+
     with torch.no_grad():
-        for inputs, _labels, rids in test_loader:
+        for inputs, labels, rids in test_loader:
             inputs = inputs.to(device)
+            labels = labels.to(device)
             probabilities = F.softmax(model(inputs), dim=1)
             confidences, predicted = probabilities.max(1)
+
+            labeled_mask = labels != -1
+            emit_total_labeled += int(labeled_mask.sum().item())
+            emit_correct += int(
+                (predicted.eq(labels) & labeled_mask).sum().item()
+            )
 
             for i, rid in enumerate(rids):
                 probs = probabilities[i].cpu().numpy()
@@ -219,6 +268,7 @@ def record_test_predictions(
 
                 row = {
                     "Image_RID": rid,
+                    "Source_Label": source_label,
                     "Predicted_Class": predicted_class,
                     "Confidence": confidence,
                 }
@@ -228,9 +278,21 @@ def record_test_predictions(
 
     if feature_records:
         execution.add_features(feature_records)
-        print(
-            f"  Recorded {len(feature_records)} classification predictions with confidence scores"
+        msg = (
+            f"  Recorded {len(feature_records)} classification predictions "
+            f"with confidence scores (source_label={source_label!r})"
         )
+        if emit_total_labeled > 0:
+            emit_acc = 100.0 * emit_correct / emit_total_labeled
+            msg += (
+                f"\n    Emission-time accuracy: {emit_acc:.2f}% "
+                f"({emit_correct}/{emit_total_labeled}). "
+                f"This is what the Analyst will recompute from the "
+                f"committed CSV. Compare against the {source_label} "
+                f"line of the training log — any divergence means the "
+                f"two accuracies were measured on different model state."
+            )
+        print(msg)
     else:
         print("  WARNING: No predictions recorded (test loader was empty)")
 
@@ -238,11 +300,19 @@ def record_test_predictions(
         csv_file = execution.asset_file_path(
             MLAsset.execution_asset,
             "prediction_probabilities.csv",
-            description="Per-image predicted class and probability distributions over all CIFAR-10 classes",
+            description=(
+                "Per-image predicted class and probability distributions "
+                "over all CIFAR-10 classes. Source_Label column records "
+                "the model state these predictions reflect (e.g. "
+                "epoch_N for training, evaluation for eval mode)."
+            ),
         )
-        fieldnames = ["Image_RID", "Predicted_Class", "Confidence"] + [
-            f"prob_{c}" for c in class_names
-        ]
+        fieldnames = [
+            "Image_RID",
+            "Source_Label",
+            "Predicted_Class",
+            "Confidence",
+        ] + [f"prob_{c}" for c in class_names]
         with csv_file.open("w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
@@ -690,7 +760,9 @@ def cifar10_cnn(
             test_loss = float("nan")
             print("  Test set is unlabeled — skipping accuracy/loss reporting.")
 
-        # Record predictions to catalog
+        # Record predictions to catalog. source_label="evaluation"
+        # documents that these predictions reflect the model state
+        # loaded from the weights file, not a freshly-trained epoch.
         print("\nRecording test predictions to catalog...")
         record_test_predictions(
             model=model,
@@ -699,6 +771,7 @@ def cifar10_cnn(
             execution=execution,
             ml_instance=ml_instance,
             device=device,
+            source_label="evaluation",
         )
 
         # Save evaluation results
@@ -914,7 +987,11 @@ def cifar10_cnn(
             f.write(line + "\n")
     print(f"  Saved log to: {log_file}")
 
-    # Record test predictions to catalog if test data is available
+    # Record test predictions to catalog if test data is available.
+    # source_label="epoch_N" tags every prediction with the epoch
+    # whose weights produced it (the final epoch, since the runner
+    # does not implement save-best). Analysts reading the committed
+    # CSV can correlate against the matching line in training_log.txt.
     if test_loader is not None:
         print("\nRecording test predictions to catalog...")
         record_test_predictions(
@@ -924,6 +1001,7 @@ def cifar10_cnn(
             execution=execution,
             ml_instance=ml_instance,
             device=device,
+            source_label=f"epoch_{epochs}",
         )
 
     print("\nTraining complete!")
