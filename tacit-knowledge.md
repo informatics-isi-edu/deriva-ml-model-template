@@ -238,3 +238,116 @@ override `datasets=` to a Split.
   `Image` (one per row, per tk-001).
 
 ---
+
+### tk-004 — Analyst arc: XPR is the operating point, not XZT
+**When:** 2026-05-27T07:10:00+00:00
+**By:** Carl Kesselman (https://localhost/auth/realms/deriva/ec40f483-26ae-4a8b-aa24-5155ca94cb22)
+**Supported by:** tk-001 (catalog audit — clean labels, 10/class
+balance let the analysis read accuracy straight from prediction-vs-GT
+join), tk-002 (leakage map — confirmed WD2 within-family pair is
+safe), tk-003 (Modeler's three differentiated runs and asset wiring).
+
+Ran the ROC analysis notebook against the Modeler's three runs
+(XDP/quick, XPR/default, XZT/extended). The catalog-side numbers
+match what the Modeler reported to the byte. The interesting story
+is in confidence calibration, not accuracy — and it changes the
+recommendation.
+
+Analysis execution: **Y90** (`https://localhost/id/96/Y90`), 13
+linked Execution_Assets (3 inputs, 10 outputs), all status
+`Uploaded`. Outputs include 3 ROC-curve JPEGs, 1 ROC-comparison
+overlay, 3 confusion-matrix JPEGs, `roc_metrics.csv`, the
+papermill-executed notebook, and the markdown export. Full report
+at [`docs/reports/2026-05-27d-analyst-report.md`](docs/reports/2026-05-27d-analyst-report.md).
+
+**Headline finding: XPR is the operating point, not XZT.** The
+ranking by top-1 accuracy (XZT 41% > XPR 38% > XDP 24%) and by
+micro-AUC (0.798 > 0.787 > 0.677) both put XZT first, but the
+calibration table inverts the recommendation:
+
+| Exec | Acc% | Avg conf. when correct | Avg conf. when wrong | Gap |
+|------|-----:|-----------------------:|---------------------:|----:|
+| XDP  | 24   | 23.5% | 17.8% | 5.7pp |
+| XPR  | 38   | 50.8% | 41.8% | 9.0pp |
+| XZT  | 41   | **88.6%** | **77.8%** | 10.8pp |
+
+XZT averages 78% confidence even on wrong predictions. Saturated
+softmax on a 400-image train set: the textbook signature tk-003
+anticipated from the loss-divergence pattern shows up here on the
+held-out side as over-confident wrong predictions. **The 3 extra
+points of accuracy XZT buys are not worth the calibration loss.**
+
+The probability outputs of XPR are usable as confidence signals
+downstream; the probability outputs of XZT are not.
+
+**Cross-cutting class-level finding: frog is a magnet class.**
+All three models, when they don't know, reach for `frog`:
+- XDP predicts `frog` for 39 of 100 test images (recall=80% on
+  frog itself, but only because the model is biased).
+- XZT predicts `frog` for 25 of 100; the textbook `cat→frog`
+  confusion (8/10 cats predicted as frogs in XDP; 5/10 in XZT) is
+  the dominant error mode in both runs.
+- XPR is the only run that *doesn't* show the cat→frog
+  attractor — and not by accident: that's what 10 epochs without
+  the heavy regularization buys.
+
+`bird` plays the same attractor role in XPR (cat→bird, deer→bird,
+5/10 each). The shape neighbourhood of `frog`/`bird`/`cat`/`deer`
+at 32×32 is what these models are picking up on, not species
+features. Any *real* version of this exercise — larger train, more
+test data — would want to add a calibration / reliability-diagram
+output to the notebook; the current `roc_metrics.csv` doesn't
+capture this.
+
+**Why this matters operationally:**
+- A downstream consumer who picks "the model with the best AUC"
+  (which is what `roc_metrics.csv` invites them to do) would pick
+  XZT. The accompanying confusion-matrix + confidence narrative
+  in the report is what flips the recommendation to XPR. **The
+  numbers alone are misleading; the story is in the calibration.**
+- The asset-RID-in-filename convention in the notebook
+  (`roc_curves_<model_config>_<asset_rid>.jpg`) is load-bearing.
+  Without it, XDP and XPR would have overwritten each other's
+  ROC JPEGs in the output bag (both have unique `model_config`
+  names *here*, but a sweep that varies only hyperparameters
+  would share `default_model` across all cells).
+
+**Friction noted, not fixed:**
+- `deriva-ml-run-notebook notebook.ipynb roc_analysis` (with
+  `roc_analysis` as a trailing positional) raises
+  `missing EQUAL at '<EOF>'` — a Hydra-parser error message that
+  doesn't point at the actual problem (unexpected positional;
+  the runner doesn't take a config name positionally because the
+  notebook itself calls `run_notebook("roc_analysis", ...)`).
+  Not blocking; documented in CLAUDE.md.
+- The training-cache directory at
+  `/Users/carl/.deriva-ml/localhost/96/upload/Y90/...` only
+  contains the *second* upload bag (the .ipynb + .md from the
+  runner harness). The first bag (the 8 output assets from
+  `execution.commit_output_assets()` inside the notebook) was
+  uploaded and then the cache cleaned for the second bag. The
+  catalog has all 13 assets; the local cache only mirrors the
+  last bag. Not a bug, but worth knowing — if you want a local
+  copy of the analysis JPEGs, you have to fetch them by RID
+  (see `analysis-scratch/fetch_outputs.py`), not browse the
+  upload cache. (Saved a local copy under
+  `analysis-scratch/y90_outputs/` for the Evaluator.)
+
+**For the Evaluator:**
+- The full report under `docs/reports/2026-05-27d-analyst-report.md`
+  is structured for a non-ML reader — TL;DR + sections on inputs,
+  verification, ranking, per-class behaviour, calibration, and
+  operational recommendations. Section 6 lists every catalog
+  artifact with its RID and byte count.
+- Re-runnable scripts: `analysis-scratch/rank_runs.py` (independent
+  re-derivation of all numbers from the prediction CSVs),
+  `analysis-scratch/verify_y90.py` (cross-channel catalog
+  verification), `analysis-scratch/fetch_outputs.py` (local
+  download of all 10 Y90 output assets).
+- The catalog state Y90 represents is durable — the report and tk
+  entry both link to it via `https://localhost/id/96/Y90`.
+- Nothing routes to a `findings/analyst/` entry. The analysis ran
+  cleanly end-to-end; the friction I encountered is the documented
+  kind, not the surprising kind.
+
+---

@@ -1,0 +1,179 @@
+[
+  {
+    "execution_rid": "XZT",
+    "asset_rid": "Y1R",
+    "csv_path": "/Users/carl/GitHub/DerivaML/deriva-ml-model-template-e2e/analysis-scratch/asset_Y1R/prediction_probabilities.csv",
+    "n_predictions": 100,
+    "n_matched_to_gt": 100,
+    "top1_accuracy_pct": 41.0,
+    "per_class": {
+      "airplane": {
+        "n": 10,
+        "recall_pct": 50.0
+      },
+      "automobile": {
+        "n": 10,
+        "recall_pct": 70.0
+      },
+      "bird": {
+        "n": 10,
+        "recall_pct": 0.0
+      },
+      "cat": {
+        "n": 10,
+        "recall_pct": 10.0
+      },
+      "deer": {
+        "n": 10,
+        "recall_pct": 20.0
+      },
+      "dog": {
+        "n": 10,
+        "recall_pct": 50.0
+      },
+      "frog": {
+        "n": 10,
+        "recall_pct": 60.0
+      },
+      "horse": {
+        "n": 10,
+        "recall_pct": 60.0
+      },
+      "ship": {
+        "n": 10,
+        "recall_pct": 30.0
+      },
+      "truck": {
+        "n": 10,
+        "recall_pct": 60.0
+      }
+    },
+    "top_confused_pairs": [
+      "cat->frog: 5",
+      "deer->frog: 3",
+      "bird->dog: 3",
+      "dog->cat: 3",
+      "truck->automobile: 3"
+    ],
+    "avg_confidence_on_correct_pct": 88.61,
+    "avg_confidence_on_wrong_pct": 77.82
+  },
+  {
+    "execution_rid": "XPR",
+    "asset_rid": "XRP",
+    "csv_path": "/Users/carl/GitHub/DerivaML/deriva-ml-model-template-e2e/analysis-scratch/asset_XRP/prediction_probabilities.csv",
+    "n_predictions": 100,
+    "n_matched_to_gt": 100,
+    "top1_accuracy_pct": 38.0,
+    "per_class": {
+      "airplane": {
+        "n": 10,
+        "recall_pct": 50.0
+      },
+      "automobile": {
+        "n": 10,
+        "recall_pct": 70.0
+      },
+      "bird": {
+        "n": 10,
+        "recall_pct": 20.0
+      },
+      "cat": {
+        "n": 10,
+        "recall_pct": 30.0
+      },
+      "deer": {
+        "n": 10,
+        "recall_pct": 0.0
+      },
+      "dog": {
+        "n": 10,
+        "recall_pct": 50.0
+      },
+      "frog": {
+        "n": 10,
+        "recall_pct": 40.0
+      },
+      "horse": {
+        "n": 10,
+        "recall_pct": 40.0
+      },
+      "ship": {
+        "n": 10,
+        "recall_pct": 40.0
+      },
+      "truck": {
+        "n": 10,
+        "recall_pct": 40.0
+      }
+    },
+    "top_confused_pairs": [
+      "truck->automobile: 5",
+      "cat->bird: 5",
+      "deer->bird: 5",
+      "dog->cat: 4",
+      "deer->frog: 2"
+    ],
+    "avg_confidence_on_correct_pct": 50.77,
+    "avg_confidence_on_wrong_pct": 41.75
+  },
+  {
+    "execution_rid": "XDP",
+    "asset_rid": "XFM",
+    "csv_path": "/Users/carl/GitHub/DerivaML/deriva-ml-model-template-e2e/analysis-scratch/asset_XFM/prediction_probabilities.csv",
+    "n_predictions": 100,
+    "n_matched_to_gt": 100,
+    "top1_accuracy_pct": 24.0,
+    "per_class": {
+      "airplane": {
+        "n": 10,
+        "recall_pct": 70.0
+      },
+      "automobile": {
+        "n": 10,
+        "recall_pct": 0.0
+      },
+      "bird": {
+        "n": 10,
+        "recall_pct": 10.0
+      },
+      "cat": {
+        "n": 10,
+        "recall_pct": 0.0
+      },
+      "deer": {
+        "n": 10,
+        "recall_pct": 0.0
+      },
+      "dog": {
+        "n": 10,
+        "recall_pct": 0.0
+      },
+      "frog": {
+        "n": 10,
+        "recall_pct": 80.0
+      },
+      "horse": {
+        "n": 10,
+        "recall_pct": 0.0
+      },
+      "ship": {
+        "n": 10,
+        "recall_pct": 0.0
+      },
+      "truck": {
+        "n": 10,
+        "recall_pct": 80.0
+      }
+    },
+    "top_confused_pairs": [
+      "cat->frog: 8",
+      "horse->frog: 6",
+      "ship->airplane: 5",
+      "automobile->truck: 5",
+      "bird->frog: 5"
+    ],
+    "avg_confidence_on_correct_pct": 23.47,
+    "avg_confidence_on_wrong_pct": 17.78
+  }
+]
