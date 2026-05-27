@@ -251,8 +251,7 @@ def _load_image(path: Any, _row: dict[str, Any]) -> PIL.Image.Image:
 
 
 def _target_to_class_idx(rec: Any) -> int:
-    cls = getattr(rec, "Image_Class", None) or rec.Name
-    return CIFAR10_CLASS_TO_IDX[cls]
+    return CIFAR10_CLASS_TO_IDX[rec.Image_Class]
 
 
 def _rid_collate(
@@ -323,7 +322,7 @@ def build_loaders(
         role = _bag_role(bag)
         if role is None:
             warnings.warn(
-                f"Bag {getattr(bag, 'dataset_rid', '<unknown>')} has no "
+                f"Bag {bag.dataset_rid} has no "
                 f"recognized Dataset_Type role (looked for one of "
                 f"{list(_LEAF_ROLES)} in {list(bag.dataset_types)!r}). "
                 f"Skipping.",
@@ -364,7 +363,7 @@ def build_loaders(
         # Don't let a Validation-only execution masquerade as a
         # successful training run.
         seen = [
-            f"  - {getattr(b, 'dataset_rid', '<unknown>')}: "
+            f"  - {b.dataset_rid}: "
             f"Dataset_Type={list(b.dataset_types)!r}"
             for b in bags
         ]
