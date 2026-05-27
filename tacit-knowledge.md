@@ -225,3 +225,195 @@ Construction details (see `scripts/curator_create_validation.py`):
   test of the dispatch path; expand if the metric is too noisy.
 
 ---
+
+## tk-004 — Developer: training runs (catalog 93, workflow XN8)
+
+**When:** 2026-05-27 (Developer persona arc)
+**By:** Developer
+**Supported by:** tk-001, tk-002, tk-003
+
+### Workflow used
+
+Single workflow **`XN8` — CIFAR-10 2-Layer CNN** (type
+`Training` + `Image Classification`,
+checksum `ed8fbff538bf20f3e692ec45be053ed1bd034a0b`). All three
+executions reuse this workflow; only the Hydra overrides differ.
+Workflow URL pins to commit
+`6c9a78157773f4014ff7974f4c13a0423c88adf3` of
+`src/models/cifar10_cnn.py`. `allow_dirty=True` is set on each
+execution because the worktree carries unpushed `[E2E-DROP]`
+commits — that's the documented dev override (`DERIVA_ML_ALLOW_DIRTY=true`).
+
+### Executions (ranked by final test accuracy)
+
+| Rank | Exec RID | Variant | Dataset(s) | Epochs | Seed | Final test_acc | Final val_acc | Weights | Log | Predictions |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | **XYG** | `cifar10_default` (default_model on TX0) | TX0 (600/150) | 10 | 123 | **42.00%** | — | Y0A | Y0C | Y0E |
+| 2 | **YAP** | `cifar10_regularized` (dropout 0.25, wd 1e-4) on TX0+**XEM** | TX0 (600/150) + **XEM (100 Validation)** | 10 | 2026 | 37.33% | **43.00%** | YCJ | YCM | YCP |
+| 3 | **XNE** | `cifar10_quick` (3-epoch smoke) on WD2 | WD2 (400/100) | 3 | 42 | 24.00% | — | XQ8 | XQA | XQC |
+
+All three: `status=Uploaded`, `workflow=XN8`, 3 Execution_Assets each
+(weights `.pt` + training log `.txt` + per-image
+`prediction_probabilities.csv`). Total catalog state added by this
+arc: **3 executions, 9 Execution_Asset rows**.
+
+### Decisions
+
+**Dataset choice.**
+
+- **XNE smoke (WD2):** Pick the smallest labeled split that
+  exercises stratification so the runner pipeline is end-to-end
+  validated before committing compute to the longer runs. 3 epochs
+  on a CPU finishes in ~1 second of wall training time. Threshold
+  metric not the point — this run is a pipeline smoke test.
+- **XYG main run (TX0):** The Curator's tk-003 recommends TX0
+  (mid-size) for the main training flow because it's stratified
+  80/20 from the *training* pool JZT and is naturally disjoint
+  from K04 (and therefore from XEM). Picked seed=123 to introduce
+  run-to-run variance against the seed=42 default already pinned
+  in `cifar10_cnn.py`.
+- **YAP Validation lane (TX0 + XEM):** Designed to exercise the
+  D01 Dataset_Type dispatch that the cifar10_cnn runner gained on
+  2026-05-26 but that had no Validation-typed input in the
+  bootstrap. Added the composite `cifar10_labeled_split_with_validation`
+  config so the lane is reachable via plain Hydra CLI. seed=2026
+  matches Curator XEM construction seed for cross-arc symmetry.
+  XEM only overlaps with K04 (which TX0 doesn't draw from) so the
+  Validation set is genuinely unseen by the training half. This is
+  the run worth re-doing if Analyst wants to test stricter
+  hyperparameter choices.
+
+**Model variant choice.**
+
+- One variant per run, each with a different question:
+  - `cifar10_quick`: pipeline-only (does the runner work?).
+  - `default_model`: baseline (what does 10 epochs of a vanilla
+    config buy you on 600 stratified images?).
+  - `cifar10_regularized`: regularized variant (does dropout +
+    weight decay help on this scale?).
+- Did *not* run the 50-epoch `cifar10_extended` variant. Reasoning:
+  at 1500 catalog images and 600-image training sets, the
+  Curator's perfectly-balanced class distribution + small data
+  ceiling means an extra 40 epochs would mostly overfit. The
+  Analyst is welcome to run it if they want an overfitting
+  signal in the ROC analysis.
+- Did *not* run a multirun (sweep). The plan rated this useful
+  but here three single-experiment runs at different points in
+  the dataset×variant×seed space produces a more interpretable
+  ranking than four learning-rate-sweep points all on
+  `cifar10_quick`. Logged here so it isn't read as a gap — it's a
+  deliberate choice given the small dataset.
+
+**Hyperparameter choices.**
+
+- Default learning rate (1e-3) and batch size (64) on XYG/YAP
+  match the model-config defaults; deliberately *not* swept
+  because run 2 / run 3 differ on model variant + dataset already.
+  More moving variables would make the ranking noisier without
+  enough runs to disambiguate.
+- Three distinct seeds (42, 123, 2026) — the byte-reproducibility
+  knob added in #30 means re-running any of these is exact.
+
+### Cross-channel verification (done)
+
+**Indirect channel (MCP):**
+- `deriva_ml_list_executions(sort=True)` reports 8 executions
+  total in the catalog. The 3 most recent (YAP, XYG, XNE) all
+  carry `workflow_rid=XN8` and `status=Uploaded`. Older 5 are
+  Curator/loader executions and check out.
+- `deriva_ml_list_assets("Execution_Asset")` reports `count=9` —
+  exactly the expected 3×3 set, RIDs match what `commit_output_assets`
+  printed verbatim during each run.
+- `deriva_ml_get_lineage(YAP, depth=1)` shows YAP consumed
+  `TX0 v0.1.0.post1.dev1` and `XEM v0.1.0.post1.dev1` as input
+  datasets — confirming the Validation dispatch lane was actually
+  fed, not just intended.
+
+**Direct channel (deriva-ml Python via path-builder):**
+- `Execution.filter(RID==<rid>).link(Execution_Asset_Execution)
+  .link(Execution_Asset).entities()` returns the same 3-row sets
+  per execution. Set equality check passed for all three
+  (`rids_found == expected` True three times).
+- `lookup_execution(rid)` confirms `status=Uploaded` and workflow
+  metadata for each.
+
+No disagreement between channels. Both surfaces stayed exactly in
+sync — no friction-map finding to file against the read paths for
+this arc.
+
+### Friction observed
+
+1. **`Execution` vs `ExecutionRecord` API surface.** The
+   `lookup_execution(rid)` call returns an `ExecutionRecord`
+   (read-only metadata view), not the `Execution` *handle* that
+   has methods like `execution_assets()`. The naming overlap is
+   confusing — both are called "Execution" in different contexts.
+   Workaround: drop to the path-builder. Not blocking, but the
+   first time you hit it from a fresh shell you waste a few
+   minutes finding the right API. Filed as
+   `findings/developer/01-execution-vs-executionrecord-api.md`.
+2. **`pathBuilder` is a method, not a property,** at least at the
+   v1.39.4 surface I had pinned. Minor; one-character fix once
+   you see the error. Worth noting because the deriva-ml
+   docstrings I've seen treat it as a property.
+
+### Handoff to Analyst
+
+**Focus run for analysis:** **XYG** (highest test_acc 42.00%) is
+the natural baseline for ROC/confusion-matrix analysis. **YAP**
+is the interesting alternative because it carries the only
+per-epoch Validation curve and tests the regularized variant.
+**XNE** is mostly a smoke-test trophy; include it in the ranking
+table so the comparison-spread is visible, but don't expect deep
+signal from a 3-epoch run.
+
+**Success metric used:** Final-epoch test accuracy. Cheap to
+compute, available in every training log, ranks the runs cleanly.
+The Analyst can override if they want top-k or AUC instead — the
+predictions CSV per execution has the per-image class probabilities
+needed to compute any soft metric (ROC, AUC, calibration).
+
+**Where the outputs live:**
+- Weights (per execution): `Execution_Asset RID` ∈ {XQ8, Y0A, YCJ}.
+- Per-image prediction probabilities (CSV, ground truth +
+  predicted class + 10-class soft probabilities, keyed by Image
+  RID): `Execution_Asset RID` ∈ {XQC, Y0E, YCP}.
+- Training logs (plain text, epoch-by-epoch loss + acc):
+  `Execution_Asset RID` ∈ {XQA, Y0C, YCM}.
+- Lineage for any of the 3 executions points back through the
+  dataset(s) consumed → through the upstream Curator/loader
+  executions. `deriva_ml_get_lineage(<exec_rid>, depth=None)`
+  walks the full chain.
+
+**Caveats:**
+- The three runs are not strictly comparable: they used different
+  datasets *and* different model variants *and* different seeds.
+  This is intentional (variety > a-b comparability for the e2e
+  exercise) but the Analyst should note it in their report.
+- YAP's `val_acc` came from per-epoch evaluation on 100 images —
+  small sample, noisy metric. Use it as a sanity check on the
+  Validation lane, not as the primary ranking signal.
+- TX0 testing partition (TXJ, 150 images) intersects with XEM
+  for the YAP run *only if* the Analyst tries to compare XYG and
+  YAP on the same test bag. They were trained on the same TX0
+  split but YAP also saw the XEM Validation bag; the test metric
+  per epoch in YAP's log is still TXJ-only — TXJ and XEM are
+  disjoint subsets (TXJ from JZT, XEM from K04). So the rankings
+  in the table above are clean: same TXJ test partition for both
+  the XYG and YAP rows.
+
+### Open questions for the Analyst
+
+- Should the ranking metric switch to validation accuracy for
+  runs that have it? YAP got val_acc 43% — higher than its
+  test_acc 37.33% — but only one run carries this metric, so
+  including it would skew the ranking. Default: stay on
+  test_acc for ranking, surface val_acc as a side column.
+- Does the Analyst want a multirun-style sweep before they
+  start? If yes, this is the moment — `lr_sweep` and
+  `quick_vs_extended` multiruns are pre-wired and would
+  produce a tidier parent-child execution graph for the
+  denormalize step to chew on. Default: the three runs above
+  are enough for an analysis pass.
+
+---
