@@ -48,24 +48,45 @@ asset_store([], name="default_asset")
 asset_store([], name="no_assets")
 
 # -----------------------------------------------------------------------------
-# Add per-experiment asset configs below as you generate them.
-# Examples (commented out — uncomment and replace RIDs after running):
+# [E2E-DROP] 2026-05-27-e Modeler arc — Family A (K0M, K0W train / K16 test).
+# Three prediction CSVs from three model configs trained on the same data,
+# so the Analyst can compare predictions directly against a genuinely
+# held-out test partition (K16 ⊆ Toronto test_batch). See tacit-knowledge.md
+# tk-004 for the rationale (and tk-002 for why Family A is the right choice
+# for ROC analysis here).
 # -----------------------------------------------------------------------------
 
-# asset_store(["<rid_quick>", "<rid_extended>"], name="roc_quick_vs_extended")
-#
-# asset_store(
-#     with_description(
-#         ["<rid_quick>"],
-#         "Pre-trained weights from cifar10_quick.",
-#     ),
-#     name="quick_weights",
-# )
-#
-# asset_store(
-#     with_description(
-#         ["<rid_extended>"],
-#         "Pre-trained weights from cifar10_extended.",
-#     ),
-#     name="extended_weights",
-# )
+asset_store(
+    with_description(
+        ["Y1M", "Z3P", "105R"],
+        "Modeler arc 2026-05-27-e: three prediction CSVs on Family A K16 "
+        "test partition. Y1M=cifar10_quick/3ep (XZP, 25.20%), "
+        "Z3P=default_model/10ep (Z1R, 36.00%), "
+        "105R=cifar10_large/20ep (103T, 36.80%, overfits).",
+    ),
+    name="modeler_familyA_triplet",
+)
+
+# Individual per-run weights — handy for the Analyst's test-only inference runs
+# (model_config=cifar10_test_only + assets=<one_of_these>).
+asset_store(
+    with_description(
+        ["Y1G"],
+        "Weights from XZP — cifar10_quick (3 epochs, 32→64) on K0M.",
+    ),
+    name="modeler_quick_weights",
+)
+asset_store(
+    with_description(
+        ["Z3J"],
+        "Weights from Z1R — default_model (10 epochs, 32→64) on K0M.",
+    ),
+    name="modeler_default_weights",
+)
+asset_store(
+    with_description(
+        ["105M"],
+        "Weights from 103T — cifar10_large (20 epochs, 64→128) on K0M.",
+    ),
+    name="modeler_large_weights",
+)
