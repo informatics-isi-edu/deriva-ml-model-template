@@ -156,6 +156,35 @@ datasets_store(
 )
 
 # -----------------------------------------------------------------------------
+# Validation dataset — held-out evaluation for the Dataset_Type=Validation lane.
+# Created by the Curator (XEM, 100 stratified images from K04, seed=2026).
+# Use ALONGSIDE a training/split dataset (e.g. cifar10_labeled_split) to
+# exercise the cifar10_cnn runner's Validation dispatch lane (D01).
+# Caveat (tk-003): XEM overlaps with K04. For strict held-out, train on
+# TX0 (stratified from JZT only) so XEM is fully unseen.
+# -----------------------------------------------------------------------------
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="XEM", version="0.1.0.post1.dev1")],
+        "CIFAR-10 Validation set: 100 stratified images from K04, seed=2026.",
+    ),
+    name="cifar10_validation",
+)
+
+# Composite config: TX0 training/testing split + XEM validation bag.
+# Drives the Validation dispatch lane in cifar10_cnn.
+datasets_store(
+    with_description(
+        [
+            DatasetSpecConfig(rid="TX0", version="0.1.0.post1.dev1"),
+            DatasetSpecConfig(rid="XEM", version="0.1.0.post1.dev1"),
+        ],
+        "CIFAR-10 labeled split (TX0) + Validation bag (XEM) for dispatch lane.",
+    ),
+    name="cifar10_labeled_split_with_validation",
+)
+
+# -----------------------------------------------------------------------------
 # Special-case configs (always empty by design)
 # -----------------------------------------------------------------------------
 
