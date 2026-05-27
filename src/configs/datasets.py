@@ -144,6 +144,18 @@ datasets_store(
     name="cifar10_small_labeled_testing",
 )
 
+# Curator-added Validation slice (carved from K04, seed=20260527).
+# 150 stratified labeled images (15/class) for early stopping / model
+# selection during training; leaves K04 untouched as the held-out test
+# partition. See tk-002 in tacit-knowledge.md for rationale.
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="XEM", version="0.1.0.post1.dev1")],
+        "Validation slice (150 images, 15/class, stratified from K04).",
+    ),
+    name="cifar10_validation_150",
+)
+
 # -----------------------------------------------------------------------------
 # Special-case configs (always empty by design)
 # -----------------------------------------------------------------------------
