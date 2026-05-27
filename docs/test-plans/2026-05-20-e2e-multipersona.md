@@ -203,63 +203,7 @@ catalog, in the worktree, and in `tacit-knowledge.md`.
 
 ---
 
-## 3. Execution model
-
-### 3.1 Modes — pick one at session start
-
-**Interactive mode.** After each persona's arc finishes, the run
-pauses. The user reviews the persona's summary, the findings file,
-and the tacit-knowledge handoff. The user can redirect, ask
-for elaboration, request a re-do of a specific step, or proceed to
-the next persona. This mode is for first-time runs and runs where
-the user wants to verify the personas are behaving sensibly.
-
-**Autonomous mode.** All three personas run their arcs back-to-back
-without checkpoints. The evaluator runs after the personas finish
-and produces its evaluation report. This mode is for repeat runs
-once the user trusts the personas, for overnight execution, or for
-batch comparison of multiple platform versions.
-
-The mode is selected once, at session start, by the user. It does
-not change mid-run. (If the user is interactively monitoring and
-wants to step away, the choice is to abort and re-launch in
-autonomous mode, not to switch modes inside one run.)
-
-**Agent-initiated inquiry is allowed in either mode.** The mode flag
-governs *checkpoint pauses* (does the orchestrator wait between
-persona arcs?) — it does **not** restrict persona agents from raising
-a short clarifying question to the user *during* an arc when the
-answer would materially improve what gets recorded in
-`tacit-knowledge.md` or `findings/`. Inquiry is distinct from a
-checkpoint: it's an inline question that doesn't pause the arc, and
-the user's answer feeds the next sentence the agent writes. In
-autonomous mode the bar is higher (asking interrupts the autonomy
-contract), so default to provenance markers and inquire only when a
-load-bearing claim would otherwise be `[inferred from pattern]` —
-see the `capture-tacit-knowledge` skill's "When to inquire"
-section for the budget, threshold, and confirmatory-shape rules.
-
-### 3.2 Decision rights — what an agent can decide alone
-
-The personas need clear ground rules about when to act and when to
-escalate. The rules differ by mode.
-
-| Decision | Interactive | Autonomous |
-|---|---|---|
-| Which existing dataset/feature/config to use for an obvious task | Decide | Decide |
-| Reasonable parameter choice (split ratio, learning rate, epoch count) within typical range | Checkpoint summary | Decide; note the choice in `tacit-knowledge.md` |
-| Pick between two equally-valid skills | Checkpoint summary | Decide |
-| Create a new dataset / feature / config that serves the persona's professional motivation | Checkpoint, ask first | Decide if it serves the persona's interests; note rationale |
-| Destructive operations (delete catalog, drop schema, force-push, rm -rf working dir) | Always ask | Always ask — abort the persona if blocked |
-| Schema migrations (new column, FK change, drop table) | Always ask | Always ask — abort the persona if blocked |
-| Fix a bug encountered mid-arc | Always ask | Never. File a finding and route around if possible. |
-| Stop the arc because the platform won't support what the persona wants | Checkpoint, explain | File a finding; produce whatever summary the persona can with what's been done |
-
-The bright lines: destructive operations and schema migrations always
-require explicit user authorization, regardless of mode. Persona
-agents never fix bugs mid-arc — that's a separate fix-pass.
-
-### 3.3 What a persona's arc looks like
+## 3. What a persona's arc looks like
 
 Each persona enters their arc with the project's `CLAUDE.md`,
 their own section of this document, and whatever the previous
@@ -274,45 +218,10 @@ At the end of their arc, the persona produces a short summary of
 what they did. Whatever else they leave behind is determined by
 the work, not by this document.
 
-### 3.4 Multi-agent setup
-
-Each persona runs as its own Agent-tool invocation with a dedicated
-system prompt drawn from §2. **All three personas share a single git
-worktree** on a single dedicated e2e branch — they run sequentially in
-the same working tree, not in per-persona worktrees. The catalog is
-also shared.
-
-Branch / worktree convention:
-
-```
-git worktree add ../deriva-ml-model-template-e2e \
-    -b e2e-test/<YYYY-MM-DD>
-```
-
-This worktree is created during Phase 0 (see `e2e-bootstrap.md`) before any persona
-runs. All persona work — config edits, `tacit-knowledge.md`
-appends, findings under `findings/<persona>/`, helper scripts,
-commits with `[E2E-DROP]` markers — happens here, on this branch.
-
-**Why single-worktree, not worktree-per-persona.** The May 2026 spec
-chose worktree-per-persona to prevent file-stomping between
-concurrent agents. Personas in this run are sequential, not
-concurrent, so the file-stomping risk doesn't apply. The cost of
-per-persona worktrees was much higher: each persona's
-`tacit-knowledge.md`, config edits, and findings lived in a
-separate working tree, and the orchestrator had to merge between
-branches to carry the handoff forward. That made the knowledge-
-transfer artifact (`tacit-knowledge.md`) implicit in the
-orchestrator's merging discipline rather than naturally available
-to the next persona. Single-worktree restores the handoff as the
-straightforward chain it should be: persona N writes,
-persona N+1 reads from the same files.
-
-**Concurrent variant (future).** If a future run ever wants to
-exercise concurrent personas (e.g., Curator on labeling while the
-Modeler trains on an earlier dataset version), reintroduce
-per-persona worktrees and treat each merge as an explicit
-synchronization point. Out of scope here.
+How the personas are spawned, what mode the orchestrator runs in,
+who decides what mid-arc, what happens when the three arcs
+finish — those are the orchestrator's concerns, covered in
+[`e2e-orchestrator.md`](e2e-orchestrator.md).
 
 ---
 
@@ -360,44 +269,21 @@ Severity and component classifications are *not* set by the
 persona — those are evaluation judgments, made later by the
 evaluator (with full context across personas) or the fix-pass.
 
----
 
-## 5. Wrap-up (mechanical)
+## 5. Things this document deliberately does not cover
 
-When the three personas have finished, the scenario is over. The
-**evaluator** (a separate agent, driven by its own rubric document)
-runs next: it reads the e2e branch, the catalog state, the
-`tacit-knowledge.md` chain, the `findings/` directory, and any
-reports the personas produced, and writes its own evaluation under
-`docs/reports/<YYYY-MM-DD>-evaluation.md`. This scenario document
-ends at "three personas done"; the evaluation is its own pass.
+Where to look instead:
 
-The mechanical wrap-up of the worktree happens after the
-evaluator's pass, not before it — the evaluator needs the artifacts
-in place to do its work:
-
-1. **Cherry-pick template fixes** from the shared
-   `e2e-test/<YYYY-MM-DD>` branch back to `main` of the model
-   template. `[E2E-DROP]`-tagged commits (the catalog-id and RID
-   repointing commits) stay on the branch; only genuine improvements
-   to the template get picked back.
-2. **Push or archive the e2e branch** for the historical record.
-3. **Worktree teardown** with explicit user confirmation: `git
-   worktree remove ../deriva-ml-model-template-e2e`, then
-   `git branch -D e2e-test/<YYYY-MM-DD>`.
-4. **Catalog disposition** with explicit user confirmation: delete
-   or preserve.
-
----
-
-## 6. Things this document deliberately does not cover
-
-- **Evaluation criteria and findings classification.** Those belong
-  to the evaluator's rubric (`evaluator.md`), not the scenario.
-- **What a "good" run looks like.** Same — that's the evaluator's
-  call. The scenario produces artifacts; the evaluator judges them.
-- **Inline bug-fixing.** Findings flow to a fix-pass after the
-  evaluator's report lands.
+- **Platform setup (creating the catalog, installing the MCP
+  server, sync audits).** See [`e2e-bootstrap.md`](e2e-bootstrap.md).
+- **Sequencing, mode (interactive vs autonomous), decision rights,
+  worktree mechanics, wrap-up.** See
+  [`e2e-orchestrator.md`](e2e-orchestrator.md).
+- **Evaluation criteria, findings classification, what a "good"
+  run looks like.** See `evaluator.md` (separate document — the
+  evaluator's rubric).
+- **Inline bug-fixing during persona arcs.** Findings flow to a
+  fix-pass after the evaluator's report lands.
 - **Multi-host scenarios, performance benchmarks, schema migration
   exercises.** Out of scope; tracked elsewhere.
 - **Concurrent persona execution.** Sequential only. Concurrent
@@ -413,12 +299,10 @@ in place to do its work:
 | Question | Answer |
 |---|---|
 | Where does this scenario live? | `docs/test-plans/2026-05-20-e2e-multipersona.md` |
+| Where does Phase 0 bootstrap live? | `docs/test-plans/e2e-bootstrap.md` |
+| Where does the orchestrator live? | `docs/test-plans/e2e-orchestrator.md` |
 | Where does the evaluator's rubric live? | `docs/test-plans/evaluator.md` (separate document) |
 | Where do persona findings go? | `findings/<persona>/<NN>-<slug>.md` in the shared e2e worktree |
 | Where does the persona-to-persona handoff happen? | `tacit-knowledge.md` (project root, in the shared e2e worktree) |
-| Who creates the catalog? | Phase 0 bootstrap (see `e2e-bootstrap.md`), via `load-cifar10` — *before* any persona runs |
 | What's the catalog name? | `e2e-test-<YYYYMMDD>` (chosen at run start) |
-| Mode flag? | Interactive (checkpoint per persona) or Autonomous; chosen at start |
-| Branch / worktree? | Single shared branch `e2e-test/<YYYY-MM-DD>` cut from `main`, checked out at `../deriva-ml-model-template-e2e`. All three personas run sequentially in this one worktree (see §3.4). |
-| Who writes the evaluation? | The evaluator agent, after the personas finish. Output: `docs/reports/<YYYY-MM-DD>-evaluation.md`. |
 | Who fixes bugs surfaced? | A fix-pass agent, after the evaluator's report. Personas never fix mid-arc. |
