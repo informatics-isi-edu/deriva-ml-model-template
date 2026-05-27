@@ -1,0 +1,4 @@
+Execution_RID,Asset_RID,Label,N,Accuracy,Micro_AUC,Macro_AUC
+103T,105R,"cifar10_large (20 epochs, 64-128)",500,36.8,0.8172,0.8172
+Z1R,Z3P,"default_model (10 epochs, 32-64)",500,36.0,0.7951,0.8012
+XZP,Y1M,"cifar10_quick (3 epochs, 32-64)",500,25.2,0.7225,0.732

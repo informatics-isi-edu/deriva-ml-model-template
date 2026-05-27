@@ -277,3 +277,115 @@ knowing if rich descriptions matter for downstream filtering. The
 work-around is to add a small experiment preset rather than reach for
 `description=`.
 
+---
+
+<a id="tk-005"></a>
+### tk-005 — Analyst arc: capacity helps on textured classes, hurts on `airplane`, and the K16 floor is shared ([Execution 11AY](https://localhost/id/2/11AY), [report](docs/reports/2026-05-27-e-analysis.md))
+**When:** 2026-05-27T17:25:00+00:00
+**By:** Carl Kesselman (carl@isi.edu)
+**Supported by:** [tk-001](#tk-001) (clean GT 1500 rows), [tk-002](#tk-002) (Family A = genuinely held-out K16), [tk-003](#tk-003) (filter `Execution=FZC AND Confidence IS NULL` for GT), [tk-004](#tk-004) (the triplet under analysis)
+
+Ranked the Modeler's [Family-A triplet](#tk-004) against K16
+ground truth and produced a single wide joined table
+([`findings/analyst/wide_joined_K16.csv`](findings/analyst/wide_joined_K16.csv),
+500 rows × 35 cols: Image_RID, True_Class, and each model's
+Predicted_Class plus all 10 per-class probabilities) from which every
+number in [`docs/reports/2026-05-27-e-analysis.md`](docs/reports/2026-05-27-e-analysis.md)
+can be re-derived. Cross-channel verified the catalog-resident
+`roc_metrics.csv` ([Asset 118J](https://localhost/id/2/118J)) against
+a standalone pandas derivation
+([`findings/analyst/rank_and_join.py`](findings/analyst/rank_and_join.py));
+the two agree to all printed digits.
+
+**Ranking (consistent across Top-1 and Micro-AUC):**
+
+| Run | Top-1 | Micro-AUC | Macro-AUC |
+|-----|-------|-----------|-----------|
+| [103T](https://localhost/id/2/103T) `cifar10_large` | 36.8% | 0.817 | 0.817 |
+| [Z1R](https://localhost/id/2/Z1R)  `default_model` | 36.0% | 0.795 | 0.801 |
+| [XZP](https://localhost/id/2/XZP)  `cifar10_quick` | 25.2% | 0.722 | 0.732 |
+
+Findings worth pinning for the next analysis (or next Modeler arc on
+this catalog):
+
+- **AUC discriminates better than Top-1 between Z1R and 103T.** The
+  accuracy gap is 0.8pp; the Micro-AUC gap is 0.022. If a future
+  iteration of this work uses Top-1 alone, it will report the
+  triplet as "essentially tied at the top," which understates what
+  capacity is buying.
+- **Capacity helps most on textured classes.** Per-class AUC jumps
+  from `quick` → `large` are largest on `automobile` (+0.157),
+  `bird` (+0.137), and `horse` (+0.119); smallest on the smooth
+  silhouettes (`airplane`, `ship`, `truck`). Interpretation: the
+  larger feature pyramid earns its keep on classes with busy local
+  texture; on classes that segregate on global silhouette, the
+  shallow features already saturate.
+- **`airplane` regresses with capacity.** The large model is
+  slightly *worse* than the default on airplane AUC (0.816 vs 0.847).
+  Read as a capacity-vs-data signal: with 50 airplane training
+  images, the larger model has room to overfit background features
+  (sky vs water) that don't transfer K0W→K16. Worth a follow-up
+  Modeler arc with augmentation if airplane recall matters.
+- **41.4% of K16 is missed by all three models simultaneously.**
+  46 / 500 (9.2%) get the same correct prediction from all three;
+  207 / 500 (41.4%) get a wrong prediction from all three. The
+  41% floor is the *shared difficulty* of K16 — the next modelling
+  lever is augmentation / more data / different representation, not
+  capacity within this architecture.
+- **103T overfits on training but still leads on test AUC.** The
+  Modeler's note ([tk-004](#tk-004)) about training accuracy climbing
+  to 100% while test loss rises after epoch 9 is real. It doesn't
+  flip the AUC ranking because AUC measures ranking, not calibration.
+  If a downstream consumer needs calibrated probabilities, 103T is
+  the *worst* choice of the three; for pure score-based ranking it's
+  still the best. Peak test accuracy from training was ~39.8% at
+  epoch 9 — early stopping would have been the right operating point.
+
+Weighed alternatives:
+
+- **Re-run the triplet on JZJ (750/750) for absolute numbers.**
+  Considered, declined for this arc. K16 at 500 images is enough to
+  *rank* models, and the ranking is what the Analyst owes the next
+  reader. JZJ is the right move if anyone wants confidence intervals
+  on absolute accuracy; one-line override
+  (`datasets=cifar10_split`) and a Modeler re-run.
+- **Include per-image confidence calibration plots (reliability
+  diagrams).** Considered, declined. The triplet has only 500 test
+  images; reliability bins would be ~25 images each, too noisy to
+  be load-bearing. If the team adds more runs (seed sweep, longer
+  training), reliability becomes worth doing.
+- **Use the macro-AUC as the primary metric.** Considered, declined.
+  Macro and Micro agree on ranking on this dataset (the class
+  balance is exact, so they're roughly the same number). Reported
+  both, defaulted reasoning to Micro because it's the conventional
+  CIFAR comparison metric. If a future dataset is class-imbalanced,
+  Macro is the right primary.
+- **Run a confusion-matrix-driven follow-up analysis using
+  feature-level joins** (e.g., partition K16 by Image_Class subtype
+  if such a vocab existed). Considered, not relevant for this
+  catalog: `Image_Classification` is the only label feature and
+  there's no subclass vocabulary to slice by. If a future catalog
+  adds richer per-image metadata, this becomes a viable next
+  analysis tier.
+
+One pipeline friction worth pinning (filed as
+[`findings/analyst/01-run-notebook-config-derivation-fails-under-papermill.md`](findings/analyst/01-run-notebook-config-derivation-fails-under-papermill.md)):
+**`run_notebook()` auto-derives its Hydra config name from the
+notebook filename interactively, but fails under
+`deriva-ml-run-notebook`** because the latter calls
+`pm.execute_notebook(...)` programmatically and never sets
+`PAPERMILL_INPUT_PATH` in `os.environ`. The result is a
+`ValueError` from `_derive_config_name_from_notebook` in
+[base_config.py:539](deriva_ml/execution/base_config.py). Workaround
+applied to `notebooks/roc_analysis.ipynb` cell 3: pass
+`run_notebook("roc_analysis", ...)` explicitly. The
+`CIFAR10.md`-style guidance about the explicit name being needed
+"only when the notebook filename and config name diverge" is wrong
+for the only headless runner the project ships — for that runner,
+the explicit name is the *common* case. Either
+`deriva-ml-run-notebook` should set `PAPERMILL_INPUT_PATH` before
+invoking papermill, or the derivation function should also check
+papermill's parameter-injected `PAPERMILL_INPUT_PATH` global (which
+the CLI does set). Out of scope for this arc — routed around by
+editing the notebook.
+
