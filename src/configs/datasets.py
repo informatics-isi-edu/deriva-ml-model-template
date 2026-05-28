@@ -46,7 +46,15 @@ datasets_store = store(group="datasets")
 #       name="cifar10_complete",
 #   )
 
-datasets_store([], name="cifar10_complete")
+# [E2E-DROP] Wiring for catalog 27 (e2e-test-20260528). The block below will be
+# reverted at wrap-up; main keeps the empty placeholders.
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="M0M", version="0.1.0.post1.dev3")],
+        "Complete CIFAR-10 dataset (1,100 labeled: 550 train + 550 test).",
+    ),
+    name="cifar10_complete",
+)
 
 # -----------------------------------------------------------------------------
 # Original Toronto split — 50K training / 10K test_batch
@@ -56,13 +64,49 @@ datasets_store([], name="cifar10_complete")
 # evaluate against the official 10K test_batch (the "standard" CIFAR-10 split).
 # Both halves carry ground-truth labels in the Toronto distribution.
 # -----------------------------------------------------------------------------
-datasets_store([], name="cifar10_split")
-datasets_store([], name="cifar10_training")
-datasets_store([], name="cifar10_testing")
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="M0Y", version="0.1.0.post1.dev1")],
+        "CIFAR-10 Toronto split: 550 training + 550 test images.",
+    ),
+    name="cifar10_split",
+)
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="M16", version="0.1.0.post1.dev2")],
+        "CIFAR-10 Toronto training partition (550 labeled images).",
+    ),
+    name="cifar10_training",
+)
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="M1G", version="0.1.0.post1.dev2")],
+        "CIFAR-10 Toronto testing partition (550 labeled images).",
+    ),
+    name="cifar10_testing",
+)
 
-datasets_store([], name="cifar10_small_split")
-datasets_store([], name="cifar10_small_training")
-datasets_store([], name="cifar10_small_testing")
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="M20", version="0.1.0.post1.dev1")],
+        "Small CIFAR-10 Toronto split: stratified 500/500 for quick testing.",
+    ),
+    name="cifar10_small_split",
+)
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="M28", version="0.1.0.post1.dev1")],
+        "Small CIFAR-10 Toronto training set (500 stratified).",
+    ),
+    name="cifar10_small_training",
+)
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="M2J", version="0.1.0.post1.dev1")],
+        "Small CIFAR-10 Toronto testing set (500 stratified).",
+    ),
+    name="cifar10_small_testing",
+)
 
 # -----------------------------------------------------------------------------
 # Training-derived holdout split — 80/20 (or 400/100) of training images only
@@ -73,13 +117,49 @@ datasets_store([], name="cifar10_small_testing")
 # workflows, ROC analysis, or experiments where the test_batch must stay
 # unseen for final evaluation.
 # -----------------------------------------------------------------------------
-datasets_store([], name="cifar10_labeled_split")
-datasets_store([], name="cifar10_labeled_training")
-datasets_store([], name="cifar10_labeled_testing")
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="TCC", version="0.1.0.post1.dev1")],
+        "CIFAR-10 labeled holdout split: stratified 80/20 from training (440/110, seed=42).",
+    ),
+    name="cifar10_labeled_split",
+)
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="TCM", version="0.1.0.post1.dev1")],
+        "Training subset (440) of cifar10_training (stratified by class, seed=42).",
+    ),
+    name="cifar10_labeled_training",
+)
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="TCY", version="0.1.0.post1.dev1")],
+        "Testing subset (110) of cifar10_training (stratified by class, seed=42).",
+    ),
+    name="cifar10_labeled_testing",
+)
 
-datasets_store([], name="cifar10_small_labeled_split")
-datasets_store([], name="cifar10_small_labeled_training")
-datasets_store([], name="cifar10_small_labeled_testing")
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="VAP", version="0.1.0.post1.dev1")],
+        "Small CIFAR-10 labeled split: stratified 400/100 from training (seed=42).",
+    ),
+    name="cifar10_small_labeled_split",
+)
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="VAY", version="0.1.0.post1.dev1")],
+        "Training subset (400) of cifar10_training (stratified, seed=42).",
+    ),
+    name="cifar10_small_labeled_training",
+)
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="VB8", version="0.1.0.post1.dev1")],
+        "Testing subset (100) of cifar10_training (stratified, seed=42).",
+    ),
+    name="cifar10_small_labeled_testing",
+)
 
 # -----------------------------------------------------------------------------
 # Special-case configs (always empty by design)
@@ -92,5 +172,12 @@ datasets_store([], name="no_datasets")
 datasets_store([], name="none")
 
 # REQUIRED: ``default_dataset`` is used when no dataset override is specified.
-# Set this to your most-frequently-used dataset after editing the configs above.
-datasets_store([], name="default_dataset")
+# Set to the small labeled split — small enough for fast iteration, labeled
+# on both halves for evaluation work.
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="VAP", version="0.1.0.post1.dev1")],
+        "Default dataset: cifar10_small_labeled_split (VAP).",
+    ),
+    name="default_dataset",
+)
