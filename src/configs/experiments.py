@@ -110,6 +110,54 @@ experiment_store(
 )
 
 # =============================================================================
+# [E2E-DROP] Toronto leakage-free pair experiments (Modeler arc 2026-05-28)
+# =============================================================================
+# These experiments train on M16 (Toronto training) and evaluate on M1G
+# (Toronto testing). Per Curator tk-002, this is the leakage-free pair —
+# 55/class each side, zero image overlap, ground truth on both halves.
+# Use these (not cifar10_quick / cifar10_default which sit on the leaky
+# VAP family) for any run whose held-out test_acc is going to be cited.
+
+experiment_store(
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "cifar10_quick"},
+            {"override /datasets": "cifar10_toronto_pair"},
+        ],
+        description="Toronto leakage-free baseline: cifar10_quick (3 epochs, 32->64 ch, batch 128) on M16 train, M1G test",
+        bases=(DerivaModelConfig,),
+    ),
+    name="cifar10_toronto_quick",
+)
+
+experiment_store(
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "default_model"},
+            {"override /datasets": "cifar10_toronto_pair"},
+        ],
+        description="Toronto leakage-free default: default_model (10 epochs, 32->64 ch, batch 64) on M16 train, M1G test",
+        bases=(DerivaModelConfig,),
+    ),
+    name="cifar10_toronto_default",
+)
+
+experiment_store(
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "cifar10_large"},
+            {"override /datasets": "cifar10_toronto_pair"},
+        ],
+        description="Toronto leakage-free large: cifar10_large (20 epochs, 64->128 ch, hidden 256) on M16 train, M1G test",
+        bases=(DerivaModelConfig,),
+    ),
+    name="cifar10_toronto_large",
+)
+
+# =============================================================================
 # Test-Only Experiment
 # =============================================================================
 # Evaluate pre-trained model on test data without training

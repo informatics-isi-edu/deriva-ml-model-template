@@ -108,6 +108,26 @@ datasets_store(
     name="cifar10_small_testing",
 )
 
+# [E2E-DROP] Toronto train+test pair bundled for Modeler arc. Per Curator
+# tk-002 the TCC / VAP "labeled split" families leak across train/test
+# because split_dataset partitioned feature rows (not images) on top of
+# tk-001's loader-retry double-tagging. The Toronto family (M16 training
+# x M1G testing) is leakage-free by construction (different Toronto source
+# pools) with 55/class on each side. Using it as a single dataset group so
+# the model harness sees one Training bag and one Testing bag in
+# execution.datasets and the per-epoch / final-epoch test_acc numbers are
+# trustworthy for the Analyst.
+datasets_store(
+    with_description(
+        [
+            DatasetSpecConfig(rid="M16", version="0.1.0.post1.dev2"),
+            DatasetSpecConfig(rid="M1G", version="0.1.0.post1.dev2"),
+        ],
+        "CIFAR-10 Toronto leakage-free pair: M16 training (550) + M1G testing (550).",
+    ),
+    name="cifar10_toronto_pair",
+)
+
 # -----------------------------------------------------------------------------
 # Training-derived holdout split — 80/20 (or 400/100) of training images only
 #
