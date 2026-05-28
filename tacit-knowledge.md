@@ -241,3 +241,131 @@ the *final* state, so this still won't recover an earlier checkpoint
 — it only re-evaluates), or (b) extend the model to save and re-emit
 the best-epoch state. Option (a) is the e2e-run-compatible workaround;
 option (b) is fix-pass scope.
+
+---
+
+<a id="tk-007"></a>
+### tk-007 — Accuracy ranking and calibration ranking disagree for the Toronto-pair runs; calibration is the more useful ranking for a domain user ([execution 1012](https://localhost/id/27/1012@355-RZWY-9B9R))
+**When:** 2026-05-28T17:45:00-07:00
+**By:** Carl Kesselman (carl@isi.edu)
+**Supported by:** [tk-005](#tk-005) (hyperparameter spread the Modeler intentionally constructed), [tk-006](#tk-006) (final-epoch CSV convention that makes YHP's overconfidence visible)
+
+Built the joined wide table (Image_RID × ground-truth × per-model
+prediction + per-class probabilities) over the full 550-image M1G
+test partition and ranked the three Toronto runs two different ways:
+
+| Run | Top-1 acc (n=550) | "Confidently-wrong" (conf ≥ 0.8 ∧ wrong) | Mean conf when wrong |
+|---|---|---|---|
+| W76 (3 ep) | 24.0 % | 1 / 418 errors (0.2 %) | 0.245 |
+| XCE (10 ep) | 37.8 % | 23 / 342 errors (6.7 %) | 0.472 |
+| YHP (20 ep) | 41.1 % | **171 / 324 errors (52.8 %)** | 0.774 |
+
+By accuracy: YHP > XCE > W76. By calibration: XCE > YHP > W76. The
+two rankings disagree on the top two slots and the disagreement is
+load-bearing: 31 % of all 550 M1G test images get a confidence ≥ 0.8
+prediction from YHP that is actually wrong, vs 4 % for XCE and 0.2 %
+for W76. YHP has learned to be confident as a side-effect of
+memorising the 550-image training set (train_acc hit 100 % by epoch
+17 per Modeler tk-005); the final-epoch CSV convention (tk-006) is
+what makes that overconfidence the *committed* model state rather
+than a transient mid-training artifact.
+
+For an analyst handing the model off to a domain reviewer who wants
+"the model is uncertain → look at this image yourself" to be a
+useful gate, XCE is the better pick despite being 3 points less
+accurate: only 23 of its predictions clear the 0.8-confidence bar
+incorrectly, and the 5 of 550 predictions it makes at conf < 0.2 are
+a real "I don't know" signal. YHP makes zero predictions at conf <
+0.2 — the model never *says* it doesn't know, even when wrong.
+W76's calibration is technically the best (mean confidence is barely
+higher when right than when wrong), but it achieves that by failing
+to learn — 165 of 550 predictions are at conf < 0.2, basically
+random.
+
+Weighed alternatives: ranked by macro-AUC instead (the
+roc_analysis.ipynb default). YHP (0.822) > XCE (0.813) > W76 (0.735).
+That ranking *agrees* with accuracy and doesn't capture the
+calibration problem — AUC is threshold-free, so it doesn't punish a
+model for being confidently-wrong as long as the wrong-confident
+predictions are still ranked below the right-confident ones in some
+threshold ordering. AUC is the right metric for "does the model rank
+images correctly"; the confidently-wrong count is the right metric
+for "is the model's confidence trustworthy as a triage signal." The
+report leads with both rankings rather than picking one, and names
+the use case each is right for.
+
+Implications for collaborators: the wide table
+(`docs/reports/joined-wide-table.csv`, also attached to this
+execution as an Execution_Asset) is the artifact downstream analyses
+should anchor on, not the headline accuracy number. Anyone who needs
+"the best run for triage" should reach for XCE; anyone who needs
+"the best raw classifier" should reach for YHP and live with the
+overconfidence. A fix-pass on save-best-by-val-acc checkpointing
+(the validation lane is already wired through `cifar10_cnn.py` per
+tk-006; only the save-best policy is missing) would close most of
+the YHP overconfidence gap without retraining.
+
+---
+
+<a id="tk-008"></a>
+### tk-008 — YHP's biggest pairwise confusion is bird ↔ deer (21 mix-ups), not a domain-intuitive pair; signals a feature-learning gap ([execution 1012](https://localhost/id/27/1012@355-RZWY-9B9R))
+**When:** 2026-05-28T17:50:00-07:00
+**By:** Carl Kesselman (carl@isi.edu)
+**Supported by:** [tk-007](#tk-007) (the joined wide table this confusion analysis was computed on)
+
+Inspected the symmetric off-diagonal mass in the per-model confusion
+matrices on the 550-image M1G test set. The expected CIFAR-10
+confusions (cat ↔ dog, automobile ↔ truck, airplane ↔ ship) all
+show up in both XCE and YHP at counts of 15–23 — they're the visual
+pairs a human looking at 32×32 thumbnails would also confuse. The
+*unexpected* result is that YHP's largest single pair is **bird ↔
+deer at 21 mix-ups (14 bird→deer, 7 deer→bird)**, which is not a
+visual confusion a domain reader would predict.
+
+Reading the per-class probabilities in the wide table: when YHP
+mispredicts a bird as a deer, its top-3 is typically deer / horse /
+dog — the "small-or-medium subject in a natural-background scene"
+cluster. When it mispredicts a deer as a bird, top-3 is bird / cat /
+frog — the same "natural-background small-subject" cluster, from
+the other side. The model has learned a *scene texture* feature
+that dominates whatever silhouette feature would distinguish a
+flying bird shape from a four-legged deer shape at 32×32. A human
+reader uses silhouette as the primary cue at this resolution; the
+model isn't.
+
+Bird ↔ deer also outranks cat ↔ dog (18 mix-ups) and automobile ↔
+truck (18) for YHP, which is the headline domain-intuition-fails
+result of this analysis. Cat ↔ dog and automobile ↔ truck are the
+confusions a non-ML reader expects; bird ↔ deer is the one that
+tells them something about *how* this model is failing that
+inspection of the confusion matrix alone would surface but a single
+"top-1 accuracy" number would hide.
+
+For XCE the same bird ↔ deer signal is weaker — only 13 mix-ups, vs
+its 23-count automobile ↔ truck top spot — suggesting the
+scene-texture confusion gets *worse* as the model gains capacity on
+this dataset size, not better. That's consistent with the broader
+overfitting story in tk-007 / tk-005: the extra parameters in YHP's
+64→128 channel block found a shortcut feature (scene texture) on
+the 550-image training set that doesn't generalise.
+
+Weighed alternatives: ranked the confusions by per-class recall gap
+instead of by pairwise count. That ranking puts cat (0.273 recall —
+the bottleneck for all three models) at the top and surfaces "the
+model can't find cat" as the result, which is also true but is the
+*expected* CIFAR-10 result (cat is well-known as the hardest
+class). The pairwise-confusion ranking is the one that surfaced
+something a non-expert reader wouldn't predict, so the report leads
+with pairwise rather than per-class. Both are in the
+`per-class-recall.csv` and `per-class-confusion-long.csv` for any
+reader who wants to ask the other question.
+
+Implications for collaborators: if a future iteration of this
+project pushes for higher accuracy (>50 % on M1G), the silhouette
+vs scene-texture failure mode is a more useful direction than
+"train longer with the same data." Either more cats (the bottleneck
+class — see tk-007 implications) or augmentations that break scene
+texture cues (random crop, color jitter) would target the actual
+failure mode bird ↔ deer surfaces. Just adding more epochs on the
+current 550-image training set would deepen the shortcut, not fix
+it.

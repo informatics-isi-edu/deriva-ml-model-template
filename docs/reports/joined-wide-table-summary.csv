@@ -1,0 +1,4 @@
+Execution_RID,Asset_RID,Label,Samples,Top1_Correct,Top1_Accuracy,Mean_Top1_Confidence,Median_Top1_Confidence
+W76,W96,"cifar10_quick (3 ep, 32-64-128 ch, batch 128)",550,132,0.24,0.2662,0.2374
+XCE,XEE,"cifar10_default (10 ep, 32-64-128 ch, batch 64)",550,208,0.3782,0.5112,0.4722
+YHP,YKP,"cifar10_large (20 ep, 64-128-256 ch, batch 64)",550,226,0.4109,0.8067,0.8822
