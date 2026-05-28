@@ -109,3 +109,19 @@ notebook_config(
     defaults={"assets": "roc_lr_batch_grid", "datasets": "no_datasets"},
     description="ROC analysis: LR x batch size grid (2x2)",
 )
+
+# [E2E-DROP] Analyst arc 2026-05-28 — Toronto-pair predictions
+# Selects the toronto_predictions asset group (W96/XEE/YKP, the three
+# prediction CSVs from Modeler executions W76/XCE/YHP on M1G). The
+# notebook's first cell hardcodes "roc_analysis" as the config name, so
+# the CLI invocation is:
+#   uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb \
+#       assets=toronto_predictions
+# rather than --config roc_toronto (per run-notebook skill: --config*
+# does not redirect the in-notebook config name).
+notebook_config(
+    "roc_toronto",
+    config_class=ROCAnalysisConfig,
+    defaults={"assets": "toronto_predictions", "datasets": "no_datasets"},
+    description="ROC analysis: Toronto-pair runs (W76 quick / XCE default / YHP large) on M1G test set",
+)
