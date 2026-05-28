@@ -393,10 +393,22 @@ Re-invoke the loader against the now-existing catalog:
 
 ```
 uv run load-cifar10 --hostname localhost \
-    --catalog-id <new_id> --num-images 500 --phase images
+    --catalog-id <new_id> --num-images 1100 --phase images
 uv run load-cifar10 --hostname localhost \
-    --catalog-id <new_id> --num-images 500 --phase datasets
+    --catalog-id <new_id> --num-images 1100 --phase datasets
 ```
+
+The small-Toronto-split family in
+`src/scripts/_cifar10_datasets.py` requires `train_pool` and
+`test_pool` strictly greater than the `SMALL_TRAIN_SIZE` /
+`SMALL_TEST_SIZE` constants (currently 500 each); otherwise the
+`datasets` phase aborts with `SmallVariantDegenerateError`. At
+`--num-images N` the loader splits `N/2` / `N/2` into train and
+test pools, so the floor is `N > 2 * 500 = 1000`. 1100 clears the
+floor with a comfortable margin. More images means a longer load
+and a larger catalog — if a future run needs faster turnaround,
+either lower `SMALL_*_SIZE` in the loader or skip the small
+Toronto split family.
 
 Run the phases separately (not `--phase all`) so a failure in
 `datasets` doesn't require re-uploading the images. Each phase is
