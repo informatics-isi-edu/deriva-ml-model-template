@@ -550,6 +550,17 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
                 "Creating Labeled_Split (80/20 of training) in execution %s...",
                 split_exe.execution_rid,
             )
+            # row_per is intentionally omitted: when stratifying, split_dataset
+            # auto-defaults row_per to element_table ("Image"), producing one
+            # row per Image with Image_Class projected as a column. An earlier
+            # version passed row_per="Execution_Image_Image_Classification",
+            # which partitioned feature *rows* instead of images — any image
+            # carrying two feature rows (e.g. after a loader retry) could land
+            # in both train and test partitions. See
+            # /Users/carl/GitHub/DerivaML/deriva-ml-model-template-e2e/findings/curator/02-train-test-leakage-in-labeled-split-datasets.md
+            # and
+            # /Users/carl/GitHub/DerivaML/deriva-ml-model-template-e2e/findings/evaluator/02-split-dataset-row-per-feature-table-is-wrong-default.md
+            # for the full mechanism.
             labeled = split_dataset(
                 ml,
                 datasets["training"],
@@ -561,7 +572,6 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
                 testing_types=["Labeled"],
                 element_table="Image",
                 include_tables=["Image", "Execution_Image_Image_Classification"],
-                row_per="Execution_Image_Image_Classification",
                 split_description=_labeled_split_description(len(train_rids)),
             )
             datasets["labeled_split"] = labeled.split.rid
@@ -571,6 +581,10 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
             logger.info("Creating Small_Labeled_Split...")
             # _require_small_variant_distinct guarantees train_rids > 500,
             # so the fixed 400/100 split always fits with images to spare.
+            # row_per omitted for the same reason as the labeled_split call
+            # above — let it auto-default to element_table="Image" so the
+            # partition is by image, not by feature row. See the e2e findings
+            # cited above.
             small_labeled = split_dataset(
                 ml,
                 datasets["training"],
@@ -583,7 +597,6 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
                 testing_types=["Labeled"],
                 element_table="Image",
                 include_tables=["Image", "Execution_Image_Image_Classification"],
-                row_per="Execution_Image_Image_Classification",
                 split_description=_small_labeled_split_description(len(train_rids)),
             )
             datasets["small_labeled_split"] = small_labeled.split.rid
