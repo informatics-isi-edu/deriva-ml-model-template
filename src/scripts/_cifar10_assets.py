@@ -449,6 +449,63 @@ def upload_images(
     }
 
 
+def _truncate_loader_classification_rows(ml: DerivaML) -> int:
+    """Delete any prior loader-written ``Image_Classification`` rows.
+
+    Makes ``--phase images`` idempotent on retry. When a previous
+    loader attempt's ``images`` sub-stage succeeded but the run
+    failed later (e.g. in the ``datasets`` phase) and the user reran
+    the loader, the prior pass's ground-truth feature rows would
+    otherwise survive — see
+    ``findings/evaluator/01-loader-retry-leaves-orphaned-gt-feature-rows.md``
+    in the 2026-05-28 e2e run for the audit. The downstream symptoms
+    were doubly-tagged images (1600 rows over 1100 unique Image RIDs)
+    and a train/test partition leak through
+    ``split_dataset(row_per=feature_table)``.
+
+    The truncate is filtered to ``Confidence IS NULL`` so it touches
+    only loader-written ground-truth rows. Training executions
+    populate ``Confidence`` when they record predictions (see
+    ``record_test_predictions`` in ``src/models/cifar10_cnn.py``) and
+    those prediction rows are preserved — this matches the dual-write
+    convention recorded in the e2e run's ``tacit-knowledge.md`` entry
+    ``tk-001``.
+
+    Args:
+        ml: Connected DerivaML instance.
+
+    Returns:
+        The number of prior loader rows that were deleted (zero on a
+        fresh catalog).
+
+    Example:
+        >>> deleted = _truncate_loader_classification_rows(ml)  # doctest: +SKIP
+        >>> print(f"removed {deleted} stale GT rows")
+    """
+    feat = ml.lookup_feature("Image", "Image_Classification")
+    pb = ml.pathBuilder()
+    feature_path = pb.schemas[feat.feature_table.schema.name].tables[
+        feat.feature_table.name
+    ]
+    # Confidence IS NULL selects loader rows (ground truth) and
+    # excludes training rows (predictions). The `== None` form is the
+    # ermrest path-builder spelling for IS NULL — see
+    # ``core/mixins/dataset.py`` for the same idiom on ``Deleted``.
+    prior = list(
+        feature_path.filter(feature_path.Confidence == None)  # noqa: E711
+        .entities()
+        .fetch()
+    )
+    if not prior:
+        return 0
+    logger.info(
+        f"  Truncating {len(prior)} prior loader Image_Classification rows "
+        "(retry idempotence; preserves training-prediction rows)"
+    )
+    feature_path.filter(feature_path.Confidence == None).delete()  # noqa: E711
+    return len(prior)
+
+
 def add_classification_features(ml: DerivaML) -> dict[str, Any]:
     """Stage 2b — add Image_Classification feature for every uploaded image.
 
@@ -461,14 +518,19 @@ def add_classification_features(ml: DerivaML) -> dict[str, Any]:
     This sub-stage is fully self-contained — it reads back from
     the catalog rather than depending on any in-memory state from
     Stage 2a. It can be re-run safely against a catalog where the
-    schema is set up and some images have already been uploaded.
+    schema is set up and some images have already been uploaded:
+    any prior loader-written ``Image_Classification`` rows are
+    truncated first via :func:`_truncate_loader_classification_rows`,
+    so retries don't accumulate orphaned ground-truth rows. Training
+    executions' prediction rows (``Confidence`` populated) are
+    preserved.
 
     Args:
         ml: Connected DerivaML instance.
 
     Returns:
         Stats dict with keys ``features_added``, ``images_skipped``,
-        ``execution_rid``.
+        ``execution_rid``, ``prior_rows_truncated``.
 
     Example:
         >>> stats = add_classification_features(ml)
@@ -477,6 +539,8 @@ def add_classification_features(ml: DerivaML) -> dict[str, Any]:
     """
     assets = ml.list_assets("Image")
     logger.info(f"Found {len(assets)} Image assets in catalog")
+
+    prior_truncated = _truncate_loader_classification_rows(ml)
 
     workflow = ml.create_workflow(
         name="CIFAR-10 Classification Labeling",
@@ -515,6 +579,7 @@ def add_classification_features(ml: DerivaML) -> dict[str, Any]:
         "features_added": len(feature_records),
         "images_skipped": skipped,
         "execution_rid": execution_rid,
+        "prior_rows_truncated": prior_truncated,
     }
 
 
