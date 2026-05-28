@@ -69,3 +69,54 @@ asset_store([], name="no_assets")
 #     ),
 #     name="extended_weights",
 # )
+
+# -----------------------------------------------------------------------------
+# [E2E-DROP] Modeler arc 2026-05-28 — Toronto-pair training executions
+# -----------------------------------------------------------------------------
+# Three training executions on the cifar10_toronto_pair (M16 train, M1G test,
+# leakage-free per Curator tk-002). Each execution produced three assets:
+# weights (.pt), training_log.txt, prediction_probabilities.csv on M1G.
+#
+#   Execution W76 — cifar10_toronto_quick   ( 3 ep / 32-64-128 / lr=1e-3 / bs=128)
+#                   final test_acc=24.00%   weights=W92  log=W94  preds=W96
+#   Execution XCE — cifar10_toronto_default (10 ep / 32-64-128 / lr=1e-3 / bs=64)
+#                   final test_acc=37.82%   weights=XEA  log=XEC  preds=XEE
+#   Execution YHP — cifar10_toronto_large   (20 ep / 64-128-256 / lr=1e-3 / bs=64)
+#                   final test_acc=41.09%   weights=YKJ  log=YKM  preds=YKP
+#
+# Numbers above are the *emission-time* test accuracy printed by
+# record_predictions; they are what a downstream consumer reproduces by
+# joining the committed CSV (W96 / XEE / YKP) against the ground-truth
+# Image_Classification feature, filtered to execution HSR (tk-001).
+
+asset_store(
+    with_description(
+        ["W96", "XEE", "YKP"],
+        "Toronto-pair prediction CSVs from Modeler arc: W76(quick,3ep) XCE(default,10ep) YHP(large,20ep). All evaluated on M1G test partition.",
+    ),
+    name="toronto_predictions",
+)
+
+asset_store(
+    with_description(
+        ["W92", "W94", "W96"],
+        "Outputs of execution W76 (cifar10_toronto_quick): weights + log + prediction CSV on M1G.",
+    ),
+    name="toronto_quick_outputs",
+)
+
+asset_store(
+    with_description(
+        ["XEA", "XEC", "XEE"],
+        "Outputs of execution XCE (cifar10_toronto_default): weights + log + prediction CSV on M1G.",
+    ),
+    name="toronto_default_outputs",
+)
+
+asset_store(
+    with_description(
+        ["YKJ", "YKM", "YKP"],
+        "Outputs of execution YHP (cifar10_toronto_large): weights + log + prediction CSV on M1G.",
+    ),
+    name="toronto_large_outputs",
+)
