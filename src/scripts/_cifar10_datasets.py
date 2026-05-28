@@ -54,9 +54,13 @@ logger = logging.getLogger(__name__)
 SMALL_TRAIN_SIZE = 500
 SMALL_TEST_SIZE = 500
 
-# Column to stratify by for class-balanced splits — matches the
-# Image_Classification feature populated in stage 2b.
-STRATIFY_COLUMN = "Execution_Image_Image_Classification.Image_Class"
+# Column to stratify by for class-balanced splits — column on the
+# Image_Class vocab table (reached transparently through the
+# Image_Classification feature populated in stage 2b). The vocab
+# table is what we pass in include_tables; see the 2026-05-28
+# denormalizer audit (findings/investigation/03-recommendations.md
+# §1) for why the feature-association table is the wrong handle.
+STRATIFY_COLUMN = "Image_Class.Name"
 
 
 class SmallVariantDegenerateError(RuntimeError):
@@ -550,17 +554,29 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
                 "Creating Labeled_Split (80/20 of training) in execution %s...",
                 split_exe.execution_rid,
             )
-            # row_per is intentionally omitted: when stratifying, split_dataset
-            # auto-defaults row_per to element_table ("Image"), producing one
-            # row per Image with Image_Class projected as a column. An earlier
-            # version passed row_per="Execution_Image_Image_Classification",
-            # which partitioned feature *rows* instead of images — any image
-            # carrying two feature rows (e.g. after a loader retry) could land
-            # in both train and test partitions. See
-            # /Users/carl/GitHub/DerivaML/deriva-ml-model-template-e2e/findings/curator/02-train-test-leakage-in-labeled-split-datasets.md
-            # and
-            # /Users/carl/GitHub/DerivaML/deriva-ml-model-template-e2e/findings/evaluator/02-split-dataset-row-per-feature-table-is-wrong-default.md
-            # for the full mechanism.
+            # Stratification shape per the 2026-05-28 denormalizer audit
+            # (deriva-ml-model-template-e2e/findings/investigation/
+            # 03-recommendations.md §1):
+            #
+            #   * include_tables passes the vocab table (Image_Class)
+            #     directly, NOT the feature-association table
+            #     (Execution_Image_Image_Classification). The
+            #     feature-association is then a transparent bridge:
+            #     the planner gets row_per=Image auto-default, and the
+            #     vocab value projects as one column per image.
+            #     Passing the feature-association table here triggers
+            #     Rule 5 (DerivaMLDenormalizeDownstreamLeaf) because
+            #     it is strict-downstream of Image and the planner
+            #     does not aggregate.
+            #   * stratify_by_column points at the vocab column
+            #     (Image_Class.Name), not at the feature-row dotted
+            #     path that the prior shape used.
+            #   * partition_by="element" (PR informatics-isi-edu/
+            #     deriva-ml#254) forces dedup at the selector layer
+            #     and asserts disjoint element-RID partitions after
+            #     the split — protection against the original
+            #     train/test leakage even if multiple feature rows
+            #     exist per image.
             labeled = split_dataset(
                 ml,
                 datasets["training"],
@@ -571,7 +587,8 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
                 training_types=["Labeled"],
                 testing_types=["Labeled"],
                 element_table="Image",
-                include_tables=["Image", "Execution_Image_Image_Classification"],
+                include_tables=["Image", "Image_Class"],
+                partition_by="element",
                 split_description=_labeled_split_description(len(train_rids)),
             )
             datasets["labeled_split"] = labeled.split.rid
@@ -581,10 +598,8 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
             logger.info("Creating Small_Labeled_Split...")
             # _require_small_variant_distinct guarantees train_rids > 500,
             # so the fixed 400/100 split always fits with images to spare.
-            # row_per omitted for the same reason as the labeled_split call
-            # above — let it auto-default to element_table="Image" so the
-            # partition is by image, not by feature row. See the e2e findings
-            # cited above.
+            # Same shape as the labeled_split call above — see that
+            # block for the audit reference.
             small_labeled = split_dataset(
                 ml,
                 datasets["training"],
@@ -596,7 +611,8 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
                 training_types=["Labeled"],
                 testing_types=["Labeled"],
                 element_table="Image",
-                include_tables=["Image", "Execution_Image_Image_Classification"],
+                include_tables=["Image", "Image_Class"],
+                partition_by="element",
                 split_description=_small_labeled_split_description(len(train_rids)),
             )
             datasets["small_labeled_split"] = small_labeled.split.rid
