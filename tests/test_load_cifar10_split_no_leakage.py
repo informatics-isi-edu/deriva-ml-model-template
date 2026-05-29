@@ -9,9 +9,12 @@ RIDs. On any catalog where the loader produced more than one feature
 row per image, an image's two rows could land on opposite sides of the
 split, putting the same image in both train and test partitions.
 
-The fix is to omit ``row_per`` entirely and let ``split_dataset``
-auto-default it to ``element_table="Image"`` when stratifying. This
-test exercises a fresh catalog end-to-end and asserts:
+The fix (per the 2026-05-28 denormalizer audit, §1) replaces the
+feature-association table with the vocab table in ``include_tables``
+and adds ``partition_by="element"`` (deriva-ml PR #254) so the
+selector layer dedupes per element-RID and enforces a disjoint-image
+invariant after the split. This test exercises a fresh catalog
+end-to-end and asserts:
 
 1. ``cifar10_labeled_split`` Training ∩ Testing on image RIDs is
    empty.
@@ -82,21 +85,22 @@ def _run_cli(*args: str) -> None:
         )
 
 
-def _fetch_image_rids(ml, schema_name: str, dataset_rid: str) -> set[str]:
+def _fetch_image_rids(ml, dataset_rid: str) -> set[str]:
     """Return the set of Image RIDs that are members of ``dataset_rid``.
+
+    Uses ``Dataset.list_dataset_members`` so the test does not depend on
+    the domain schema's association table layout.
 
     Args:
         ml: Connected :class:`DerivaML` instance.
-        schema_name: Domain schema name (the throwaway project name).
         dataset_rid: Dataset RID to query.
 
     Returns:
         Set of image RIDs that are members of the dataset.
     """
-    pb = ml.catalog.getPathBuilder()
-    di = pb.schemas[schema_name].Dataset_Image
-    rows = di.filter(di.Dataset == dataset_rid).entities().fetch()
-    return {r["Image"] for r in rows}
+    ds = ml.lookup_dataset(dataset_rid)
+    members = ds.list_dataset_members()
+    return {r["RID"] for r in members.get("Image", [])}
 
 
 def test_split_dataset_partitions_by_image_not_feature_row(tmp_path):
@@ -113,7 +117,7 @@ def test_split_dataset_partitions_by_image_not_feature_row(tmp_path):
     from deriva.core import DerivaServer, get_credential
     from deriva_ml import DerivaML
 
-    project_name = f"no-leakage-test-{uuid.uuid4().hex[:8]}"
+    project_name = f"no-leakage-final-{uuid.uuid4().hex[:8]}"
 
     # --- Phase 1: schema (creates the catalog and prints its id). ---
     _run_cli(
@@ -161,23 +165,6 @@ def test_split_dataset_partitions_by_image_not_feature_row(tmp_path):
         pb = ml.catalog.getPathBuilder()
         dataset_tbl = pb.schemas["deriva-ml"].Dataset
 
-        # Each labeled split is a parent dataset whose Description
-        # carries the advertised counts produced by
-        # ``_labeled_split_description`` and
-        # ``_small_labeled_split_description``. We discover the train
-        # and test children via the Dataset.Dataset_Parent column.
-        dataset_parent_tbl = pb.schemas["deriva-ml"].Dataset_Dataset
-
-        def _children(parent_rid: str) -> list[str]:
-            rows = (
-                dataset_parent_tbl.filter(
-                    dataset_parent_tbl.Parent_Dataset == parent_rid
-                )
-                .entities()
-                .fetch()
-            )
-            return [r["Child_Dataset"] for r in rows]
-
         # Find the labeled and small_labeled split parent datasets.
         # Their Description column starts with the strings emitted by
         # ``_labeled_split_description`` / ``_small_labeled_split_description``.
@@ -197,14 +184,27 @@ def test_split_dataset_partitions_by_image_not_feature_row(tmp_path):
             "Could not find small_labeled_split parent in catalog."
         )
 
-        def _train_test_children(parent_rid: str) -> tuple[str, str]:
-            """Return (train_rid, test_rid) for a Labeled_Split parent.
+        # Use deriva-ml's Dataset_Dataset_Type association directly to
+        # discover Training/Testing children. ``split_dataset`` tags
+        # each child dataset with the "Training" or "Testing" dataset
+        # type; we read those tags via the association table.
+        ds_dt = pb.schemas["deriva-ml"].Dataset_Dataset_Type
 
-            Identifies children by the "Training"/"Testing" dataset
-            type tags applied by ``split_dataset``.
+        def _train_test_children(parent_rid: str) -> tuple[str, str]:
+            """Return (train_rid, test_rid) for a labeled-split parent.
+
+            Identifies children via ``Dataset.list_dataset_children`` and
+            disambiguates train vs test by the "Training"/"Testing"
+            dataset-type tags applied by ``split_dataset``.
+
+            Args:
+                parent_rid: RID of the parent split dataset.
+
+            Returns:
+                Tuple of (train_dataset_rid, test_dataset_rid).
             """
-            child_rids = _children(parent_rid)
-            ds_dt = pb.schemas["deriva-ml"].Dataset_Dataset_Type
+            parent = ml.lookup_dataset(parent_rid)
+            child_rids = [c.dataset_rid for c in parent.list_dataset_children()]
             train_rid = test_rid = None
             for crid in child_rids:
                 types = {
@@ -227,10 +227,10 @@ def test_split_dataset_partitions_by_image_not_feature_row(tmp_path):
         labeled_train, labeled_test = _train_test_children(labeled_parent)
         small_train, small_test = _train_test_children(small_labeled_parent)
 
-        labeled_train_rids = _fetch_image_rids(ml, project_name, labeled_train)
-        labeled_test_rids = _fetch_image_rids(ml, project_name, labeled_test)
-        small_train_rids = _fetch_image_rids(ml, project_name, small_train)
-        small_test_rids = _fetch_image_rids(ml, project_name, small_test)
+        labeled_train_rids = _fetch_image_rids(ml, labeled_train)
+        labeled_test_rids = _fetch_image_rids(ml, labeled_test)
+        small_train_rids = _fetch_image_rids(ml, small_train)
+        small_test_rids = _fetch_image_rids(ml, small_test)
 
         # Print sizes so a failure tells us by how much we drifted.
         print(
