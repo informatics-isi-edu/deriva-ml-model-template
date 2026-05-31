@@ -46,7 +46,10 @@ datasets_store = store(group="datasets")
 #       name="cifar10_complete",
 #   )
 
-datasets_store([], name="cifar10_complete")
+datasets_store(  # [E2E-DROP] catalog 168
+    [DatasetSpecConfig(rid="F28", version="0.1.0.post1.dev3")],
+    name="cifar10_complete",
+)
 
 # -----------------------------------------------------------------------------
 # Original Toronto split — 50K training / 10K test_batch
@@ -56,13 +59,13 @@ datasets_store([], name="cifar10_complete")
 # evaluate against the official 10K test_batch (the "standard" CIFAR-10 split).
 # Both halves carry ground-truth labels in the Toronto distribution.
 # -----------------------------------------------------------------------------
-datasets_store([], name="cifar10_split")
-datasets_store([], name="cifar10_training")
-datasets_store([], name="cifar10_testing")
+datasets_store([DatasetSpecConfig(rid="F2J", version="0.1.0.post1.dev1")], name="cifar10_split")  # [E2E-DROP]
+datasets_store([DatasetSpecConfig(rid="F2T", version="0.1.0.post1.dev2")], name="cifar10_training")  # [E2E-DROP]
+datasets_store([DatasetSpecConfig(rid="F34", version="0.1.0.post1.dev2")], name="cifar10_testing")  # [E2E-DROP]
 
-datasets_store([], name="cifar10_small_split")
-datasets_store([], name="cifar10_small_training")
-datasets_store([], name="cifar10_small_testing")
+datasets_store([DatasetSpecConfig(rid="F3M", version="0.1.0.post1.dev1")], name="cifar10_small_split")  # [E2E-DROP]
+datasets_store([DatasetSpecConfig(rid="F3W", version="0.1.0.post1.dev1")], name="cifar10_small_training")  # [E2E-DROP]
+datasets_store([DatasetSpecConfig(rid="F46", version="0.1.0.post1.dev1")], name="cifar10_small_testing")  # [E2E-DROP]
 
 # -----------------------------------------------------------------------------
 # Training-derived holdout split — 80/20 (or 400/100) of training images only
@@ -73,13 +76,13 @@ datasets_store([], name="cifar10_small_testing")
 # workflows, ROC analysis, or experiments where the test_batch must stay
 # unseen for final evaluation.
 # -----------------------------------------------------------------------------
-datasets_store([], name="cifar10_labeled_split")
-datasets_store([], name="cifar10_labeled_training")
-datasets_store([], name="cifar10_labeled_testing")
+datasets_store([DatasetSpecConfig(rid="NE0", version="0.1.0.post1.dev1")], name="cifar10_labeled_split")  # [E2E-DROP]
+datasets_store([DatasetSpecConfig(rid="NE8", version="0.1.0.post1.dev1")], name="cifar10_labeled_training")  # [E2E-DROP]
+datasets_store([DatasetSpecConfig(rid="NEJ", version="0.1.0.post1.dev1")], name="cifar10_labeled_testing")  # [E2E-DROP]
 
-datasets_store([], name="cifar10_small_labeled_split")
-datasets_store([], name="cifar10_small_labeled_training")
-datasets_store([], name="cifar10_small_labeled_testing")
+datasets_store([DatasetSpecConfig(rid="PHJ", version="0.1.0.post1.dev1")], name="cifar10_small_labeled_split")  # [E2E-DROP]
+datasets_store([DatasetSpecConfig(rid="PHT", version="0.1.0.post1.dev1")], name="cifar10_small_labeled_training")  # [E2E-DROP]
+datasets_store([DatasetSpecConfig(rid="PJ4", version="0.1.0.post1.dev1")], name="cifar10_small_labeled_testing")  # [E2E-DROP]
 
 # -----------------------------------------------------------------------------
 # Special-case configs (always empty by design)
@@ -93,4 +96,4 @@ datasets_store([], name="none")
 
 # REQUIRED: ``default_dataset`` is used when no dataset override is specified.
 # Set this to your most-frequently-used dataset after editing the configs above.
-datasets_store([], name="default_dataset")
+datasets_store([DatasetSpecConfig(rid="PHJ", version="0.1.0.post1.dev1")], name="default_dataset")  # [E2E-DROP] small labeled split
