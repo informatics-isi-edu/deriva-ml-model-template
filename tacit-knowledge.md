@@ -261,3 +261,99 @@ not the loader's GT. This is why the prediction CSV assets
 [SVC](https://localhost/id/168/SVC)) are handy as a parallel surface:
 each CSV is already scoped to exactly one run's predictions, with a
 `Source_Label` column recording the model state (e.g. `epoch_20`).
+
+<a id="tk-007"></a>
+### tk-007 — Analyst verdict: SSE beats RM8 on F34, but the win is non-uniform and SSE is overconfident ([execution TYR](https://localhost/id/168/TYR))
+**When:** 2026-05-30T23:12:00-07:00
+**By:** Carl Kesselman (carl@isi.edu)
+**Supported by:** [tk-005](#tk-005) (the two runs being compared), [tk-006](#tk-006) (the GT-vs-prediction scoping the join relied on)
+
+Closed the team's story by scoring [RM8](https://localhost/id/168/RM8)
+and [SSE](https://localhost/id/168/SSE) on the held-out F34 set. The
+headline confirms the Modeler's numbers (RM8 27.6%, SSE 37.6%), but the
+domain reading is richer than "bigger model wins," and three judgments
+are worth carrying forward:
+
+- **The win is concentrated in the *hard* classes, not uniform.** SSE
+  rescues exactly the classes RM8 abandoned to near-random — automobile
+  13%→55%, deer 5%→38%, cat 4%→27% — which is where the whole 10-point
+  gain lives. On the ROC/AUC measure SSE dominates at every operating
+  point (micro-AUC 0.81 vs 0.73), so for *ranking* quality there is no
+  ambiguity. But RM8 nominally "wins" frog (73% vs 40%), which is an
+  artifact, not a strength (next point).
+- **RM8's failure mode is mode collapse.** `[inferred from pattern]` It
+  funnels uncertain inputs into two classes: 171/550 of its predictions
+  are "frog" and 115 are "truck" (together 52%), while it predicts cat /
+  deer / automobile ~10 times each. That is why it catches most real
+  frogs — it calls everything froggish "frog" — so RM8's frog number must
+  not be cherry-picked as evidence the small model is good at anything.
+  The under-trained-low-capacity model getting "lucky" on one class this
+  way is a textbook signature, hence the pattern marker.
+- **SSE is confidently wrong a lot — its softmax is miscalibrated by the
+  overfit.** Mean confidence 0.81 (vs RM8's honest-but-useless 0.26), yet
+  among its >0.70-confidence predictions, 223 are wrong vs 170 right —
+  i.e. *when SSE says it's sure, it's wrong more than half the time.*
+  This is the same overfit [tk-005](#tk-005) saw as rising F34 test_loss;
+  it surfaces here as overconfidence. Practical guidance for any
+  downstream consumer: **trust SSE's ordering (ROC), do not trust its
+  confidence magnitudes.** Its mistakes are at least sensible (animals↔
+  animals: bird→deer, dog→deer; vehicles↔vehicles: ship→truck,
+  automobile→truck), which is a quality signal beyond accuracy.
+
+All numbers are pipeline-validation numbers on a deliberately tiny
+substrate (550 train / 55-per-class test), not a CIFAR-10 capability
+claim — see [tk-005](#tk-005). Full writeup, the re-derivable wide table,
+and the figures are in `docs/reports/2026-05-30-analysis.md`; the
+analysis is captured with provenance as execution
+[TYR](https://localhost/id/168/TYR).
+
+**Weighed alternatives:** ranked the runs by top-1 accuracy *and* by AUC
+rather than accuracy alone, specifically because the per-class table
+showed accuracy and ranking-quality could in principle disagree; here
+they agreed (SSE wins both), but the AUC view is what makes the
+"dominates at every operating point" claim, and the per-class view is
+what exposes the frog artifact that the single accuracy number hides.
+
+<a id="tk-008"></a>
+### tk-008 — Convention — the ROC notebook now emits a joined wide table; runner's execution description shows the static config text, not the override ([execution TYR](https://localhost/id/168/TYR))
+**When:** 2026-05-30T23:13:00-07:00
+**By:** Carl Kesselman (carl@isi.edu)
+**Supported by:** [tk-006](#tk-006) (the dual-purpose feature the wide-table join had to scope around)
+
+Two reusable facts from running the analysis pipeline on this catalog:
+
+- **`notebooks/roc_analysis.ipynb` now materializes a single joined wide
+  table** (`prediction_wide_table.csv`, one row per held-out image: GT +
+  every model's predicted class, confidence, and full per-class
+  probability vector, columns prefixed `<model_config>__<asset_rid>__`)
+  and commits it as an `Execution_Asset`. The pattern for a multi-model
+  comparison on this template is therefore: point the `assets=` group at
+  the prediction CSVs, and the notebook produces the wide table + ROC +
+  confusion matrices + `roc_metrics.csv` in one provenance-tracked run.
+  The wide table is the re-derivable artifact behind the report — a
+  consumer never has to re-touch the dual-purpose feature
+  ([tk-006](#tk-006)) because the join was done once, correctly, here. A
+  built-in assertion fails the run if the wide-table accuracy disagrees
+  with the per-experiment merge-cell accuracy, so a lossy/duplicating
+  join can't ship silently. The reusable named config is
+  `roc_quick_vs_large_toronto` (`src/configs/roc_analysis.py`), pointing
+  at the same-named `assets` group (RP6 + SVC).
+- **Gotcha worth knowing:** the catalog `Execution.Description` for a
+  notebook run shows the *static* `notebook_config` description ("ROC
+  curve analysis (default: quick vs extended training)") even when the
+  actual asset group was overridden on the CLI. The real choice is
+  recorded separately in the `[overrides: assets=...]` suffix the runner
+  appends and in the resolved Hydra config asset — so to know what a
+  notebook execution *actually* analyzed, read the overrides suffix /
+  `config_choices`, not the prose description. `[observed]` This is
+  cosmetic (provenance is intact in the override record), but a reader
+  skimming execution descriptions could be misled.
+
+**Weighed alternatives:** considered editing the notebook's
+`run_notebook(...)` call to name `roc_quick_vs_large_toronto` directly so
+the description prose would match; kept the notebook's config name
+unbound and selected the asset group via a positional `assets=` override
+instead, per the run-notebook skill's guidance (keep the notebook string
+stable, select the target with positional overrides) — the description
+mismatch is the price of that (correct) choice, recorded above so it
+isn't mistaken for a bug.
