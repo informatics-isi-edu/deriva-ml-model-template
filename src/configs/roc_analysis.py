@@ -96,6 +96,20 @@ notebook_config(
     description="ROC analysis: learning rate sweep (0.0001, 0.001, 0.01, 0.1)",
 )
 
+# Held-out Toronto-split comparison (catalog 168 e2e run): the clean
+# F2T-train / F34-eval pair the Modeler used (tacit-knowledge.md tk-004/005).
+# Compares the low-capacity baseline (RM8, cifar10_quick_toronto) against the
+# high-capacity 20-epoch run (SSE, cifar10_large_toronto) on the genuinely
+# held-out F34 partition. The asset group ``roc_quick_vs_large_toronto`` is
+# defined in src/configs/assets.py and carries the two prediction CSVs
+# (RP6 for RM8, SVC for SSE).
+notebook_config(
+    "roc_quick_vs_large_toronto",
+    config_class=ROCAnalysisConfig,
+    defaults={"assets": "roc_quick_vs_large_toronto", "datasets": "no_datasets"},
+    description="ROC analysis: quick (3 ep) vs large (20 ep) on held-out Toronto F34",
+)
+
 notebook_config(
     "roc_epoch_sweep",
     config_class=ROCAnalysisConfig,
