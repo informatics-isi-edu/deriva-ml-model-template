@@ -27,6 +27,8 @@ EXPECTED_EXPERIMENTS = {
     "cifar10_quick_full",
     "cifar10_extended_full",
     "cifar10_test_only",
+    "cifar10_quick_toronto",
+    "cifar10_large_toronto",
 }
 
 
