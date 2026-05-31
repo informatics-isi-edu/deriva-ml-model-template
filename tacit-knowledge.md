@@ -139,3 +139,125 @@ the hierarchy; you have to read descriptions or re-derive by set
 intersection (as this audit did). This is a gap in the bootstrap loader's
 split-registration, recorded in
 `findings/curator/02-labeled-split-not-registered-as-child.md`.
+
+<a id="tk-004"></a>
+### tk-004 — Modeler chose the canonical Toronto F2T/F34 pair (cifar10_split) for the held-out comparison, not the labeled-split family ([dataset F2J](https://localhost/id/168/F2J))
+**When:** 2026-05-30T22:55:00-07:00
+**By:** Carl Kesselman (carl@isi.edu)
+**Supported by:** [tk-002](#tk-002) (the leakage trap this choice avoids)
+
+Decision: for the differentiated training runs whose held-out numbers
+the Analyst will trust, train on the F2T Training partition and evaluate
+on the F34 Testing partition, fed to the runner as the
+[F2J](https://localhost/id/168/F2J) `Split` parent (config
+`cifar10_split`), which the model harness flattens to its F2T + F34
+children. Chose this family specifically *because* [tk-002](#tk-002)
+showed the labeled-split "testing" partitions
+([NEJ](https://localhost/id/168/NEJ) /
+[PJ4](https://localhost/id/168/PJ4)) are carved from the F2T training
+pool — training on F2T then "evaluating" on NEJ/PJ4 is total leakage. F2T
+and [F34](https://localhost/id/168/F34) are drawn from disjoint Toronto
+source batches (F2T ∩ F34 = 0, confirmed in [tk-001](#tk-001)), so the
+harness's final-epoch predictions on the F34 `Testing` bag are a genuine
+held-out metric.
+
+Mechanism worth knowing (term-of-art for a domain reader): the CIFAR-10
+model harness dispatches each input dataset to a *lane* by its
+`Dataset_Type` — a bag typed `Training` trains the model; a bag typed
+`Testing` is held out and only used to score per-epoch metrics and to
+record final-epoch predictions; a `Split` parent is expanded to its
+children first. So which dataset becomes "the held-out eval set" is
+decided entirely by catalog `Dataset_Type`, not by any flag the Modeler
+passes. This is why the leakage trap in [tk-002](#tk-002) matters
+operationally: a consumer who fed NEJ as the `Testing` bag would get a
+leaked number with no warning from the pipeline.
+
+To make the clean pairing a first-class, re-runnable choice I added two
+experiment presets — `cifar10_quick_toronto` and `cifar10_large_toronto`
+(in `src/configs/experiments.py`) — both overriding `datasets` to
+`cifar10_split`. The pre-existing `cifar10_quick` / `cifar10_extended`
+presets point at the labeled-split family and are kept as-is, but a
+header comment now flags them as the leaky-for-F2T-eval family.
+
+**Weighed alternatives:** considered using `cifar10_small_split`
+([F3M](https://localhost/id/168/F3M) → F3W/F46) for the headline
+comparison too — rejected for the *comparison* runs because, although
+F3W/F46 are internally disjoint, [tk-002](#tk-002) notes F3W overlaps F2T
+and F46 overlaps F34, so mixing F3M-trained and F2J-trained models in one
+analysis would cross dataset families. Used F3M only for the throwaway
+smoke run (pipeline shakeout), never for a reported number.
+
+<a id="tk-005"></a>
+### tk-005 — Two differentiated held-out runs: capacity+duration lifts F34 accuracy from 27.6% to 37.6% (and overfits) ([execution SSE](https://localhost/id/168/SSE))
+**When:** 2026-05-30T22:58:00-07:00
+**By:** Carl Kesselman (carl@isi.edu)
+**Supported by:** [tk-004](#tk-004) (the clean F2T/F34 pairing both runs used)
+
+Hypothesis: does more model capacity + more training time produce a
+measurably higher *held-out* F34 accuracy than a low-capacity baseline,
+both trained on F2T with zero leakage? Ran two executions to find out:
+
+- [RM8](https://localhost/id/168/RM8) — `cifar10_quick_toronto`
+  (3 epochs, 32→64 ch, 128 hidden, batch 128). Final-epoch held-out F34
+  accuracy **27.64%**.
+- [SSE](https://localhost/id/168/SSE) — `cifar10_large_toronto`
+  (20 epochs, 64→128 ch, 256 hidden, batch 64). Final-epoch held-out F34
+  accuracy **37.64%**, peaking ~39.8% mid-training.
+
+Both used seed=42 and trained on 550 F2T images, evaluated on 550 F34
+images. The runs differentiate clearly — a ~10-point held-out gap — so
+the pipeline reflects hyperparameter variation in its outputs rather than
+producing identical results (one of the things this arc set out to
+stress-test). The headline numbers are low in absolute terms because the
+substrate is tiny (550 train images, ~55/class) — these are
+pipeline-and-comparison validation numbers, **not** a model-capability
+claim for CIFAR-10.
+
+The large run also exhibits a textbook overfit a domain reader should
+note: train accuracy climbs to 100% by epoch 16 while F34 test_loss rises
+monotonically from 1.76 (epoch 6) to 3.40 (epoch 20) — the network is
+memorizing 550 images. The per-epoch `training_log.txt` asset captures
+the full curve, and the held-out F34 metric (not a leaky NEJ/PJ4 number)
+is what makes the overfit visible. Confirms the platform surfaces
+generalization signal correctly when the eval set is genuinely held out.
+
+For the Analyst: compare RM8 vs SSE on **F34**. Both wrote 550
+`Image_Classification` feature rows (queryable via
+`deriva_ml_list_feature_values(table="Image",
+feature_name="Image_Classification", execution_rids=["RM8"])` etc.) AND a
+wide per-image prediction CSV with per-class probabilities. The two CSVs
+are wired into `src/configs/assets.py` as the group
+`roc_quick_vs_large_toronto` (RIDs
+[RP6](https://localhost/id/168/RP6) for RM8,
+[SVC](https://localhost/id/168/SVC) for SSE). Join either against the
+loader-written ground-truth rows on F34 (see [tk-006](#tk-006)).
+
+<a id="tk-006"></a>
+### tk-006 — Convention — Image_Classification is dual-purpose: loader writes ground truth, training runs write predictions ([feature on Image](https://localhost/id/168/F28))
+**When:** 2026-05-30T23:00:00-07:00
+**By:** Carl Kesselman (carl@isi.edu)
+**Supported by:** [tk-005](#tk-005) (the prediction rows that established the second purpose)
+
+The `Image_Classification` feature on `Image` is written by two distinct
+kinds of execution and the rows are **not** distinguishable by table
+membership alone. The bootstrap loader execution writes the *ground
+truth* — one labeled row per image, `Confidence` unset. Each training
+execution (e.g. [RM8](https://localhost/id/168/RM8),
+[SSE](https://localhost/id/168/SSE)) writes *predictions* — one row per
+evaluated image, `Confidence` populated with the softmax max. After the
+two runs in [tk-005](#tk-005), an F34 image therefore carries three
+`Image_Classification` rows: one GT + one per training run.
+
+Implications for collaborators (the Analyst especially): when reading
+this feature, scope by the producing execution. To get *predictions* for
+one model, filter `execution_rids=[<that run's RID>]`; to get *ground
+truth*, filter to the loader execution's RID (or, equivalently, the
+`Confidence IS NULL` rows). An unfiltered read returns GT + every
+recorded prediction interleaved, which is almost never what an analysis
+wants — and the `newest` selector is **not** a safe substitute for "ground
+truth," since "newest" is whichever execution last wrote (a prediction),
+not the loader's GT. This is why the prediction CSV assets
+([RP6](https://localhost/id/168/RP6),
+[SVC](https://localhost/id/168/SVC)) are handy as a parallel surface:
+each CSV is already scoped to exactly one run's predictions, with a
+`Source_Label` column recording the model state (e.g. `epoch_20`).
