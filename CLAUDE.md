@@ -82,7 +82,7 @@ uv run ruff check src tests              # lint
 uv run ruff format src tests             # format
 uv run bump-version patch|minor|major    # release (clean tree required)
 
-uv run deriva-ml-run --info              # list configs
+uv run deriva-ml-run --list-configs      # list configs
 uv run deriva-ml-run dry_run=true        # dry run (no catalog writes)
 ```
 

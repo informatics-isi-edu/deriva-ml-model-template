@@ -125,8 +125,8 @@ print(f"Max iterations: {config.max_iterations}")
 Override configuration from the command line:
 
 ```bash
-# Show available options
-uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb --info
+# Show available configs
+uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb --list-configs
 
 # Override standard fields
 uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb \

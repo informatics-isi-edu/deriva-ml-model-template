@@ -102,7 +102,7 @@ First, update `src/configs/deriva.py` with your catalog's hostname and catalog I
 
 ```bash
 # Show available configs, experiment presets, and multiruns
-uv run deriva-ml-run --info
+uv run deriva-ml-run --list-configs
 ```
 
 Then run the model:
@@ -134,7 +134,7 @@ uv run deriva-ml-run +multirun=quick_vs_extended
 uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb
 
 # Discover available notebook configs
-uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb --info
+uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb --list-configs
 
 # Override config values using Hydra overrides
 uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb assets=my_assets

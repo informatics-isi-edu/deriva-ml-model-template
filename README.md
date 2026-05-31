@@ -192,7 +192,7 @@ uv run deriva-ml-run +experiment=cifar10_quick
 uv run deriva-ml-run +multirun=quick_vs_extended
 
 # Show available configs
-uv run deriva-ml-run --info
+uv run deriva-ml-run --list-configs
 
 # Run a notebook
 uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb

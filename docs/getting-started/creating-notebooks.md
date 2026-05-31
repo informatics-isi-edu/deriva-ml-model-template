@@ -165,8 +165,8 @@ print("Outputs committed successfully!")
 ### Command Line Testing
 
 ```bash
-# Show available configuration options
-uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb --info
+# Show available configs
+uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb --list-configs
 
 # Dry run (if supported by your notebook)
 uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb \
@@ -246,5 +246,5 @@ Before running your notebook in production:
 - [ ] Final cell calls `execution.commit_output_assets()`
 - [ ] Notebook runs start-to-finish without intervention
 - [ ] Commit all changes to Git
-- [ ] Test with `--info` flag to verify configuration
+- [ ] Verify configuration with `--list-configs` (the config menu) and `--cfg job` (the resolved config)
 - [ ] Strip output cells before committing (`nbstripout` should handle this)

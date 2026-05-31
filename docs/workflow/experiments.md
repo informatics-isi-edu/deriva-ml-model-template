@@ -9,7 +9,7 @@ Before running an experiment:
 - [ ] Code changes committed to Git
 - [ ] Dependencies up to date (`uv sync`)
 - [ ] Authenticated with Deriva (`uv run deriva-globus-auth-utils login --host ...`)
-- [ ] Configuration verified (use `--help` or `--info`)
+- [ ] Configuration verified (use `--list-configs` for the menu or `--cfg job` for the resolved config)
 - [ ] Version tag created for significant runs
 
 ## Single Experiment
@@ -109,7 +109,7 @@ uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb assets=different_asse
 ### View Configuration Options
 
 ```bash
-uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb --info
+uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb --list-configs
 ```
 
 ## Monitoring Progress

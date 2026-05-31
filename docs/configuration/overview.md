@@ -99,6 +99,28 @@ uv run deriva-ml-run model_config.epochs=100
 uv run deriva-ml-run datasets=testing model_config=extended
 ```
 
+### Inspecting Configuration
+
+Three distinct operations — keep them separate:
+
+```bash
+# List the config-group menu (ignores overrides)
+uv run deriva-ml-run --list-configs
+
+# Show the fully resolved config a run would use, without executing
+uv run deriva-ml-run --cfg job
+
+# Resolve AND validate against the live catalog (still no catalog writes)
+uv run deriva-ml-run +experiment=cifar10_quick dry_run=true
+```
+
+`deriva-ml-run` forwards every
+[Hydra command-line flag](https://hydra.cc/docs/advanced/hydra-command-line-flags/)
+(including `--info config|defaults|defaults-tree|plugins|searchpath|all`).
+`deriva-ml-run-notebook` supports `--list-configs`, `--info <mode>`, and
+`--cfg <mode>` as render-only inspection (it does not forward arbitrary
+flags).
+
 ## Next Steps
 
 - [Configuration Groups](groups.md) - Detailed guide to each group
