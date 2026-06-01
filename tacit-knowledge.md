@@ -168,3 +168,104 @@ resolved overrides, so no manual `description=` is needed. For ad-hoc
 `model_config=` / `datasets=` runs where you want a meaningful name, either keep
 the description free of grammar metacharacters or define a one-line experiment
 preset. Filed as `findings/modeler/hydra-description-override-grammar.md`.
+
+---
+
+## 2026-06-01 — Analyst: ranked the three runs by AUC, not top-1 accuracy
+
+**When:** 2026-06-01T11:55:00-07:00
+**By:** Carl Kesselman (carl@isi.edu)
+
+**Context.** Analyst arc. Evaluated the three Modeler runs — smoke
+[QK8](https://localhost/id/2/QK8@356-DC66-N6X8) / regularized
+[QWA](https://localhost/id/2/QWA@356-DC66-N6X8) / fast_lr
+[R5C](https://localhost/id/2/R5C@356-DC66-N6X8) — all on the same 100-image
+eval set [PK6](https://localhost/id/2/PK6@356-DC66-N6X8). Recorded the ROC
+notebook as analysis execution
+[REJ](https://localhost/id/2/REJ@356-DD8X-BD5W). Full write-up in
+`docs/reports/2026-06-01-analysis.md`.
+
+**Decision and why.** Ranked by **macro-AUC (one-vs-rest), not top-1
+accuracy** — and the choice was load-bearing, not stylistic. The two
+weaker runs *tie at 20% top-1 accuracy* but are not equivalent: macro-AUC
+separates them (smoke 0.739 vs fast_lr 0.638). The regularized run wins on
+every metric (acc 32%, macro-AUC 0.751, micro-AUC 0.757) so the ranking
+isn't sensitive to the metric *at the top* — but the metric choice is what
+distinguishes the two tied-on-accuracy runs, which is the analytically
+interesting part. **macro-AUC** (mean over per-class one-vs-rest AUC, equal
+weight per class) asks "do the model's probability scores *rank* the right
+class above the wrong ones," a different question from "is the single
+argmax guess correct." A model can be useless at committing to a final
+answer while still ordering classes sensibly — that's the smoke run.
+
+**The durable interpretive finding (the reason this entry exists).** The
+two 20%-accuracy runs fail in qualitatively different ways, and the failure
+mode is diagnosable from the *prediction distribution* (how many of the 10
+classes the model ever predicts) plus the calibration gap:
+- **Smoke (QK8) is underfit-but-informative.** Predicts only 7/10 classes,
+  collapses 34/100 guesses onto "horse," near-zero confidence (mean 0.18,
+  barely above the 0.10 chance floor) — yet its macro-AUC (0.739) is the
+  second-best of the three because the softmax *ordering* is already
+  sound. Three epochs taught it to rank, not to decide.
+- **Fast_lr (R5C) is unstable-and-uninformative.** Uses all 10 classes but
+  collapses 28/100 onto "deer," near-chance per-class AUC on deer (0.497),
+  horse (0.496), cat (0.568). The high LR (1e-2) thrashed instead of
+  converging. Genuinely the worst at discrimination despite the same 20%
+  top-1 as the smoke run.
+- **Regularized (QWA) is the only run whose mistakes are interpretable** —
+  frog→cat, cat→dog, automobile→truck, ship→airplane, bird→deer: the
+  classic CIFAR-10 confusable pairs, exactly what a domain expert expects
+  to be hard at 32×32. The collapse-onto-one-class signature of the other
+  two is the fingerprint of a model that *hasn't learned*, NOT of semantic
+  confusion. This is the tell to teach a domain reader: "everything → one
+  class" is non-learning; "confuses the visually-similar pairs" is learning.
+
+**Calibration consequence for downstream domain readers.** Only QWA
+produces confidence scores usable for triage (mean 0.67 correct / 0.59
+wrong, a real +0.08 gap centered well above chance). The smoke run is
+unsure of everything; fast_lr's gap exists but its scores are noisy. If
+anyone later wants to threshold on confidence to auto-accept / queue for
+review, QWA is the only candidate — and only after retraining at real data
+volume. These remain pipeline-validation runs (400 train images); the
+20–32% accuracies are NOT capability claims.
+
+**Reproducibility note.** Computed every metric two independent ways — a
+read-only script (`scripts/analyst_explore.py`) and the provenance-tracked
+ROC notebook (execution REJ) — and they agreed to the digit. The notebook
+correctly consumed QN6/QY8/R7A as inputs (now tagged `Input_File`), so the
+ROC/confusion figures on REJ trace by lineage back to the three training
+runs.
+
+---
+
+## 2026-06-01 — Convention — `Image_Classification` is dual-purpose (ground truth + predictions)
+
+**When:** 2026-06-01T11:56:00-07:00
+**By:** Carl Kesselman (carl@isi.edu)
+
+The `Image_Classification` feature on `Image` is written by two distinct
+kinds of execution and the rows are **not** distinguishable by table
+membership alone. The loader execution
+([CWC](https://localhost/id/2/CWC@356-DC66-N6X8)) writes the ground-truth
+layer with `Confidence IS NULL`; each training execution writes its
+predictions with `Confidence` populated (softmax max-probability). At
+Analyst time the feature held 1,400 rows = 1,100 GT (CWC) + 100 each from
+QK8 / QWA / R5C — and it grows by 100 more on every future run that
+predicts on a labeled set. So the raw count is a snapshot that rots; the
+*convention* is what's durable.
+
+**Implications for collaborators.** To read this feature as **ground
+truth**, filter by the loader execution RID OR by `Confidence IS NULL`. To
+isolate **one run's predictions**, filter by that run's execution RID. An
+unfiltered `ml.feature_values("Image", "Image_Classification")` returns GT
++ every recorded prediction interleaved — rarely what an analysis wants. A
+`newest`-style selector is also NOT a safe substitute for "ground truth":
+newest is whichever execution last wrote (a prediction run), not the
+loader. The ROC notebook handles this correctly — it auto-detects the GT
+execution as the one whose rows are all `Confidence`-NULL, picking the
+largest such execution when more than one exists — but a hand-written read
+of this feature must apply the filter explicitly or it silently mixes
+truth and predictions. (This is the consumer-facing face of the Curator's
+`Dataset_Type` expressiveness finding: the catalog stores the
+GT-vs-prediction distinction in a nullable value column, not in the type
+system.)
