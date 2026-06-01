@@ -83,3 +83,88 @@ scope for this arc.
 `deriva://...` orientation + read resources could not be read; all reads went
 through `deriva_ml_*` tools + read-only Python. See
 `findings/curator/mcp-resource-read-tool-unavailable.md`.
+
+---
+
+## 2026-06-01 — Modeler: three pipeline-validation runs in the small labeled family
+
+**Context.** Modeler arc of the e2e run. Goal was to stress-test the modelling
+pipeline against the Curator's substrate — confirm training launches cleanly,
+produces a learning signal, and lands outputs with provenance the Analyst can
+use — **not** to chase accuracy. Three CIFAR-10 CNN executions, all on
+[dataset PJM](https://localhost/chaise/record/#2@356-DC66-N6X8/deriva-ml:Dataset/RID=PJM)
+(`cifar10_small_labeled_split`, the `Split` parent that flattens to train PJW
+400 / eval PK6 100, both stratified from F3T seed=42):
+
+- Smoke: [execution QK8](https://localhost/chaise/record/#2@356-DC66-N6X8/deriva-ml:Execution/RID=QK8)
+  — `cifar10_quick` (3 epochs, lr 1e-3, batch 128).
+- Run A: [execution QWA](https://localhost/chaise/record/#2@356-DC66-N6X8/deriva-ml:Execution/RID=QWA)
+  — `cifar10_regularized` (20 epochs, dropout 0.25 — softens reliance on any
+  single feature to fight overfit — weight decay 1e-4, lr 1e-3).
+- Run B: [execution R5C](https://localhost/chaise/record/#2@356-DC66-N6X8/deriva-ml:Execution/RID=R5C)
+  — `cifar10_fast_lr` (15 epochs, lr 1e-2, no dropout).
+
+**Why this dataset, and the no-cross-families rule.** Per the Curator's
+leakage finding (above; `findings/curator/labeled-test-splits-drawn-from-training-pool.md`),
+the labeled "testing" splits NFJ/PK6 are carved from the *training* pool F3T,
+so training on F3T/F38 and evaluating on PK6 would be silent leakage the catalog
+can't warn about. The leakage-safe rule is: **train and eval within ONE family,
+never crossed.** Using the `Split` parent PJM accomplishes this structurally —
+the model's `build_loaders` harness flattens PJM to its own children (PJW train,
+PK6 eval), so train and eval are guaranteed same-family. Verified via
+`deriva_ml_get_lineage`: PK6 predictions trace back through PJM → F3T cleanly,
+and no F3T/F38/F44 dataset was ever an input. The small family was chosen over
+the full F3T/F44 family for fast iteration — 400+100 images train in seconds.
+
+**Did variation produce variation? Yes.** The three configs produced clearly
+distinct training dynamics, confirming the pipeline reflects hyperparameter
+changes rather than collapsing to one result:
+- Smoke (3 ep): train_acc 7% → 28.75%, test_acc ~20% — a learning signal, no
+  more (too few epochs to converge).
+- Run A (regularized, 20 ep): train_acc → 87.25%, test_acc → 32%. The large
+  train-vs-test gap is textbook overfitting on a 400-image train set — expected
+  at this scale, and a meaningfully different curve from the smoke run.
+- Run B (fast_lr 1e-2, 15 ep): epoch-1 train_loss spiked to 3.30 (the high
+  learning rate overshoots early), then converged slowly and noisily to
+  train_acc 45.75% while test_loss *diverged* upward (2.30 → 3.07) — an
+  unstable-optimization signature distinct from both other runs.
+
+**Implications for the Analyst.** These are pipeline-validation runs, not
+performance baselines — do not cite any of these accuracy numbers as a model
+capability claim. The eval set for all three is **PK6** (100 labeled images, in
+PJM). Each run recorded exactly 100 `Image_Classification` feature rows on PK6
+with a populated `Confidence` (softmax max-probability) plus a wider
+`prediction_probabilities.csv` asset carrying per-class probabilities — that CSV
+is the surface ROC analysis consumes. Because PK6 carries ground truth, accuracy
+and ROC are computable. Output asset RIDs are wired into `src/configs/assets.py`
+(`preds_*`, `weights_*`, and the combined `roc_modeler_e2e_three_way`).
+
+**Reproducibility note.** All three configs pin `seed=42` (drives weight init,
+shuffle order, numpy/random). Runs were launched from a clean git tree so the
+workflow commit hash is honest; the dirty-tree override was used only for the
+read-only config smoke tests, never for a recorded training run.
+
+---
+
+## 2026-06-01 — Modeler: behavior — Hydra rejects free-text `description=` overrides with parens/commas
+
+**Context.** Tried to give Run A a descriptive execution name by passing
+`description="Modeler e2e Run A: regularized (20ep, dropout 0.25, wd 1e-4) ..."`
+as a `deriva-ml-run` override. The run failed before any catalog write with
+`mismatched input ' (' expecting <EOF>` from Hydra's override grammar.
+
+**Behavior (durable).** `deriva-ml-run` passes positional `key=value` args
+through to Hydra's override parser, which treats `(`, `)`, and `,` as grammar
+metacharacters even inside a value. A free-text `description=` containing those
+characters is a parse error, not a runtime error — the process never starts.
+This is a Hydra-grammar constraint, not a deriva-ml bug.
+
+**Workaround applied.** Sanitized the description to drop parens/commas
+(`'description=Modeler e2e Run A regularized 20ep dropout0.25 wd1e-4 on ...'`,
+single-quoted for the shell). The auto-composed description for
+`+experiment=<name>` presets sidesteps this entirely — when an experiment preset
+is used, deriva-ml composes the description from the preset's text plus the
+resolved overrides, so no manual `description=` is needed. For ad-hoc
+`model_config=` / `datasets=` runs where you want a meaningful name, either keep
+the description free of grammar metacharacters or define a one-line experiment
+preset. Filed as `findings/modeler/hydra-description-override-grammar.md`.
