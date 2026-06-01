@@ -269,3 +269,28 @@ truth and predictions. (This is the consumer-facing face of the Curator's
 `Dataset_Type` expressiveness finding: the catalog stores the
 GT-vs-prediction distinction in a nullable value column, not in the type
 system.)
+
+---
+
+## E2E run 2026-06-01 — wrap-up disposition (orchestrator)
+
+- **Catalog KEPT, not deleted.** `e2e-test-20260601` (hostname `localhost`,
+  **catalog_id 2**) is preserved for archeology by explicit user decision.
+  The `[E2E-DROP]` commits on this branch (`80a6f31` deriva.py→id 2,
+  `a78687b` datasets.py RIDs) point the worktree's `default_deriva` /
+  `datasets.py` at it, so this worktree runs against catalog 2 as-is. Those
+  commits are intentionally NOT cherry-picked back to `main`.
+- **Branch archived** to `origin/archive/e2e-test-2026-06-01` (@ `da868fc`).
+  No template-source fixes were cherry-picked back: the only genuine template
+  improvement this run produced (the group-agnostic ROC description) landed on
+  `main` independently as PR #58. All other non-`[E2E-DROP]` commits are run
+  artifacts (reports, findings, this file, the analyst helper script).
+- **Worktree left in place** at `../deriva-ml-model-template-e2e` per CLAUDE.md
+  (read the reports/findings/notebooks without checking out the archive).
+- **Findings dispositioned:** PR #58 (ROC description, merged); deriva-ml
+  #272 = the `Dataset_Type`/leakage finding of record; deriva-ml #273 = the
+  agreed remediation (a member-overlap guard — server-side dataset
+  intersection, design captured, implementation deferred). The Hydra
+  `description=` grammar nit is deferred; the `ReadMcpResourceTool`-unavailable
+  finding is dismissed as a spawned-agent harness limitation, not a platform
+  defect.
