@@ -66,13 +66,21 @@ class ROCAnalysisConfig(BaseConfig):
 # ROC Analysis Notebook Configurations
 # =============================================================================
 
-# Default: Use quick vs extended comparison
+# Default config. The description is intentionally GENERIC: this config is the
+# CLI entry point for ROC analysis of whatever prediction-probability asset
+# group the user selects (``deriva-ml-run-notebook ... assets=<group>``). A
+# description that named the default asset group ("quick vs extended") would go
+# stale the moment a different ``assets=`` group is passed, leaving the recorded
+# execution's Description claiming a comparison that did not run. Keep it
+# group-agnostic so the prose is true for every override; the resolved
+# ``assets=`` override is appended to the execution Description automatically and
+# carries the specific group that actually ran.
 # Note: Use "no_datasets" to avoid type conflicts with with_description wrapped datasets
 notebook_config(
     "roc_analysis",
     config_class=ROCAnalysisConfig,
     defaults={"assets": "roc_quick_vs_extended", "datasets": "no_datasets"},
-    description="ROC curve analysis (default: quick vs extended training)",
+    description="ROC curve analysis of the selected prediction-probability asset group",
 )
 
 # -----------------------------------------------------------------------------
