@@ -208,9 +208,11 @@ def _print_summary(
             ("Split", "split"),
             ("Training (Labeled)", "training"),
             ("Testing (Labeled)", "testing"),
-            ("Small_Split", "small_split"),
-            ("Small_Training (Labeled)", "small_training"),
-            ("Small_Testing (Labeled)", "small_testing"),
+            # Small_Split parent dataset dropped in v1.42 migration —
+            # Small_Training/Small_Testing are sibling subsample()
+            # outputs, not children of a Small_Split.
+            ("Small_Training (Labeled, Subsample)", "small_training"),
+            ("Small_Testing (Labeled, Subsample)", "small_testing"),
             ("Labeled_Split", "labeled_split"),
             ("Labeled_Training", "labeled_training"),
             ("Labeled_Testing", "labeled_testing"),

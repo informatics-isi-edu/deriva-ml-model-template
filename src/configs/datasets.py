@@ -60,7 +60,12 @@ datasets_store([], name="cifar10_split")
 datasets_store([], name="cifar10_training")
 datasets_store([], name="cifar10_testing")
 
-datasets_store([], name="cifar10_small_split")
+# Note: ``cifar10_small_split`` is intentionally absent. The parent
+# ``Small_Split`` dataset was dropped in the v1.42 migration —
+# ``Small_Training`` and ``Small_Testing`` are now sibling subsample()
+# outputs of the same execution, discoverable via that execution's
+# outputs rather than via a parent dataset. See
+# ``deriva-ml/docs/superpowers/specs/2026-06-01-split-partition-tag-and-subsample-design.md``.
 datasets_store([], name="cifar10_small_training")
 datasets_store([], name="cifar10_small_testing")
 
