@@ -13,10 +13,13 @@ keywords = ["deriva-ml"]
 
 dependencies = [
     # Change this to be the module with the domain specific class derived from deriva-ml.
-    # Pinned to >=1.39 — v1.39.0 carries the unified
+    # Pinned to >=1.42 — v1.42.0 adds the ``subsample()`` primitive and
+    # the ``Split_Partition`` Dataset_Type tag (deriva-ml PR #275; design
+    # spec 2026-06-01-split-partition-tag-and-subsample-design.md). The
+    # CIFAR-10 hierarchy below relies on both. v1.39 carried the unified
     # Execution.commit_output_assets surface (ADR-0009); v2.0.0 was
     # walked back by the maintainer (same commit, re-tagged as v1.39.0).
-    "deriva-ml>=1.39,<2.0",
+    "deriva-ml>=1.42,<2.0",
     "notebook>=7.4.7",
     "torchvision",
     # For ROC analysis notebook
