@@ -150,18 +150,21 @@ loader assigned (visible via `ml.find_datasets()` after loading).
 | Config name | Loader output |
 |---|---|
 | `cifar10_complete` | `Complete` |
-| `cifar10_split` | `Split` |
-| `cifar10_training` | `Training` |
-| `cifar10_testing` | `Testing` |
-| `cifar10_small_split` | `Small_Split` |
-| `cifar10_small_training` | `Small_Training` |
-| `cifar10_small_testing` | `Small_Testing` |
+| `cifar10_split` | `Split` (canonical Toronto train/test partition, produced by `split_dataset(selection_fn=...)`) |
+| `cifar10_training` | child `Training` of `Split` |
+| `cifar10_testing` | child `Testing` of `Split` |
+| `cifar10_small_training` | `Small_Training` (stratified `subsample()` of `Training`; no parent Split) |
+| `cifar10_small_testing` | `Small_Testing` (stratified `subsample()` of `Testing`; no parent Split) |
 | `cifar10_labeled_split` | `Labeled_Split` |
 | `cifar10_labeled_training` | child `Training` of `Labeled_Split` |
 | `cifar10_labeled_testing` | child `Testing` of `Labeled_Split` |
 | `cifar10_small_labeled_split` | `Small_Labeled_Split` |
 | `cifar10_small_labeled_training` | child `Training` of `Small_Labeled_Split` |
 | `cifar10_small_labeled_testing` | child `Testing` of `Small_Labeled_Split` |
+
+Note: `cifar10_small_split` no longer exists. The parent `Small_Split`
+dataset was dropped in the v1.42 migration — `Small_Training` and
+`Small_Testing` are sibling subsample outputs of the same execution.
 
 For multi-environment setups, register parallel `*_<env>` configs in
 `src/configs/dev/` rather than editing the defaults — the example model in

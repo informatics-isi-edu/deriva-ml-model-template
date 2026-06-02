@@ -26,8 +26,7 @@ The CIFAR-10 example includes multiple dataset configurations:
 |------|--------------------------|----------|
 | `cifar10_small_labeled_split` | 20% holdout of training images | Quick experiments, ROC analysis (recommended) |
 | `cifar10_labeled_split` | 20% holdout of training images | Full experiments, ROC analysis |
-| `cifar10_small_split` | Toronto test_batch (official) | Quick experiments on official 50K/10K split |
-| `cifar10_split` | Toronto test_batch (official) | Full training on official 50K/10K split |
+| `cifar10_split` | Toronto test_batch (official) | Full training on official 50K/10K split (use `cifar10_small_training` / `cifar10_small_testing` for the small subsample variant) |
 
 Both families carry ground-truth labels in the Toronto distribution. The distinction is *which images* form the test partition:
 

@@ -160,12 +160,15 @@ The template includes pre-configured datasets for different use cases. Understan
 
 ### Labeled vs Unlabeled Datasets
 
-**Unlabeled Split Datasets** (`cifar10_split`, `cifar10_small_split`):
+**Unlabeled Split Datasets** (`cifar10_split` + `cifar10_small_training` /
+`cifar10_small_testing`):
 
 - Created from the full CIFAR-10 data (50,000 training + 10,000 test images)
 - The test partition contains images that do NOT have ground truth labels in the catalog
 - Suitable for training runs where you don't need to evaluate against ground truth
 - Cannot be used for ROC analysis or accuracy metrics on test data
+- Note: the small variant has no parent Split dataset — `Small_Training` and
+  `Small_Testing` are sibling `subsample()` outputs (v1.42 migration).
 
 **Labeled Split Datasets** (`cifar10_labeled_split`, `cifar10_small_labeled_split`):
 
@@ -183,10 +186,9 @@ The template includes pre-configured datasets for different use cases. Understan
 | `cifar10_split` | 28D4 | 10,000 | Split: 5,000 train + 5,000 test (unlabeled) |
 | `cifar10_training` | 28DC | 5,000 | Training set only |
 | `cifar10_testing` | 28DP | 5,000 | Testing set only (unlabeled) |
-| **Small Datasets** |
-| `cifar10_small_split` | 28EA | 1,000 | Split: 500 train + 500 test (unlabeled) |
-| `cifar10_small_training` | 28EJ | 500 | Small training set |
-| `cifar10_small_testing` | 28EW | 500 | Small testing set (unlabeled) |
+| **Small Datasets** (sibling subsamples; no parent Split) |
+| `cifar10_small_training` | 28EJ | 500 | Stratified subsample of `Training` |
+| `cifar10_small_testing` | 28EW | 500 | Stratified subsample of `Testing` (unlabeled) |
 | **Labeled Split Datasets** (for evaluation) |
 | `cifar10_labeled_split` | 28FG | 5,000 | Split: 4,000 train + 1,000 test (both labeled) |
 | `cifar10_labeled_training` | 28FT | 4,000 | Labeled training set |
