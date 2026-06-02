@@ -1,30 +1,42 @@
 """CIFAR-10 Stage 3: create the dataset hierarchy.
 
 This module demonstrates the **dataset-hierarchy pattern**: how
-to query the catalog for existing assets, partition them by some
-attribute (here: filename prefix), and assemble a nested dataset
-structure with derived holdout splits — all inside one Execution.
-Copy this module when you need to turn a set of uploaded assets
-into a structured dataset hierarchy with train/test splits.
+to query the catalog for existing assets, partition them via the
+library's split/subsample primitives, and assemble a nested
+dataset structure with derived holdout splits — all inside one
+Execution. Copy this module when you need to turn a set of
+uploaded assets into a structured dataset hierarchy with
+train/test splits.
 
 This module is the datasets layer. Given a catalog with the
 schema set up and some Image asset rows uploaded (Stages 1 and
 2 complete), it creates:
 
-    - ``Complete`` (Labeled) — all images.
-    - ``Split`` — parent of Training and Testing.
-    - ``Training`` (Labeled) — train-prefix images.
-    - ``Testing`` (Labeled) — test-prefix images.
-    - ``Small_Split`` — parent of Small_Training and Small_Testing.
-    - ``Small_Training`` (Labeled) — up to ``SMALL_TRAIN_SIZE``
-      stratified train-prefix images (capped at the actual pool).
-    - ``Small_Testing`` (Labeled) — up to ``SMALL_TEST_SIZE``
-      stratified test-prefix images (capped at the actual pool).
+    - ``Complete`` (Labeled) — all images. Hand-built; it is the
+      input to the canonical Split, not a Split itself.
+    - ``Split`` (+ ``Training`` / ``Testing`` partition children) —
+      the canonical Toronto train/test partition. Produced by
+      ``split_dataset(selection_fn=cifar_canonical_partition)`` so
+      the curators' fixed ``train_`` / ``test_`` filename prefix
+      drives the partition. The two children carry the
+      ``Split_Partition`` discriminator (deriva-ml v1.42, spec
+      2026-06-01).
+    - ``Small_Training`` (Labeled, ``Subsample``) — a stratified
+      ``SMALL_TRAIN_SIZE`` sample of ``Training``. Produced by
+      ``subsample()``; no parent Split — siblings are
+      discoverable via the producing execution's outputs.
+    - ``Small_Testing`` (Labeled, ``Subsample``) — same shape,
+      drawn from ``Testing``.
     - ``Labeled_Split`` (and Training/Testing children) — 80/20
       split of training images via ``split_dataset()``.
     - ``Small_Labeled_Split`` (and Training/Testing children) —
       fixed 400/100 split when the training pool is >=500, else
       an 80/20 fallback for small-scale work.
+
+The roles-don't-propagate rule: ``split_dataset`` assigns
+``Training`` / ``Testing`` based on each partition's role in the
+split, not by inheriting from the source. See CONTEXT.md
+(``Datasets — types and partitions``) for the canonical framing.
 
 Stage 3 reads back ``Image`` rows from the catalog and uses
 each filename's ``train_`` or ``test_`` prefix to decide which
@@ -41,13 +53,13 @@ Public API:
 from __future__ import annotations
 
 import logging
-import random
+
+import numpy as np
+import pandas as pd
 
 from deriva_ml import DerivaML
-from deriva_ml.dataset.split import split_dataset
+from deriva_ml.dataset.split import split_dataset, subsample
 from deriva_ml.execution import ExecutionConfiguration
-
-from scripts._cifar10_assets import class_from_filename
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +169,10 @@ def _build_dataset_descriptions(
     Returns:
         Mapping with one entry per Toronto-family dataset key. Keys are
         ``complete``, ``split``, ``training``, ``testing``,
-        ``small_split``, ``small_training``, and ``small_testing``.
+        ``small_training``, and ``small_testing``. ``small_split`` is
+        not produced — ``Small_Training`` and ``Small_Testing`` are
+        sibling outputs of the same execution (no parent Split), per
+        the v1.42 ``subsample()`` migration.
 
     Example:
         >>> d = _build_dataset_descriptions(
@@ -166,9 +181,10 @@ def _build_dataset_descriptions(
         ... )
         >>> "250 labeled images" in d["training"]
         True
+        >>> "small_split" in d
+        False
     """
     total = train_count + test_count
-    small_total = small_train_count + small_test_count
     return {
         "complete": (
             f"Complete CIFAR-10 dataset: {total:,} labeled images "
@@ -180,11 +196,6 @@ def _build_dataset_descriptions(
         ),
         "training": (f"CIFAR-10 training partition: {train_count:,} labeled images."),
         "testing": (f"CIFAR-10 testing partition: {test_count:,} labeled images."),
-        "small_split": (
-            f"Small CIFAR-10 dataset split: {small_total:,} stratified "
-            f"images for quick testing "
-            f"({small_train_count:,} / {small_test_count:,} train/test)."
-        ),
         "small_training": (
             f"Small CIFAR-10 training set: {small_train_count:,} "
             "stratified images for quick testing."
@@ -248,103 +259,52 @@ def _small_labeled_split_description(train_count: int) -> str:
     )
 
 
-def stratified_sample_rids(
-    rids: list[str],
-    classes: list[str | None],
-    sample_size: int,
+def cifar_canonical_partition(
+    df: pd.DataFrame,
+    partition_sizes: dict[str, int],
     seed: int,
-) -> list[str]:
-    """Pick a class-balanced sample of asset RIDs.
+) -> dict[str, np.ndarray]:
+    """Partition CIFAR-10 images by the curators' fixed filename prefix.
 
-    Mirrors :func:`scripts._cifar10_assets.stratified_sample_by_class`
-    but operates over a flat ``(rid, class)`` pairing — used for the
-    ``Small_Training`` / ``Small_Testing`` random samples that previously
-    called :func:`random.sample` on the full RID list (which left them
-    skewed toward whichever classes came first in the catalog query).
+    ``split_dataset()`` accepts a ``selection_fn`` callable that maps
+    the denormalized dataframe to a per-partition index mapping. For
+    CIFAR-10 the canonical Toronto train/test partition is fully
+    predicate-determined by filename prefix — ``train_*`` images are
+    Training, ``test_*`` images are Testing — so ``partition_sizes``
+    and ``seed`` are ignored (the selector is deterministic).
+
+    The caller must pass ``include_tables=["Image"]`` so the
+    denormalized dataframe carries the ``Image.filename`` column this
+    predicate inspects.
 
     Args:
-        rids: All candidate RIDs.
-        classes: Parallel list of class names. ``None`` entries are
-            treated as unknown-class and excluded from the result.
-        sample_size: Number of RIDs to return. If ``>= len(rids)`` the
-            full known-class set is returned.
-        seed: Seed used for per-class and final shuffles.
+        df: Denormalized member dataframe assembled by
+            ``split_dataset`` from the source dataset.
+        partition_sizes: Requested per-partition sizes. Ignored —
+            sizes are determined entirely by the predicate.
+        seed: Random seed. Ignored — the selector is deterministic.
 
     Returns:
-        A list of ``sample_size`` RIDs with roughly equal class
-        representation when ``sample_size >= len(unique classes)``.
+        Mapping ``{"Training": indices, "Testing": indices}`` of
+        integer index arrays selecting rows of ``df``.
 
     Example:
-        >>> rids = [f"R{i}" for i in range(6)]
-        >>> classes = ["a", "b", "a", "b", "a", "b"]
-        >>> sample = stratified_sample_rids(rids, classes, 4, seed=1)
-        >>> sum(1 for r, c in zip(rids, classes) if r in sample and c == "a")
-        2
+        >>> df = pd.DataFrame(
+        ...     {"Image.filename": ["train_a.png", "test_b.png", "train_c.png"]}
+        ... )
+        >>> parts = cifar_canonical_partition(df, {"Training": 0, "Testing": 0}, seed=0)
+        >>> sorted(parts.keys())
+        ['Testing', 'Training']
+        >>> parts["Training"].tolist()
+        [0, 2]
+        >>> parts["Testing"].tolist()
+        [1]
     """
-    if sample_size <= 0:
-        return []
-    by_class: dict[str, list[str]] = {}
-    for rid, cls in zip(rids, classes):
-        if cls is None:
-            continue
-        by_class.setdefault(cls, []).append(rid)
-
-    total_known = sum(len(v) for v in by_class.values())
-    if sample_size >= total_known:
-        rng = random.Random(seed)
-        flat = [r for v in by_class.values() for r in v]
-        rng.shuffle(flat)
-        return flat
-
-    num_classes = len(by_class)
-    if num_classes == 0:
-        return []
-    if sample_size < num_classes:
-        logger.warning(
-            "Stratified RID sample requested for %d items but %d classes "
-            "are available; result will be class-biased.",
-            sample_size,
-            num_classes,
-        )
-
-    class_rng = random.Random(seed)
-    sorted_classes = sorted(by_class.keys())
-    shuffled_by_class: dict[str, list[str]] = {}
-    for cls in sorted_classes:
-        bucket = list(by_class[cls])
-        class_rng.shuffle(bucket)
-        shuffled_by_class[cls] = bucket
-
-    base_quota = sample_size // num_classes
-    remainder = sample_size % num_classes
-    order_rng = random.Random(seed + 1)
-    class_order = list(sorted_classes)
-    order_rng.shuffle(class_order)
-    extras = set(class_order[:remainder])
-
-    picked: list[str] = []
-    for cls in sorted_classes:
-        quota = base_quota + (1 if cls in extras else 0)
-        picked.extend(shuffled_by_class[cls][:quota])
-
-    if len(picked) < sample_size:
-        already = set(picked)
-        leftover: list[str] = []
-        for cls in sorted_classes:
-            quota = base_quota + (1 if cls in extras else 0)
-            leftover.extend(shuffled_by_class[cls][quota:])
-        leftover_rng = random.Random(seed + 2)
-        leftover_rng.shuffle(leftover)
-        for rid in leftover:
-            if len(picked) >= sample_size:
-                break
-            if rid in already:
-                continue
-            picked.append(rid)
-
-    final_rng = random.Random(seed + 3)
-    final_rng.shuffle(picked)
-    return picked
+    is_train = df["Image.filename"].str.startswith("train_")
+    return {
+        "Training": np.flatnonzero(is_train.values),
+        "Testing": np.flatnonzero(~is_train.values),
+    }
 
 
 def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, str]:
@@ -365,10 +325,17 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
     Returns:
         Mapping of dataset name to its RID. Keys include
         ``complete``, ``split``, ``training``, ``testing``,
-        ``small_split``, ``small_training``, ``small_testing``,
+        ``small_training``, ``small_testing``,
         ``labeled_split``, ``labeled_training``,
         ``labeled_testing``, ``small_labeled_split``,
         ``small_labeled_training``, ``small_labeled_testing``.
+
+        ``small_split`` is **not** present — the parent ``Small_Split``
+        dataset is no longer created. ``Small_Training`` and
+        ``Small_Testing`` are sibling outputs of the same execution
+        (per the v1.42 ``subsample()`` migration; see CONTEXT.md
+        ``Datasets — types and partitions``). Code that previously
+        read ``datasets["small_split"]`` must migrate.
 
     Raises:
         SmallVariantDegenerateError: If the catalog holds too few
@@ -388,16 +355,6 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
 
     train_rids = [a.asset_rid for a in assets if a.filename.startswith("train_")]
     test_rids = [a.asset_rid for a in assets if a.filename.startswith("test_")]
-    train_classes = [
-        class_from_filename(a.filename)
-        for a in assets
-        if a.filename.startswith("train_")
-    ]
-    test_classes = [
-        class_from_filename(a.filename)
-        for a in assets
-        if a.filename.startswith("test_")
-    ]
     all_rids = train_rids + test_rids
     logger.info(f"  Train: {len(train_rids)}, Test: {len(test_rids)}")
 
@@ -406,7 +363,9 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
     # before any catalog writes keeps the catalog clean: if the small
     # variant can't be distinct, we don't want the full-size datasets
     # half-created either, since the operator will need to re-run with
-    # more images anyway.
+    # more images anyway. ``subsample()`` will also raise on
+    # ``size > total``, but this guard fails faster (no catalog writes
+    # at all) and produces operator-friendly remediation text.
     _require_small_variant_distinct(
         train_pool=len(train_rids), test_pool=len(test_rids)
     )
@@ -432,66 +391,6 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
 
     datasets: dict[str, str] = {}
 
-    with ml.create_execution(config) as exe:
-        logger.info(f"  Datasets execution RID: {exe.execution_rid}")
-
-        # Parent + child datasets
-        complete = exe.create_dataset(
-            description=descriptions["complete"],
-            dataset_types=["Complete", "Labeled"],
-        )
-        datasets["complete"] = complete.dataset_rid
-
-        split = exe.create_dataset(
-            description=descriptions["split"],
-            dataset_types=["Split"],
-        )
-        datasets["split"] = split.dataset_rid
-
-        training = exe.create_dataset(
-            description=descriptions["training"],
-            dataset_types=["Training", "Labeled"],
-        )
-        datasets["training"] = training.dataset_rid
-
-        testing = exe.create_dataset(
-            description=descriptions["testing"],
-            dataset_types=["Testing", "Labeled"],
-        )
-        datasets["testing"] = testing.dataset_rid
-
-        split.add_dataset_members(
-            [training.dataset_rid, testing.dataset_rid], validate=False
-        )
-
-        small_split = exe.create_dataset(
-            description=descriptions["small_split"],
-            dataset_types=["Split"],
-        )
-        datasets["small_split"] = small_split.dataset_rid
-
-        small_training = exe.create_dataset(
-            description=descriptions["small_training"],
-            dataset_types=["Training", "Labeled"],
-        )
-        datasets["small_training"] = small_training.dataset_rid
-
-        small_testing = exe.create_dataset(
-            description=descriptions["small_testing"],
-            dataset_types=["Testing", "Labeled"],
-        )
-        datasets["small_testing"] = small_testing.dataset_rid
-
-        small_split.add_dataset_members(
-            [small_training.dataset_rid, small_testing.dataset_rid], validate=False
-        )
-
-    exe.commit_output_assets(clean_folder=True)
-
-    # Member assignment runs against the catalog directly
-    # (the Execution above has already been committed)
-    logger.info("Assigning Image RIDs to datasets...")
-
     def _batched_add(ds_rid: str, rids: list[str], label: str) -> None:
         ds = ml.lookup_dataset(ds_rid)
         added = 0
@@ -501,25 +400,95 @@ def create_dataset_hierarchy(ml: DerivaML, batch_size: int = 500) -> dict[str, s
             added += len(batch)
         logger.info(f"  {label}: added {added}/{len(rids)} images")
 
-    if all_rids:
-        _batched_add(datasets["complete"], all_rids, "Complete")
-    if train_rids:
-        _batched_add(datasets["training"], train_rids, "Training")
-    if test_rids:
-        _batched_add(datasets["testing"], test_rids, "Testing")
+    with ml.create_execution(config) as exe:
+        logger.info(f"  Datasets execution RID: {exe.execution_rid}")
 
-    # Small splits — stratified sample by class. The pool-size guard
-    # at the top of this function (_require_small_variant_distinct) has
-    # already verified that train_rids and test_rids each exceed the
-    # respective SMALL_*_SIZE, so the sample is always strictly smaller
-    # than the source. Stratified sampling keeps each class
-    # proportionally represented (#13).
-    sample = stratified_sample_rids(
-        train_rids, train_classes, SMALL_TRAIN_SIZE, seed=42
-    )
-    _batched_add(datasets["small_training"], sample, "Small_Training")
-    sample = stratified_sample_rids(test_rids, test_classes, SMALL_TEST_SIZE, seed=43)
-    _batched_add(datasets["small_testing"], sample, "Small_Testing")
+        # Complete is hand-built — it is the *input* to the canonical
+        # Split, not itself a Split. Members are assigned in batches
+        # via the catalog directly; the execution scopes provenance.
+        complete = exe.create_dataset(
+            description=descriptions["complete"],
+            dataset_types=["Complete", "Labeled"],
+        )
+        datasets["complete"] = complete.dataset_rid
+        if all_rids:
+            logger.info("Assigning Image RIDs to Complete...")
+            _batched_add(datasets["complete"], all_rids, "Complete")
+
+        # Canonical Toronto train/test partition — produced by
+        # split_dataset() with a predicate selector. The selector
+        # ignores partition_sizes and seed (the partition is fully
+        # determined by the train_/test_ filename prefix), but
+        # split_dataset's signature still requires test_size — any
+        # nonzero value satisfies validation. include_tables=["Image"]
+        # guarantees the denormalized dataframe carries
+        # Image.filename for the predicate to inspect.
+        #
+        # Both children automatically receive the Split_Partition tag
+        # (deriva-ml v1.42, spec 2026-06-01). Role types
+        # (Training/Testing) are assigned by split_dataset based on
+        # the partition's role in the split, NOT inherited from the
+        # source — that is the canonical role-axis vs origin-axis
+        # decomposition; see CONTEXT.md.
+        if all_rids:
+            logger.info("Creating canonical Split via split_dataset(selection_fn)...")
+            canonical = split_dataset(
+                ml,
+                datasets["complete"],
+                exe,
+                test_size=max(len(test_rids), 1),
+                selection_fn=cifar_canonical_partition,
+                element_table="Image",
+                include_tables=["Image"],
+                training_types=["Labeled"],
+                testing_types=["Labeled"],
+                partition_by="element",
+                split_description=descriptions["split"],
+            )
+            datasets["split"] = canonical.split.rid
+            datasets["training"] = canonical.training.rid
+            datasets["testing"] = canonical.testing.rid
+
+            # Small_Training and Small_Testing — stratified subsamples
+            # of the canonical Training / Testing partitions. The
+            # source relationship is recorded in execution provenance
+            # (the source becomes an input of this execution, the
+            # subsample is an output); no parent Split, no
+            # Dataset_Dataset edge. ``Subsample`` is appended to
+            # dataset_types automatically.
+            logger.info("Subsampling Small_Training from Training...")
+            small_training_result = subsample(
+                ml,
+                datasets["training"],
+                exe,
+                size=SMALL_TRAIN_SIZE,
+                seed=42,
+                stratify_by_column=STRATIFY_COLUMN,
+                element_table="Image",
+                include_tables=["Image", "Image_Class"],
+                dataset_types=["Training", "Labeled"],
+                description=descriptions["small_training"],
+                partition_by="element",
+            )
+            datasets["small_training"] = small_training_result.subsample.rid
+
+            logger.info("Subsampling Small_Testing from Testing...")
+            small_testing_result = subsample(
+                ml,
+                datasets["testing"],
+                exe,
+                size=SMALL_TEST_SIZE,
+                seed=43,
+                stratify_by_column=STRATIFY_COLUMN,
+                element_table="Image",
+                include_tables=["Image", "Image_Class"],
+                dataset_types=["Testing", "Labeled"],
+                description=descriptions["small_testing"],
+                partition_by="element",
+            )
+            datasets["small_testing"] = small_testing_result.subsample.rid
+
+    exe.commit_output_assets(clean_folder=True)
 
     # Labeled splits derived from Training. Stratify by the
     # Image_Classification feature so each child partition keeps a
