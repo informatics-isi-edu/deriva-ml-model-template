@@ -2,97 +2,79 @@
 
 Stage 3 needs a live Deriva catalog for its dataset-creation work,
 so the orchestrator-level tests are sparse — end-to-end behavior
-is exercised in the load-cifar10 smoke test in Task A13. The
-pure RID-level stratified-sampling helper is tested directly here.
+is exercised in the load-cifar10 smoke test in Task A13.
+
+The legacy ``stratified_sample_rids`` helper was removed in the v1.42
+migration (deriva-ml ``subsample()`` does the stratified sampling
+now); its dedicated test coverage was retired with it.
 """
 
 from __future__ import annotations
 
-from collections import Counter
-
+import numpy as np
+import pandas as pd
 import pytest
-
-
-def _make_rid_corpus(per_class: int) -> tuple[list[str], list[str]]:
-    """Build (rids, classes) with per_class items in each of 10 classes."""
-    classes_names = (
-        "airplane",
-        "automobile",
-        "bird",
-        "cat",
-        "deer",
-        "dog",
-        "frog",
-        "horse",
-        "ship",
-        "truck",
-    )
-    rids: list[str] = []
-    classes: list[str] = []
-    counter = 0
-    for cls in classes_names:
-        for _ in range(per_class):
-            rids.append(f"R-{counter:06d}")
-            classes.append(cls)
-            counter += 1
-    return rids, classes
 
 
 def test_module_exposes_expected_api():
     from scripts._cifar10_datasets import (
+        cifar_canonical_partition,
         create_dataset_hierarchy,
         run_datasets_phase,
-        stratified_sample_rids,
     )
 
-    for fn in (create_dataset_hierarchy, run_datasets_phase, stratified_sample_rids):
+    for fn in (create_dataset_hierarchy, run_datasets_phase, cifar_canonical_partition):
         assert callable(fn)
 
 
-def test_stratified_rid_sample_balances_partition():
-    """Feed a class-balanced 100-RID set, sample 50: 5 per class."""
-    from scripts._cifar10_datasets import stratified_sample_rids
+def test_cifar_canonical_partition_splits_by_filename_prefix():
+    """``cifar_canonical_partition`` is the predicate selector passed to
+    ``split_dataset`` for the canonical Toronto train/test partition.
 
-    rids, classes = _make_rid_corpus(per_class=10)
-    sample = stratified_sample_rids(rids, classes, sample_size=50, seed=42)
-    rid_to_class = dict(zip(rids, classes))
+    The selector reads ``Image.filename`` from the denormalized dataframe
+    and routes ``train_*`` rows to Training and ``test_*`` rows to Testing.
+    ``partition_sizes`` and ``seed`` are ignored — the partition is fully
+    predicate-determined.
+    """
+    from scripts._cifar10_datasets import cifar_canonical_partition
 
-    assert len(sample) == 50
-    counts = Counter(rid_to_class[r] for r in sample)
-    assert all(n == 5 for n in counts.values()), counts
-
-
-def test_stratified_rid_sample_handles_imbalanced_source():
-    """Skewed source (most images bird/ship): result still spreads per quota."""
-    from scripts._cifar10_datasets import stratified_sample_rids
-
-    classes = ["bird"] * 200 + ["ship"] * 50 + ["airplane"] * 5 + ["truck"] * 5
-    rids = [f"R-{i:06d}" for i in range(len(classes))]
-    sample = stratified_sample_rids(rids, classes, sample_size=12, seed=42)
-
-    rid_to_class = dict(zip(rids, classes))
-    counts = Counter(rid_to_class[r] for r in sample)
-    # Base quota 3 per class (4 classes), remainder 0. So each class
-    # contributes exactly 3 — not 6 bird-skewed copies.
-    assert len(sample) == 12
-    assert all(n == 3 for n in counts.values()), counts
-
-
-def test_stratified_rid_sample_ignores_none_class_entries():
-    from scripts._cifar10_datasets import stratified_sample_rids
-
-    rids = ["A", "B", "C", "D"]
-    classes = ["x", None, "y", None]
-    sample = stratified_sample_rids(rids, classes, sample_size=2, seed=42)
-
-    assert set(sample) == {"A", "C"}
+    df = pd.DataFrame(
+        {
+            "Image.filename": [
+                "train_a.png",
+                "test_b.png",
+                "train_c.png",
+                "test_d.png",
+                "train_e.png",
+            ]
+        }
+    )
+    parts = cifar_canonical_partition(
+        df, partition_sizes={"Training": 0, "Testing": 0}, seed=0
+    )
+    assert sorted(parts.keys()) == ["Testing", "Training"]
+    np.testing.assert_array_equal(parts["Training"], np.array([0, 2, 4]))
+    np.testing.assert_array_equal(parts["Testing"], np.array([1, 3]))
 
 
-def test_stratified_rid_sample_empty_inputs_return_empty():
-    from scripts._cifar10_datasets import stratified_sample_rids
+def test_cifar_canonical_partition_handles_all_train():
+    """All ``train_`` filenames yield empty Testing partition."""
+    from scripts._cifar10_datasets import cifar_canonical_partition
 
-    assert stratified_sample_rids([], [], sample_size=5, seed=42) == []
-    assert stratified_sample_rids(["A"], ["x"], sample_size=0, seed=42) == []
+    df = pd.DataFrame({"Image.filename": ["train_a.png", "train_b.png"]})
+    parts = cifar_canonical_partition(df, partition_sizes={}, seed=0)
+    np.testing.assert_array_equal(parts["Training"], np.array([0, 1]))
+    assert parts["Testing"].size == 0
+
+
+def test_cifar_canonical_partition_handles_all_test():
+    """All ``test_`` filenames yield empty Training partition."""
+    from scripts._cifar10_datasets import cifar_canonical_partition
+
+    df = pd.DataFrame({"Image.filename": ["test_a.png", "test_b.png"]})
+    parts = cifar_canonical_partition(df, partition_sizes={}, seed=0)
+    np.testing.assert_array_equal(parts["Testing"], np.array([0, 1]))
+    assert parts["Training"].size == 0
 
 
 # --- _require_small_variant_distinct --------------------------------------
@@ -146,9 +128,9 @@ def test_require_small_variant_distinct_rejects_curator_01_scenario():
 def test_require_small_variant_distinct_rejects_boundary_case():
     """Equality (pool == SMALL_*_SIZE) is still degenerate.
 
-    When ``stratified_sample_rids`` is asked for exactly len(rids) it
-    returns every input RID, so the small dataset would still be
-    set-equal to the full one. The guard rejects equality alongside
+    When ``subsample()`` is asked for exactly ``len(source)`` it returns
+    every input RID, so the small dataset would still be set-equal to
+    the full one. The guard rejects equality alongside
     smaller-than-equal.
     """
     from scripts._cifar10_datasets import (
@@ -266,12 +248,14 @@ def test_dataset_descriptions_cover_all_toronto_keys():
         small_train_count=400,
         small_test_count=100,
     )
+    # ``small_split`` is intentionally absent — the parent Small_Split
+    # dataset was dropped in the v1.42 ``subsample()`` migration. See
+    # ``deriva-ml/docs/superpowers/specs/2026-06-01-split-partition-tag-and-subsample-design.md``.
     expected_keys = {
         "complete",
         "split",
         "training",
         "testing",
-        "small_split",
         "small_training",
         "small_testing",
     }
