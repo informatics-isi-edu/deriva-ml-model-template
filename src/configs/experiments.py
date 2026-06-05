@@ -26,7 +26,7 @@ Reference:
     https://mit-ll-responsible-ai.github.io/hydra-zen/how_to/configuring_experiments.html
 """
 
-from hydra_zen import make_config, store, MISSING
+from hydra_zen import make_config, store
 
 from configs.base import DerivaModelConfig
 
@@ -77,6 +77,46 @@ experiment_store(
         bases=(DerivaModelConfig,),
     ),
     name="cifar10_extended",
+)
+
+# =============================================================================
+# Capacity-comparison family on the small labeled split
+# =============================================================================
+# These three experiments hold the dataset constant at
+# ``cifar10_small_labeled_split`` (labeled on both partitions, leak-free)
+# and vary only model capacity + training duration. Because every run
+# evaluates on the *same* held-out test partition, the resulting
+# accuracies are directly comparable — capacity-vs-accuracy isolated from
+# any data confound. ``cifar10_quick`` (above) is the low end of the same
+# family (3 epochs, 32->64 ch); these add the middle and high ends so a
+# downstream analyst can plot a clean capacity sweep. All three write
+# predictions (Image_Classification feature rows + a probability CSV) on
+# the held-out test partition.
+
+experiment_store(
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "default_model"},
+            {"override /datasets": "cifar10_small_labeled_split"},
+        ],
+        description="Default CIFAR-10 on small labeled split: 10 epochs, 32->64 channels, lr=1e-3, batch 64",
+        bases=(DerivaModelConfig,),
+    ),
+    name="cifar10_small_default",
+)
+
+experiment_store(
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "cifar10_large"},
+            {"override /datasets": "cifar10_small_labeled_split"},
+        ],
+        description="Large CIFAR-10 on small labeled split: 20 epochs, 64->128 channels, 256 hidden units",
+        bases=(DerivaModelConfig,),
+    ),
+    name="cifar10_small_large",
 )
 
 # =============================================================================
