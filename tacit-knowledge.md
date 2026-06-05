@@ -243,3 +243,92 @@ The per-epoch trajectory needed to see the peak lives only in each run's
 `training_log.txt` execution asset, not in the feature rows. If
 best-epoch predictions are ever wanted, that's a model-code change
 (add save-best + restore before the predict step), not a config tweak.
+
+---
+
+<a id="tk-006"></a>
+### tk-006 — Analyst ranking + the coarse-vs-fine reading of the capacity sweep ([execution TKM](https://localhost/chaise/record/#69/deriva-ml:Execution/RID=TKM))
+**When:** 2026-06-05T12:10:00-07:00
+**By:** Carl Kesselman (https://localhost/auth/realms/deriva/372da2af-ee50-42b0-ada8-7c9eba10493c)
+**Supported by:** [tk-004](#tk-004) (the three runs + their recorded test_acc this analysis scores), [tk-005](#tk-005) (final-epoch caveat that bounds the ranking claim)
+
+Interpretive judgment a future analyst/modeler on this project should
+inherit, from scoring SR8/T1A/TAC against ground truth on RR6 (the joined
+wide table, [asset TN0](https://localhost/id/69/TN0); report at
+`docs/reports/2026-06-05-analyst-findings.md`).
+
+**Ranking.** By top-1 accuracy on the 100-image RR6 holdout: **default
+(T1A) 26% > large (TAC) 24% > quick (SR8) 20%** (random baseline 10%).
+The ranking is identical under macro-AUC (0.749 / 0.740 / 0.739), so it's
+robust to the metric choice. **If you have to pick one model, pick
+default (T1A)**: best top-1, best macro-AUC, and it doesn't pay large's
+overfitting tax. BUT — per [tk-005](#tk-005) these are *final-epoch*
+predictions; TAC peaked ~34% mid-training and decayed to 24%, so on a
+best-epoch basis large could plausibly win. State the ranking as
+"final-epoch states," never as "best each model can do." With 100 test
+images each point is ±~3 images, so default-vs-large is a near-tie on
+top-1; the only clean separation is quick's poor *calibration*
+(micro-AUC 0.643 vs ~0.74) — the 3-epoch model is confidently wrong more
+often, visible in ROC but invisible in top-1.
+
+**The load-bearing domain insight: coarse >> fine.** All three models
+score **~80% on the coarse "animal vs vehicle" question** while scoring
+only 20–26% on the fine 10-way label (computed by collapsing the 10
+classes into animals {bird,cat,deer,dog,frog,horse} vs vehicles
+{airplane,automobile,ship,truck} and checking supergroup agreement).
+The signal these models learned is real but at the wrong granularity —
+exactly what a 2-layer CNN on 400 images should produce. For a domain
+reader this single fact ("they know it's a vehicle, they just can't tell
+truck from car") is more informative than any top-1 number. The
+confusions confirm it: the dominant error pairs stay *within* supergroup
+— `automobile↔truck` (the canonical CIFAR-10 confusion, and the single
+most-confused pair here), `ship↔airplane`, and animal↔animal mixing
+(cat↔deer/horse/frog). `cat` is the hardest class for every run (0.0/0.2/0.0),
+matching CIFAR-10 lore. So the models confuse things that genuinely look
+alike — systematic, explainable errors, not noise. A future analyst
+should report the *shape* (coarse-learned, sensible confusions, mid-size
+wins), not cite 20–26% as a capability claim — these are tiny-dataset
+pipeline-validation runs.
+
+---
+
+<a id="tk-007"></a>
+### tk-007 — Convention — capture the analysis itself as a provenance execution; recorded test_acc reconciled exactly ([asset TN0](https://localhost/id/69/TN0))
+**When:** 2026-06-05T12:12:00-07:00
+**By:** Carl Kesselman (https://localhost/auth/realms/deriva/372da2af-ee50-42b0-ada8-7c9eba10493c)
+**Supported by:** [tk-003](#tk-003) (the `Confidence IS NULL` ground-truth filter this join depends on), [tk-006](#tk-006) (the ranking these outputs support)
+
+Two durable notes from the Analyst arc.
+
+**(1) Run the evaluation as a DerivaML execution that *consumes the
+prediction CSVs as declared inputs*.** I captured the analysis as
+execution [TKM](https://localhost/chaise/record/#69/deriva-ml:Execution/RID=TKM)
+(workflow type Analysis/Testing) whose `ExecutionConfiguration(assets=[ST6,
+T38, TCA])` declares the three runs' prediction CSVs as inputs. The payoff:
+`get_lineage(TN0)` (the joined-table asset) walks in one call all the way
+back — TN0 ← TKM ← {ST6,T38,TCA} ← {SR8,T1A,TAC} ← dataset RQP
+v0.1.0.post1.dev1 ← split exec ← KE0. Every figure in the report is
+therefore reproducible *and* traceable to the exact data+code that made it.
+The alternative (an ad-hoc script that just reads and plots) loses that
+chain. Cost is low: a clean tree before the run (commit the analysis code
+first) so the git hash is honest; dev iteration uses
+`--dry-run` + `DERIVA_ML_ALLOW_DIRTY=true`. Design split that's worth
+copying: pure RID-free join/metric logic in `src/scripts/analyst_join.py`
+(unit-tested, reusable template config), catalog RIDs only in the
+`[E2E-DROP]` driver `scripts/analyst_analysis.py`.
+
+**(2) The recorded test_acc reconciled *exactly* with independent
+recomputation.** Recomputing top-1 from the raw joined per-image rows gave
+20/26/24% — byte-identical to the catalog-recorded `test_acc` for
+SR8/T1A/TAC. This is the integrity check that matters: the platform's
+stored numbers are reproducible from its stored raw data, with no fudge.
+Note the two facts that coexist without contradiction: "recorded ==
+recomputed" is true, and (per [tk-005](#tk-005)) "recorded != the model's
+best epoch" is *also* true — an analyst must carry both. Also verified the
+feature-row argmax (`Image_Class`) agrees with the CSV `Predicted_Class`,
+so the two prediction surfaces tell the same story. No platform bug
+surfaced during the Analyst arc; the one cross-tier friction point
+(generic `count_table`/`query_*` need the *physical* feature-table name
+`Execution_Image_Image_Classification`, not the logical
+`Image_Classification`) was already filed by the Modeler
+(`findings/modeler/01`), so I routed around it rather than re-filing.

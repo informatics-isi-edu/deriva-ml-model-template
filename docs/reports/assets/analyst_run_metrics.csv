@@ -1,0 +1,4 @@
+run,execution_rid,config,n_images,correct,computed_test_acc_pct,recorded_test_acc_pct,reconciles,macro_auc,micro_auc,random_baseline_pct
+default,T1A,"cifar10_small_default (10 epochs, 32->64, 128h)",100,26,26.0,26.0,True,0.7488,0.743,10.0
+large,TAC,"cifar10_small_large (20 epochs, 64->128, 256h)",100,24,24.0,24.0,True,0.7401,0.7413,10.0
+quick,SR8,"cifar10_quick (3 epochs, 32->64, 128h)",100,20,20.0,20.0,True,0.7388,0.6429,10.0
