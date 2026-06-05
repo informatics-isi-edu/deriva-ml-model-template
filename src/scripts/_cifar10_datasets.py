@@ -274,8 +274,9 @@ def cifar_canonical_partition(
     and ``seed`` are ignored (the selector is deterministic).
 
     The caller must pass ``include_tables=["Image"]`` so the
-    denormalized dataframe carries the ``Image.filename`` column this
-    predicate inspects.
+    denormalized dataframe carries the ``Image.Filename`` column this
+    predicate inspects. The column case mirrors the catalog column
+    (``Filename``), not the lowercase asset-object attribute.
 
     Args:
         df: Denormalized member dataframe assembled by
@@ -290,7 +291,7 @@ def cifar_canonical_partition(
 
     Example:
         >>> df = pd.DataFrame(
-        ...     {"Image.filename": ["train_a.png", "test_b.png", "train_c.png"]}
+        ...     {"Image.Filename": ["train_a.png", "test_b.png", "train_c.png"]}
         ... )
         >>> parts = cifar_canonical_partition(df, {"Training": 0, "Testing": 0}, seed=0)
         >>> sorted(parts.keys())
@@ -300,7 +301,7 @@ def cifar_canonical_partition(
         >>> parts["Testing"].tolist()
         [1]
     """
-    is_train = df["Image.filename"].str.startswith("train_")
+    is_train = df["Image.Filename"].str.startswith("train_")
     return {
         "Training": np.flatnonzero(is_train.values),
         "Testing": np.flatnonzero(~is_train.values),
