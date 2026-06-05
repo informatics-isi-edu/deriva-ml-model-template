@@ -40,7 +40,7 @@ def test_cifar_canonical_partition_splits_by_filename_prefix():
 
     df = pd.DataFrame(
         {
-            "Image.filename": [
+            "Image.Filename": [
                 "train_a.png",
                 "test_b.png",
                 "train_c.png",
@@ -61,7 +61,7 @@ def test_cifar_canonical_partition_handles_all_train():
     """All ``train_`` filenames yield empty Testing partition."""
     from scripts._cifar10_datasets import cifar_canonical_partition
 
-    df = pd.DataFrame({"Image.filename": ["train_a.png", "train_b.png"]})
+    df = pd.DataFrame({"Image.Filename": ["train_a.png", "train_b.png"]})
     parts = cifar_canonical_partition(df, partition_sizes={}, seed=0)
     np.testing.assert_array_equal(parts["Training"], np.array([0, 1]))
     assert parts["Testing"].size == 0
@@ -71,7 +71,7 @@ def test_cifar_canonical_partition_handles_all_test():
     """All ``test_`` filenames yield empty Training partition."""
     from scripts._cifar10_datasets import cifar_canonical_partition
 
-    df = pd.DataFrame({"Image.filename": ["test_a.png", "test_b.png"]})
+    df = pd.DataFrame({"Image.Filename": ["test_a.png", "test_b.png"]})
     parts = cifar_canonical_partition(df, partition_sizes={}, seed=0)
     np.testing.assert_array_equal(parts["Testing"], np.array([0, 1]))
     assert parts["Training"].size == 0
