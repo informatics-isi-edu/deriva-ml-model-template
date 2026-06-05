@@ -147,3 +147,99 @@ for anything built on it. The config name → RID mapping (which the
 catalog does not itself store) is therefore: `cifar10_complete` → H8M,
 and F2J should be treated as do-not-use. Not deleted — deleting a
 dataset is a destructive op reserved for explicit user authorization.
+
+---
+
+<a id="tk-004"></a>
+### tk-004 — Modeler: capacity sweep on the small labeled split, 3 differentiated runs for the Analyst ([execution TAC](https://localhost/id/69/TAC@357-1GX4-RGMT))
+**When:** 2026-06-05T11:55:00-07:00
+**By:** Carl Kesselman (https://localhost/auth/realms/deriva/372da2af-ee50-42b0-ada8-7c9eba10493c)
+**Supported by:** [tk-002](#tk-002) (proved RQW/RR6 are leak-free and class-balanced — the precondition for trusting these test numbers), [tk-003](#tk-003) (dual-purpose feature convention these prediction rows obey)
+
+Hypothesis under test: does the training pipeline run end-to-end against
+a real catalog dataset, and do varied hyperparameters produce *different*
+outputs (vs all runs collapsing to the same number)? Ran a deliberate
+**capacity sweep** — three runs, identical dataset and seed, increasing
+only model capacity + training duration — so any accuracy difference is
+attributable to the model, not to the data. All three trained on
+[dataset RQP v0.1.0.post1.dev1](https://localhost/id/69/RQP@357-1GX4-RGMT)
+(small labeled split: RQW 400-image train / RR6 100-image held-out test,
+seed=42) and recorded predictions on the RR6 partition.
+
+Term-of-art for the platform reader: a "capacity sweep" holds the data
+fixed and scales the model up; rising train accuracy with flat-or-falling
+*test* accuracy is the signature of **overfitting** (the model memorizing
+training images rather than learning generalizable features).
+
+The three runs (headline = final-epoch test accuracy on RR6, the number
+that became the recorded predictions; random-guess baseline is 10% across
+10 balanced classes):
+
+| Run | Execution | Config | Epochs / Arch | final train_acc | recorded test_acc | best test_acc |
+|---|---|---|---|---|---|---|
+| 1 | [SR8](https://localhost/id/69/SR8@357-1GX4-RGMT) | `cifar10_quick` | 3 / 32→64, 128h | 28.75% | **20%** | 27% (ep1) |
+| 2 | [T1A](https://localhost/id/69/T1A@357-1GX4-RGMT) | `cifar10_small_default` | 10 / 32→64, 128h | 63.50% | **26%** | 29% (ep7) |
+| 3 | [TAC](https://localhost/id/69/TAC@357-1GX4-RGMT) | `cifar10_small_large` | 20 / 64→128, 256h | 99.50% | **24%** | 34% (ep5/7) |
+
+Findings: (1) The pipeline works end-to-end against a real catalog —
+three clean Uploaded executions, each with weights + training log +
+prediction CSV linked, predictions written as Image_Classification
+feature rows. (2) The runs differentiate sharply: train accuracy spans
+29%→99.5%, a clear learning signal, not noise. (3) The high-capacity run
+(TAC) is a textbook overfit — train hits 99.5% while test peaks at 34%
+(epoch 5/7) then *decays* to 24% by epoch 20 as test loss climbs
+2.25→3.54. On only 400 training images, more capacity bought
+memorization, not generalization. The *final-epoch* prediction the model
+recorded (24%) is therefore worse than its mid-training peak (34%) —
+a consequence of the template recording final-epoch predictions, not
+best-epoch (see [tk-005](#tk-005)).
+
+Implications for the Analyst: these are pipeline-validation + capacity-
+characterization runs, **not** performance baselines — don't cite 20/26/24%
+as model-capability claims; the test partition is 100 images, so each
+point is ±~3 images of noise. The interesting comparison is the *shape*
+(quick underfits, large overfits, default is the least-bad generalizer),
+not the absolute ranking. All three share dataset and seed, so they are
+directly comparable. Predictions live in the
+[Image_Classification feature](https://localhost/id/69/CWP@357-1GX4-RGMT)
+filtered by `Execution=SR8|T1A|TAC` (100 rows each, `Confidence`
+populated); ground truth is the same table filtered `Confidence IS NULL`
+per [tk-003](#tk-003).
+
+---
+
+<a id="tk-005"></a>
+### tk-005 — Convention — capacity-comparison experiments hold dataset + seed fixed; template records final-epoch (not best-epoch) predictions
+**When:** 2026-06-05T11:58:00-07:00
+**By:** Carl Kesselman (https://localhost/auth/realms/deriva/372da2af-ee50-42b0-ada8-7c9eba10493c)
+**Supported by:** [tk-004](#tk-004) (the run set that motivated both conventions)
+
+Two durable notes a future modeler/analyst on this project needs.
+
+**(1) Why the new `cifar10_small_*` experiments hold data + seed
+constant.** Added two experiment presets — `cifar10_small_default`
+(default_model, 10 epochs) and `cifar10_small_large` (cifar10_large,
+20 epochs) — both pinned to `cifar10_small_labeled_split`, joining the
+pre-existing `cifar10_quick` (3 epochs, same dataset). The point of the
+trio is a *controlled* comparison: same train/test partitions, same
+seed=42 (the template default, which matches the split's own seed), so
+the only independent variable across the three is model capacity ×
+training duration. If a future run wants to compare *datasets* instead,
+vary the `datasets=` group and hold the model fixed — don't conflate the
+two axes in one comparison. These presets bake in no catalog RIDs (they
+reference dataset *group names*), so they are reusable template config,
+not catalog-69-specific.
+
+**(2) The template records FINAL-epoch predictions, not best-epoch.**
+`src/models/cifar10_cnn.py` writes predictions once, after the last
+training epoch, tagged `source_label="epoch_N"`. It does **not** track
+or restore a best-validation checkpoint. Consequence, made concrete by
+the TAC run in [tk-004](#tk-004): when a model overfits, the recorded
+predictions reflect the *degraded* final state (24%), not the model's
+peak (34% at epoch 5/7). An analyst comparing recorded predictions
+across these runs is comparing final-epoch states, which is fair (it's
+apples-to-apples) but is **not** a "best each model could do" comparison.
+The per-epoch trajectory needed to see the peak lives only in each run's
+`training_log.txt` execution asset, not in the feature rows. If
+best-epoch predictions are ever wanted, that's a model-code change
+(add save-best + restore before the predict step), not a config tweak.
