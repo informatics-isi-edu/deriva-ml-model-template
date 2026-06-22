@@ -211,6 +211,8 @@ uv run deriva-ml-run --host localhost --catalog 45 +experiment=cifar10_quick
 ├── pyproject.toml                  # Project metadata and dependencies
 ├── Experiments.md                  # Registry of defined experiments
 ├── CLAUDE.md                       # Claude Code project instructions
+├── experiment-design/              # Per-experiment design docs (plan before config)
+├── dataset-design/                 # Per-dataset design docs (plan before build)
 ├── src/
 │   ├── configs/                    # Hydra-zen configurations (Python, no YAML)
 │   │   ├── base.py                 # Base DerivaModelConfig
