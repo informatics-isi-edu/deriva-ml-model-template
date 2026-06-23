@@ -197,11 +197,11 @@ uv run deriva-ml-run --host <hostname> --catalog <id> +experiment=<your_experime
 │   │   ├── experiments.py          # Experiment presets (model + dataset)
 │   │   ├── multiruns.py            # Named multirun (sweep) configurations
 │   │   ├── analysis.py             # Analysis notebook config
-│   │   └── dev/                    # Alternate per-environment catalog configs
+│   │   └── dev/                    # Alternate per-environment catalog configs (create as needed)
 │   ├── models/                     # Model implementations
 │   │   └── model_protocol.py       # The interface a model must implement
 │   └── scripts/                    # Data loading / generation scripts (package)
-├── notebooks/                      # Analysis notebooks (add your own)
+├── notebooks/                      # Analysis notebooks (create as needed)
 └── docs/                           # Documentation (auto-published)
     └── design/                     # Design docs (plan before you build)
         ├── experiment/             #   per-experiment designs (<slug>.md)
