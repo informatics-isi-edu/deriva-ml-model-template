@@ -160,19 +160,18 @@ src/
 │  ├─ datasets.py
 │  ├─ assets.py
 │  ├─ workflow.py
-│  └─ cifar10_cnn.py
+│  └─ model.py
 ├─ models/            # Model implementations
-│  └─ cifar10_cnn.py
-└─ scripts/           # Data loading scripts
-   └─ load_cifar10.py
+│  └─ model_protocol.py
+└─ scripts/           # Data loading / generation scripts
 ```
 
 ## Naming Conventions
 
 | Item | Convention | Example |
 |------|------------|---------|
-| Configuration files | `snake_case.py` | `cifar10_cnn.py` |
-| Configuration names | `snake_case` | `cifar10_extended` |
+| Configuration files | `snake_case.py` | `model.py` |
+| Configuration names | `snake_case` | `extended_training` |
 | Model functions | `snake_case` | `train_model` |
 | Classes | `PascalCase` | `MyModelConfig` |
 | Constants | `UPPER_CASE` | `DEFAULT_EPOCHS` |

@@ -183,15 +183,14 @@ uv run deriva-ml-run model_config=my_model_default dry_run=true
 uv run deriva-ml-run +experiment=my_experiment
 ```
 
-## Complete Example: CIFAR-10 CNN
+## Complete Example
 
-See `src/models/cifar10_cnn.py` and `src/configs/cifar10_cnn.py` for a complete working example that:
-
-- Downloads and restructures image datasets
-- Trains a CNN with configurable architecture
-- Logs training metrics
-- Saves model checkpoints
-- Tracks all provenance in the catalog
+This template ships only a no-op placeholder model (`example_model` in
+`src/configs/model.py`). For a complete, runnable model — one that downloads and
+restructures image datasets, trains a CNN with configurable architecture, logs
+metrics, saves checkpoints, and tracks all provenance in the catalog — see the
+separate worked-example repo
+[`deriva-ml-cifar-example`](https://github.com/informatics-isi-edu/deriva-ml-cifar-example).
 
 ## Checklist
 

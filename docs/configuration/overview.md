@@ -20,10 +20,10 @@ src/configs/
 ├─ workflow.py          # Workflow metadata
 ├─ base.py              # Base DerivaModelConfig
 ├─ workflow.py          # Workflow metadata
-├─ cifar10_cnn.py       # Model hyperparameters
+├─ model.py             # Model function + hyperparameters
 ├─ experiments.py       # Experiment presets
-├─ multiruns.py         # Named multirun configurations
-└─ my_notebook.py       # Notebook configurations
+├─ multiruns.py         # Named multirun (sweep) configurations
+└─ analysis.py          # Notebook configurations
 ```
 
 ## Key Concepts
@@ -111,7 +111,7 @@ uv run deriva-ml-run --list-configs
 uv run deriva-ml-run --cfg job
 
 # Resolve AND validate against the live catalog (still no catalog writes)
-uv run deriva-ml-run +experiment=cifar10_quick dry_run=true
+uv run deriva-ml-run +experiment=<name> dry_run=true
 ```
 
 `deriva-ml-run` forwards every

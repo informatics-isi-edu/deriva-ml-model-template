@@ -227,14 +227,14 @@ else:
     results.to_csv(data_path)
 ```
 
-## Complete Example: ROC Analysis
+## Complete Example
 
-See `src/configs/roc_analysis.py` and `notebooks/roc_analysis.ipynb` for a complete working example that:
-
-- Uses custom configuration parameters (`show_per_class`, `confidence_threshold`)
-- Processes probability files from model outputs
-- Generates ROC curves
-- Uploads analysis results to the catalog
+This template ships a generic notebook config scaffold (`src/configs/analysis.py`)
+but no executed notebook. For a complete, runnable analysis notebook — one that
+uses custom configuration parameters, processes probability files from model
+outputs, generates ROC curves, and uploads analysis results to the catalog — see
+the separate worked-example repo
+[`deriva-ml-cifar-example`](https://github.com/informatics-isi-edu/deriva-ml-cifar-example).
 
 ## Checklist
 

@@ -52,8 +52,7 @@ For model configurations, use hydra-zen directly::
     my_store(builds(my_model, param=value, zen_partial=True), name="my_model")
 """
 
-# Re-export load_configs from deriva-ml for convenience
-from deriva_ml.execution import load_configs
+# Re-export load_configs from deriva-ml for convenience.
+from deriva_ml.execution import load_configs  # noqa: F401
 
-# Deprecated: use load_configs("configs") directly. Kept for backward compatibility.
-load_all_configs = lambda: load_configs("configs")
+__all__ = ["load_configs"]

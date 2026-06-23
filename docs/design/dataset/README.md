@@ -1,7 +1,7 @@
 # Dataset Design Documents
 
 One Markdown design document per dataset, named `<slug>.md` (e.g.
-`cifar10-dev-subset.md`). Write the design **before** you create, split,
+`dev-subset.md`). Write the design **before** you create, split,
 subsample, or curate the dataset — it is the up-front contract the build then
 implements.
 

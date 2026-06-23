@@ -16,12 +16,25 @@ Quick links:
 
 ## What's Included
 
-- Python-first configuration using hydra-zen (no YAML)
-- CLI entry points via `deriva-ml-run` and `deriva-ml-run-notebook`
-- An example model (CIFAR-10 CNN) with 7 configuration variants
-- Experiment presets and named multirun configurations
-- A ROC analysis notebook with hydra-zen configuration
-- GitHub Actions for automated versioning and documentation
+This template ships as a **runnable skeleton** — every config group resolves
+and dry-runs end to end, with a no-op placeholder model so you can verify the
+plumbing before writing any code. You fill it in:
+
+- A Python-first hydra-zen configuration scaffold (no YAML): one self-documenting
+  module per config group in `src/configs/` — `deriva.py` (catalog connection),
+  `datasets.py`, `model.py`, `experiments.py`, `multiruns.py`, `assets.py`,
+  `workflow.py`, and `analysis.py` (notebook config). Each carries a live default
+  plus a single commented example you uncomment and fill in.
+- CLI entry points via `deriva-ml-run` (models) and `deriva-ml-run-notebook`
+  (analysis notebooks).
+- A model interface to implement (`src/models/model_protocol.py`) and a
+  placeholder `default_model` to replace (`src/configs/model.py`).
+- Experiment presets and named multirun (sweep) configurations.
+- GitHub Actions for automated versioning and documentation.
+
+For a complete worked example — a real model with multiple variants, a dataset
+loader, and an analysis notebook — see
+[`deriva-ml-cifar-example`](https://github.com/informatics-isi-edu/deriva-ml-cifar-example).
 
 ## Quick Start
 
@@ -52,7 +65,7 @@ uv sync --group=jupyter
 uv run nbstripout --install
 uv run deriva-ml-install-kernel
 
-# For PyTorch (required by the CIFAR-10 example)
+# For PyTorch (only if your model needs it)
 uv sync --group=pytorch
 ```
 
@@ -117,91 +130,54 @@ For checking versions of the underlying components (deriva-py, deriva-mcp-core, 
 uv run deriva-globus-auth-utils login --host <hostname>
 ```
 
-### 6. Load CIFAR-10 into a catalog
+### 6. Verify the skeleton resolves
 
-The example model needs CIFAR-10 data and dataset definitions in your catalog.
-
-**Prerequisites:** none beyond `uv` and a Deriva localhost instance.
-The CIFAR-10 archive (~170 MB) is downloaded automatically from the
-Toronto open mirror on first run and cached at
-`~/.cache/deriva-ml-model-template/`.
+Out of the box the template is a runnable skeleton: a no-op placeholder model
+on an empty default dataset. Confirm the config tree resolves before you
+customize anything.
 
 ```bash
-# Create a fresh catalog and load 10K images (good for first-time setup)
-uv run python src/scripts/load_cifar10.py \
-    --hostname <hostname> --create-catalog cifar10_test --num-images 10000
+# List the config-group menu (deriva_ml, datasets, model_config, ...)
+uv run deriva-ml-run --list-configs
 
-# Or load into an existing catalog
-uv run python src/scripts/load_cifar10.py \
-    --hostname <hostname> --catalog-id <id> --num-images 10000
+# Show the fully resolved config the default run would use (no execution)
+uv run deriva-ml-run +experiment=default --cfg job
 ```
 
-The loader prints the catalog ID and the RID of every dataset it creates
-(`Complete`, `Training`, `Small_Labeled_Split`, etc.). **Save these RIDs** —
-you need them for the next step.
+### 7. Customize
 
-### 7. Update configs for your catalog
-
-`src/configs/datasets.py` ships with RIDs from a previous demo catalog.
-After running `load-cifar10`, replace each `DatasetSpecConfig(rid=...)` with
-the RID the loader reported, and update each `version=` to the version the
-loader assigned (visible via `ml.find_datasets()` after loading).
-
-| Config name | Loader output |
-|---|---|
-| `cifar10_complete` | `Complete` |
-| `cifar10_split` | `Split` (canonical Toronto train/test partition, produced by `split_dataset(selection_fn=...)`) |
-| `cifar10_training` | child `Training` of `Split` |
-| `cifar10_testing` | child `Testing` of `Split` |
-| `cifar10_small_training` | `Small_Training` (stratified `subsample()` of `Training`; no parent Split) |
-| `cifar10_small_testing` | `Small_Testing` (stratified `subsample()` of `Testing`; no parent Split) |
-| `cifar10_labeled_split` | `Labeled_Split` |
-| `cifar10_labeled_training` | child `Training` of `Labeled_Split` |
-| `cifar10_labeled_testing` | child `Testing` of `Labeled_Split` |
-| `cifar10_small_labeled_split` | `Small_Labeled_Split` |
-| `cifar10_small_labeled_training` | child `Training` of `Small_Labeled_Split` |
-| `cifar10_small_labeled_testing` | child `Testing` of `Small_Labeled_Split` |
-
-Note: `cifar10_small_split` no longer exists. The parent `Small_Split`
-dataset was dropped in the v1.42 migration — `Small_Training` and
-`Small_Testing` are sibling subsample outputs of the same execution.
-
-For multi-environment setups, register parallel `*_<env>` configs in
-`src/configs/dev/` rather than editing the defaults — the example model in
-this template uses `cifar10_small_labeled_split`, so the corresponding
-`*_<env>` variant is the minimum you need to override.
-
-Also point `src/configs/deriva.py` (or a new entry under `src/configs/dev/`)
-at your hostname and catalog ID, **or** override at the CLI:
-`--host <hostname> --catalog <id>`.
+Turn the skeleton into your project by editing the config scaffolds in
+`src/configs/` — see [Customizing this template](#customizing-this-template)
+below for the ordered walkthrough.
 
 ### 8. Run
 
 > **Commit before running.** DerivaML records the git commit hash for
 > provenance. Uncommitted changes raise a warning and pollute the audit
-> trail of any run that uses them.
+> trail of any run that uses them. For fast iteration during development,
+> prefix a command with `DERIVA_ML_ALLOW_DIRTY=true` to bypass the check.
 
 ```bash
-# Run the example model with defaults
+# Run your default model with defaults
 uv run deriva-ml-run
 
-# Dry run (no catalog writes)
+# Dry run (resolves + validates against the catalog, no catalog writes)
 uv run deriva-ml-run dry_run=true
 
 # Use an experiment preset
-uv run deriva-ml-run +experiment=cifar10_quick
+uv run deriva-ml-run +experiment=<your_experiment>
 
-# Named multirun
-uv run deriva-ml-run +multirun=quick_vs_extended
+# Named multirun (sweep)
+uv run deriva-ml-run +multirun=<your_sweep>
 
 # Show available configs
 uv run deriva-ml-run --list-configs
 
-# Run a notebook
-uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb
+# Run an analysis notebook
+uv run deriva-ml-run-notebook notebooks/<your_notebook>.ipynb
 
 # Override host/catalog from command line
-uv run deriva-ml-run --host localhost --catalog 45 +experiment=cifar10_quick
+uv run deriva-ml-run --host <hostname> --catalog <id> +experiment=<your_experiment>
 ```
 
 ## Project Layout
@@ -209,7 +185,6 @@ uv run deriva-ml-run --host localhost --catalog 45 +experiment=cifar10_quick
 ```
 .
 ├── pyproject.toml                  # Project metadata and dependencies
-├── Experiments.md                  # Registry of defined experiments
 ├── CLAUDE.md                       # Claude Code project instructions
 ├── src/
 │   ├── configs/                    # Hydra-zen configurations (Python, no YAML)
@@ -218,17 +193,15 @@ uv run deriva-ml-run --host localhost --catalog 45 +experiment=cifar10_quick
 │   │   ├── datasets.py             # Dataset specifications
 │   │   ├── assets.py               # Asset RID configurations
 │   │   ├── workflow.py             # Workflow definitions
-│   │   ├── cifar10_cnn.py          # Model variant configs
-│   │   ├── experiments.py          # Experiment presets
-│   │   ├── multiruns.py            # Named multirun configurations
-│   │   ├── roc_analysis.py         # ROC analysis notebook config
-│   │   └── dev/                    # Alternate catalog configs
+│   │   ├── model.py                # Model function + hyperparameter configs
+│   │   ├── experiments.py          # Experiment presets (model + dataset)
+│   │   ├── multiruns.py            # Named multirun (sweep) configurations
+│   │   ├── analysis.py             # Analysis notebook config
+│   │   └── dev/                    # Alternate per-environment catalog configs
 │   ├── models/                     # Model implementations
-│   │   └── cifar10_cnn.py          # CIFAR-10 CNN model
-│   └── scripts/                    # Data loading scripts
-│       └── load_cifar10.py         # CIFAR-10 dataset loader
-├── notebooks/
-│   └── roc_analysis.ipynb          # ROC curve analysis notebook
+│   │   └── model_protocol.py       # The interface a model must implement
+│   └── scripts/                    # Data loading / generation scripts (package)
+├── notebooks/                      # Analysis notebooks (add your own)
 └── docs/                           # Documentation (auto-published)
     └── design/                     # Design docs (plan before you build)
         ├── experiment/             #   per-experiment designs (<slug>.md)
@@ -247,9 +220,43 @@ uv run bump-version minor   # New features
 uv run bump-version major   # Breaking changes
 ```
 
-## CIFAR-10 Example
+## Customizing this template
 
-The template includes a complete CIFAR-10 CNN example. See [CIFAR10.md](CIFAR10.md) for usage and dataset details, or the [full CIFAR-10 documentation](https://informatics-isi-edu.github.io/deriva-ml-model-template/reference/cifar10-example/) for architecture and model variants.
+Turn the skeleton into your project by working through the config scaffolds in
+`src/configs/`. Each module ships with a docstring, a live default, and one
+commented example you uncomment and fill in. The ordered walkthrough:
+
+1. **Point at your catalog** — set `hostname` and `catalog_id` in
+   `src/configs/deriva.py` (or pass `--host`/`--catalog` on the CLI).
+2. **Declare your datasets** — uncomment the `datasets_store(...)` example in
+   `src/configs/datasets.py` and fill in your dataset RIDs and versions
+   (discover them with `ml.find_datasets()`).
+3. **Add your model** — implement the `src/models/model_protocol.py` interface,
+   then replace `example_model` in `src/configs/model.py` and point
+   `default_model` at your config.
+4. **Define experiments** — uncomment the `experiment_store(...)` example in
+   `src/configs/experiments.py` to pair a model config with a dataset config
+   under one name.
+5. **(Optional) sweeps / assets / workflows** — `src/configs/multiruns.py`,
+   `src/configs/assets.py`, and `src/configs/workflow.py` each carry a commented
+   example for parameter sweeps, input asset RID lists, and workflow metadata.
+6. **Rename the project** — set `name` and `description` in `pyproject.toml`.
+
+Verify as you go:
+
+```bash
+uv run deriva-ml-run --list-configs              # your configs appear in the menu
+uv run deriva-ml-run +experiment=<name> --cfg job  # the resolved config looks right
+uv run deriva-ml-run +experiment=<name> dry_run=true  # validates against the catalog
+```
+
+For the full per-file walkthrough — exactly which block to uncomment, what each
+field means, and how to verify each step — see
+[docs/customization.md](docs/customization.md).
+
+For a complete worked reference — every step above filled in with a real model,
+datasets, and an analysis notebook — see
+[`deriva-ml-cifar-example`](https://github.com/informatics-isi-edu/deriva-ml-cifar-example).
 
 ## Using Claude Code with DerivaML
 

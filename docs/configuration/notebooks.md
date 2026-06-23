@@ -155,38 +155,41 @@ The `BaseConfig` class provides these standard fields:
 
 ## Complete Example
 
+The template ships a generic notebook config scaffold in
+`src/configs/analysis.py`. Rename it (and add more) to match the notebooks you
+build under `notebooks/`:
+
 ```python
-# src/configs/roc_analysis.py
+# src/configs/analysis.py
 from dataclasses import dataclass
 from deriva_ml.execution import BaseConfig, notebook_config
 
 @dataclass
-class ROCAnalysisConfig(BaseConfig):
-    """Configuration for ROC analysis notebook.
+class AnalysisConfig(BaseConfig):
+    """Configuration for an analysis notebook.
 
     Attributes:
-        show_per_class: Plot individual class ROC curves.
-        confidence_threshold: Minimum confidence for predictions.
+        show_detail: Example boolean parameter. Replace with parameters your
+            notebook actually needs.
     """
-    show_per_class: bool = True
-    confidence_threshold: float = 0.0
+    show_detail: bool = True
 
 notebook_config(
-    "roc_analysis",
-    config_class=ROCAnalysisConfig,
-    defaults={"assets": "probability_files"},
-    description="ROC curve analysis",
+    "analysis",
+    config_class=AnalysisConfig,
+    defaults={"assets": "no_assets", "datasets": "no_datasets"},
+    description="Analysis of the selected asset group.",
 )
 ```
 
 ```python
-# notebooks/roc_analysis.ipynb - Cell 1
+# notebooks/analysis.ipynb - Cell 1
 from deriva_ml.execution import run_notebook
 
 # Config name is auto-derived from the notebook filename
-# (roc_analysis.ipynb -> "roc_analysis").
-ml, execution, config = run_notebook(workflow_type="ROC Analysis Notebook")
+# (analysis.ipynb -> "analysis").
+ml, execution, config = run_notebook()
 
-print(f"Show per-class curves: {config.show_per_class}")
-print(f"Confidence threshold: {config.confidence_threshold}")
+print(f"Show detail: {config.show_detail}")
+print(f"Assets: {config.assets}")
 ```

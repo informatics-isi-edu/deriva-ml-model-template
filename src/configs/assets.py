@@ -1,39 +1,27 @@
-"""Asset Configurations.
+"""Asset configurations.
 
 Configuration Group: ``assets``
+-------------------------------
+An *asset config* names a list of asset RIDs (model weights, prediction files,
+plots, etc.) that a model or notebook should consume as inputs. The runner
+selects one with ``assets=<name>`` and the model reads it from
+``config.assets``.
 
-Asset RIDs are produced *by* prior executions in your catalog (e.g., a
-training run that uploaded a weights file). They cannot be supplied by the
-template — they only exist after you run experiments.
+Asset RIDs are produced *by* prior executions in your catalog — a training run
+that uploaded a weights file, for example — so the template ships with **no
+live asset configs**, only the empty entries the runner requires. After an
+execution prints its output RIDs, register them here. Two patterns:
 
-The defaults here are empty. After running an experiment, take the asset RIDs
-it printed and either:
+1. **Edit this file** — add an ``asset_store([...], name="...")`` entry.
+2. **Add a per-environment override** — register ``<name>_<env>`` configs in
+   ``src/configs/dev/assets_<env>.py`` under this same ``assets`` group, then
+   select with ``deriva-ml-run assets=<name>_<env>``.
 
-1. **Edit this file** — add an ``asset_store(["<rid>", ...], name="...")``
-   entry referencing the RIDs.
-2. **Add a per-environment override** — drop ``src/configs/dev/assets_<env>.py``
-   that registers ``<name>_<env>`` configs in the same ``assets`` group, then
-   select on the CLI: ``deriva-ml-run assets=quick_weights_<env>``.
-
-Pattern for an entry with a description (recommended — descriptions show up
-in ``deriva-ml-run --info`` output):
-
-    asset_store(
-        with_description(
-            ["3WS2"],
-            "Pre-trained weights from cifar10_quick (3 epochs).",
-        ),
-        name="quick_weights",
-    )
-
-A plain list also works if you don't want a description:
-
-    asset_store(["3WS6", "3X20"], name="roc_quick_vs_extended")
-
-Both forms compose with notebook configs — ``BaseConfig.assets`` is typed
-``Any = None`` so OmegaConf doesn't type-lock the slot, and
-``with_description`` instantiates to a ``DescribedList`` that behaves like
-a plain list at runtime.
+Both a plain list and a ``with_description(...)`` wrapper work — the latter
+surfaces a description in ``deriva-ml-run --info``. ``BaseConfig.assets`` is
+typed ``Any = None`` so OmegaConf does not type-lock the slot, and
+``with_description`` instantiates to a ``DescribedList`` that behaves like a
+plain list at runtime.
 """
 
 from hydra_zen import store
@@ -44,28 +32,18 @@ asset_store = store(group="assets")
 # REQUIRED: ``default_asset`` is used when no ``assets`` override is given.
 asset_store([], name="default_asset")
 
-# Alias for clarity in notebook configs.
+# Alias for clarity in notebook configs that take assets but no datasets.
 asset_store([], name="no_assets")
 
 # -----------------------------------------------------------------------------
-# Add per-experiment asset configs below as you generate them.
-# Examples (commented out — uncomment and replace RIDs after running):
+# Add per-experiment asset configs below as you generate them. Example (replace
+# the placeholder RIDs with the ones your execution printed):
 # -----------------------------------------------------------------------------
-
-# asset_store(["<rid_quick>", "<rid_extended>"], name="roc_quick_vs_extended")
 #
-# asset_store(
-#     with_description(
-#         ["<rid_quick>"],
-#         "Pre-trained weights from cifar10_quick.",
-#     ),
-#     name="quick_weights",
-# )
-#
-# asset_store(
-#     with_description(
-#         ["<rid_extended>"],
-#         "Pre-trained weights from cifar10_extended.",
-#     ),
-#     name="extended_weights",
-# )
+#   asset_store(
+#       with_description(
+#           ["<your-rid>"],
+#           "<what this asset is, e.g. trained weights from run X>",
+#       ),
+#       name="<your_assets>",
+#   )

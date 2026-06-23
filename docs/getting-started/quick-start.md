@@ -82,37 +82,33 @@ uv run deriva-globus-auth-utils login --host <hostname>
 
 This opens a browser window for Globus authentication. Credentials are cached locally.
 
-## Step 5: Set Up the Catalog
+## Step 5: Verify the Skeleton Resolves
 
-Before running the example model, load CIFAR-10 data into your catalog:
-
-```bash
-# Load 500 images (quick start)
-uv run load-cifar10 --host <hostname> --catalog_id <catalog_id> --num_images 500
-
-# Load more images for full experiments
-uv run load-cifar10 --host <hostname> --catalog_id <catalog_id> --num_images 5000
-```
-
-This creates datasets, uploads images, and sets up the schema needed by the example model. See the [CIFAR-10 example](../reference/cifar10-example.md) for details on dataset types and configurations.
-
-## Step 6: Run the Example Model
-
-First, update `src/configs/deriva.py` with your catalog's hostname and catalog ID, then discover what configurations are available:
+Out of the box the template is a runnable skeleton: a no-op placeholder model on
+an empty default dataset. Point `src/configs/deriva.py` at your catalog (or pass
+`--host`/`--catalog` on the CLI), then confirm the config tree resolves:
 
 ```bash
 # Show available configs, experiment presets, and multiruns
 uv run deriva-ml-run --list-configs
+
+# Show the fully resolved config the default run would use (no execution)
+uv run deriva-ml-run +experiment=default --cfg job
 ```
 
-Then run the model:
+## Step 6: Customize and Run
+
+Fill in the config scaffolds in `src/configs/` to turn the skeleton into your
+project — see [Customizing this Template](../customization.md) for the ordered
+walkthrough (point at your catalog, declare datasets, add your model, define
+experiments). Then run:
 
 ```bash
 # Run with default configuration
 uv run deriva-ml-run
 
-# Run with an experiment preset
-uv run deriva-ml-run +experiment=cifar10_quick
+# Run with an experiment preset (one you defined)
+uv run deriva-ml-run +experiment=<your_experiment>
 
 # Dry run (downloads inputs, skips catalog writes)
 uv run deriva-ml-run dry_run=true
@@ -121,31 +117,35 @@ uv run deriva-ml-run dry_run=true
 uv run deriva-ml-run --host <hostname> --catalog <catalog_id>
 
 # Override a specific model config
-uv run deriva-ml-run model_config=cifar10_quick
+uv run deriva-ml-run model_config=<your_model_config>
 
-# Run a named multirun
-uv run deriva-ml-run +multirun=quick_vs_extended
+# Run a named multirun (sweep)
+uv run deriva-ml-run +multirun=<your_sweep>
 ```
 
 ## Step 7: Run a Notebook
 
+The template ships a generic `analysis` notebook config (`src/configs/analysis.py`).
+Add your own notebooks under `notebooks/` and a matching `notebook_config(...)`:
+
 ```bash
 # Run notebook and upload results to catalog
-uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb
+uv run deriva-ml-run-notebook notebooks/<your_notebook>.ipynb
 
 # Discover available notebook configs
-uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb --list-configs
+uv run deriva-ml-run-notebook notebooks/<your_notebook>.ipynb --list-configs
 
 # Override config values using Hydra overrides
-uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb assets=my_assets
+uv run deriva-ml-run-notebook notebooks/<your_notebook>.ipynb assets=my_assets
 
 # Override host and catalog from the command line
-uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb \
+uv run deriva-ml-run-notebook notebooks/<your_notebook>.ipynb \
   --host <hostname> --catalog <catalog_id>
 ```
 
 ## Next Steps
 
+- [Customize the template](../customization.md)
 - [Create your own model](creating-models.md)
 - [Create a new notebook](creating-notebooks.md)
 - [Understand the configuration system](../configuration/overview.md)
