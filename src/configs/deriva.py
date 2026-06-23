@@ -10,7 +10,7 @@ in particular. Edit it for your environment, or override at the CLI:
     deriva-ml-run --host <hostname> --catalog <id> ...
 
 For multi-environment work, register additional configs (one per host/catalog)
-in ``src/configs/dev/deriva.py`` and select with
+in ``src/configs/dev/deriva_<env>.py`` and select with
 ``deriva_ml=<name>``.
 """
 
