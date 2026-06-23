@@ -51,14 +51,15 @@ The platform underneath:
   package).
 - `notebooks/` — analysis notebooks.
 - `tests/` — pytest smoke tests for configs.
-- `experiment-design/` — one Markdown design doc per experiment
-  (`<slug>.md`), authored **before** the config via
-  `/deriva-ml:design-experiment`. The up-front contract the config
-  implements; see `experiment-design/README.md`.
-- `dataset-design/` — one Markdown design doc per dataset
-  (`<slug>.md`), authored **before** the build via the same skill.
-  Parallel in shape to the experiment design; see
-  `dataset-design/README.md`.
+- `docs/design/` — the design docs (Specify-phase contracts),
+  authored **before** the work via `/deriva-ml:design-experiment`,
+  in per-entity subdirs (`<slug>.md` each):
+  - `docs/design/experiment/` — per-experiment designs (the contract
+    the config implements); see its `README.md`.
+  - `docs/design/dataset/` — per-dataset designs (before the build).
+  - `docs/design/feature/` — per-feature designs (before create).
+  - `docs/design/model/` — per-model designs (before authoring the
+    model fn + config).
 
 ## Conventions
 
@@ -147,10 +148,9 @@ uv run deriva-ml-run dry_run=true        # dry run (no catalog writes)
   reference.
 - [tacit-knowledge.md](tacit-knowledge.md) — design
   rationale and decision log for the example model.
-- [experiment-design/](experiment-design/) — per-experiment design
-  docs (the plan, written before the config).
-- [dataset-design/](dataset-design/) — per-dataset design docs (the
-  plan, written before the build).
+- [docs/design/](docs/design/) — design docs (the plan, written
+  before the work) in per-entity subdirs: `experiment/`, `dataset/`,
+  `feature/`, `model/`.
 
 ## Test plans
 
