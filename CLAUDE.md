@@ -158,27 +158,3 @@ uv run deriva-ml-run dry_run=true        # dry run (no catalog writes)
   `feature/`, `model/`.
 - [`deriva-ml-cifar-example`](https://github.com/informatics-isi-edu/deriva-ml-cifar-example) —
   the complete worked example (separate repo).
-
-## Test plans
-
-- When the user asks to run an end-to-end platform test (any
-  variant of "let's do an e2e run", "exercise the stack", or
-  "test the platform"), the current plan of record is
-  [docs/test-plans/2026-05-20-e2e-multipersona.md](docs/test-plans/2026-05-20-e2e-multipersona.md).
-  Read it before kicking off the run. The prior single-agent
-  platform-fitness plan (May 2026) is superseded but kept in
-  `docs/superpowers/specs/` for historical reference.
-
-- **Don't tear down the e2e worktree at wrap-up.** After the
-  Analyst arc commits and the evaluation report lands, push the
-  branch to `origin/archive/e2e-test-<YYYY-MM-DD>` for the
-  historical record, but **leave the local worktree at
-  `../deriva-ml-model-template-e2e/` in place**. The user needs to
-  be able to open the evaluation report, the per-persona findings
-  files, the executed notebooks, and the tacit-knowledge entries
-  *without* having to check out an archived branch or read GitHub.
-  Only remove the worktree when the user explicitly asks (or when
-  setting up the next run's worktree, which would otherwise
-  conflict). The pre-bootstrap step 0 of the next run is the
-  right place to ask "the prior run's worktree is still here; OK
-  to archive and remove it?"
