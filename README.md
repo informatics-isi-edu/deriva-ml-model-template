@@ -211,8 +211,6 @@ uv run deriva-ml-run --host localhost --catalog 45 +experiment=cifar10_quick
 ├── pyproject.toml                  # Project metadata and dependencies
 ├── Experiments.md                  # Registry of defined experiments
 ├── CLAUDE.md                       # Claude Code project instructions
-├── experiment-design/              # Per-experiment design docs (plan before config)
-├── dataset-design/                 # Per-dataset design docs (plan before build)
 ├── src/
 │   ├── configs/                    # Hydra-zen configurations (Python, no YAML)
 │   │   ├── base.py                 # Base DerivaModelConfig
@@ -232,6 +230,11 @@ uv run deriva-ml-run --host localhost --catalog 45 +experiment=cifar10_quick
 ├── notebooks/
 │   └── roc_analysis.ipynb          # ROC curve analysis notebook
 └── docs/                           # Documentation (auto-published)
+    └── design/                     # Design docs (plan before you build)
+        ├── experiment/             #   per-experiment designs (<slug>.md)
+        ├── dataset/                #   per-dataset designs
+        ├── feature/                #   per-feature designs
+        └── model/                  #   per-model designs
 ```
 
 ## Versioning
