@@ -18,9 +18,9 @@ plan · Status & links) and a worked example.
 - **`tacit-knowledge.md`** (project root) = the **running journal**: what you
   *learned* during and after the run. The two cross-link — a design doc's
   "Status & links" section points at the journal entries its run produced.
-- **`Experiments.md`** (project root) = the human-readable **registry** of all
-  configured experiments/multiruns. The design doc explains *why* an experiment
-  exists; `Experiments.md` summarizes *what* is configured.
+- **`src/configs/experiments.py`** = where the experiment is actually
+  *configured* (a model config paired with a dataset config). The design doc
+  explains *why* an experiment exists; the config defines *what* runs.
 
 A design doc is cheap; finding out you ran the wrong experiment after the run
 is not. Fill every section — a section you can't fill is a design question you

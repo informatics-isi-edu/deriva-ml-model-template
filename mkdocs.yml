@@ -16,6 +16,7 @@ plugins:
 
 nav:
   - Home: index.md
+  - Customization: customization.md
   - Getting Started:
       - Quick Start: getting-started/quick-start.md
       - Environment Setup: getting-started/environment-setup.md
@@ -32,4 +33,3 @@ nav:
       - Running Experiments: workflow/experiments.md
   - Reference:
       - Coding Guidelines: reference/coding-guidelines.md
-      - CIFAR-10 Example: reference/cifar10-example.md

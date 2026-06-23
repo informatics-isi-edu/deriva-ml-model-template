@@ -188,16 +188,16 @@ uv run deriva-ml-run model_config.epochs=25
 from hydra_zen import store, builds
 from deriva_ml.execution import Workflow
 
-Cifar10CNNWorkflow = builds(
+MyWorkflow = builds(
     Workflow,
-    name="CIFAR-10 2-Layer CNN",
+    name="Model Run",
     workflow_type=["Training", "Image Classification"],
-    description="Train a CNN on CIFAR-10.",
+    description="Train a model on my dataset.",
     populate_full_signature=True,
 )
 
 workflow_store = store(group="workflow")
-workflow_store(Cifar10CNNWorkflow, name="default_workflow")
+workflow_store(MyWorkflow, name="default_workflow")
 ```
 
 ## Required Defaults

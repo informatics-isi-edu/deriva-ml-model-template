@@ -17,13 +17,13 @@ experiment_store(
     make_config(
         hydra_defaults=[
             "_self_",
-            {"override /model_config": "cifar10_quick"},
-            {"override /datasets": "cifar10_small_labeled_split"},
+            {"override /model_config": "quick"},
+            {"override /datasets": "small_labeled_split"},
         ],
-        description="Quick CIFAR-10 training: 3 epochs, batch size 128",
+        description="Quick training: 3 epochs, batch size 128",
         bases=(DerivaModelConfig,),
     ),
-    name="cifar10_quick",
+    name="quick",
 )
 
 # Full training run
@@ -31,14 +31,14 @@ experiment_store(
     make_config(
         hydra_defaults=[
             "_self_",
-            {"override /model_config": "cifar10_extended"},
-            {"override /datasets": "cifar10_labeled_split"},
+            {"override /model_config": "extended"},
+            {"override /datasets": "labeled_split"},
             {"override /assets": "pretrained_weights"},
         ],
-        description="Full CIFAR-10 training with extended epochs",
+        description="Full training with extended epochs",
         bases=(DerivaModelConfig,),
     ),
-    name="cifar10_extended",
+    name="extended",
 )
 ```
 
@@ -47,19 +47,19 @@ experiment_store(
 Run a single experiment:
 
 ```bash
-uv run deriva-ml-run +experiment=cifar10_quick
+uv run deriva-ml-run +experiment=quick
 ```
 
 Run multiple experiments in sequence (ad-hoc multirun):
 
 ```bash
-uv run deriva-ml-run --multirun +experiment=cifar10_quick,cifar10_extended
+uv run deriva-ml-run --multirun +experiment=quick,extended
 ```
 
 Override within an experiment:
 
 ```bash
-uv run deriva-ml-run +experiment=cifar10_extended model_config.epochs=100
+uv run deriva-ml-run +experiment=extended model_config.epochs=100
 ```
 
 ## Named Multiruns
@@ -72,7 +72,7 @@ from deriva_ml.execution import multirun_config
 multirun_config(
     "lr_sweep",
     overrides=[
-        "+experiment=cifar10_quick",
+        "+experiment=quick",
         "model_config.learning_rate=0.0001,0.001,0.01,0.1",
     ],
     description="Learning rate sweep",
@@ -81,7 +81,7 @@ multirun_config(
 multirun_config(
     "quick_vs_extended",
     overrides=[
-        "+experiment=cifar10_quick,cifar10_extended",
+        "+experiment=quick,extended",
     ],
     description="Compare quick and extended training",
 )

@@ -12,9 +12,15 @@ template — conventions, gotchas, where things live.
 ## Project context
 
 This is a template for ML models integrated with DerivaML. As
-shipped it contains a CIFAR-10 CNN example with 7 model variants.
-Users typically clone it, replace the example with their own model
-and data, and ship.
+shipped it is a **runnable skeleton**: each `src/configs/*.py` is a
+self-documenting scaffold (a docstring, a live default, and one
+commented example to uncomment), and `src/configs/model.py` registers
+a no-op placeholder `default_model` so a fresh clone resolves and
+dry-runs end to end. Users clone it, fill in the scaffolds with their
+own catalog, datasets, and model, and ship. A complete worked example
+lives in a separate repo,
+[`deriva-ml-cifar-example`](https://github.com/informatics-isi-edu/deriva-ml-cifar-example) —
+do not re-add the worked example here.
 
 The platform underneath:
 - **deriva-ml** — core Python library for reproducible ML on
@@ -24,27 +30,26 @@ The platform underneath:
 
 ## Source layout
 
-- `src/configs/` — Hydra-zen configuration (Python, no YAML).
-  - `base.py` — `BaseConfig` dataclass.
-  - `cifar10_cnn.py` — model configs (architectures,
-    hyperparameters).
+- `src/configs/` — Hydra-zen configuration (Python, no YAML). Each
+  module is a scaffold: docstring + live default + one commented
+  example.
+  - `base.py` — `BaseConfig` / `DerivaModelConfig`.
+  - `model.py` — model function + hyperparameter configs; registers
+    `default_model` (a placeholder the user replaces).
   - `datasets.py` — `DatasetSpecConfig` per dataset.
   - `deriva.py` — Deriva connection configs.
   - `workflow.py` — Workflow definitions.
-  - `assets.py` — Asset RID configs for model weights and
-    predictions.
+  - `assets.py` — Asset RID configs (model weights, predictions).
   - `experiments.py` — model + dataset combinations.
   - `multiruns.py` — parameter sweep configs.
   - `multirun_descriptions.py` — rich markdown for multirun parent
     executions.
-  - `roc_analysis.py` — ROC notebook asset configs.
+  - `analysis.py` — analysis notebook config (consumes asset RIDs).
   - `dev/` — per-environment overrides
     (`deriva_<env>.py`, `datasets_<env>.py`, etc.).
-- `src/models/` — model implementations.
-  - `cifar10_cnn.py` — CNN model, training loop, prediction
-    recording.
+- `src/models/` — model implementations (user-authored).
   - `model_protocol.py` — Protocol/interface model functions
-    implement.
+    implement (re-exported from deriva-ml).
 - `src/scripts/` — data loading scripts (importable Python
   package).
 - `scripts/` — standalone shell/CLI utilities (not a Python
@@ -113,16 +118,17 @@ uv run deriva-ml-run dry_run=true        # dry run (no catalog writes)
 
 ## Key rules when modifying configs
 
-- **The defaults in `src/configs/datasets.py` ship with RIDs from a
-  previous demo catalog and will not work in a fresh checkout
-  until the user runs `load-cifar10` and updates them.** README §7
-  documents the update procedure for users; the agent should
-  follow the same procedure when configuring a new environment.
-- **Use labeled datasets for evaluation.** `cifar10_small_labeled_split`
-  or `cifar10_labeled_split` carry ground truth on both train and
-  test partitions and are the right choice for ROC analysis,
-  accuracy metrics, or any evaluation work. The `*_split` configs
-  (without `_labeled`) are for training-only flows.
+- **`src/configs/datasets.py` ships with NO live dataset configs** —
+  only the required empty sentinels (`default_dataset`, `no_datasets`,
+  `none`). The empty `default_dataset` passes config validation but
+  fails at execution time ("Dataset '' not found") by design: a fresh
+  clone must not silently run against someone else's RIDs. The user
+  registers their own `DatasetSpecConfig(rid=..., version=...)` by
+  uncommenting the example in that file. README "Customizing this
+  template" and `docs/customization.md` document the procedure.
+- **Each config scaffold has ONE commented example** — point users
+  (and yourself) at uncommenting and filling it in rather than writing
+  config from scratch.
 - **`Execution_Asset`** is for model outputs (weights, predictions,
   plots). `Execution_Metadata` is auto-managed; don't write to it
   directly.
@@ -143,14 +149,15 @@ uv run deriva-ml-run dry_run=true        # dry run (no catalog writes)
 ## Related docs
 
 - [README.md](README.md) — user-facing setup and usage.
-- [CIFAR10.md](CIFAR10.md) — end-to-end CIFAR-10 walkthrough.
-- [Experiments.md](Experiments.md) — experiment configuration
-  reference.
+- [docs/customization.md](docs/customization.md) — the per-file
+  walkthrough for turning the skeleton into a project.
 - [tacit-knowledge.md](tacit-knowledge.md) — design
-  rationale and decision log for the example model.
+  rationale and decision log.
 - [docs/design/](docs/design/) — design docs (the plan, written
   before the work) in per-entity subdirs: `experiment/`, `dataset/`,
   `feature/`, `model/`.
+- [`deriva-ml-cifar-example`](https://github.com/informatics-isi-edu/deriva-ml-cifar-example) —
+  the complete worked example (separate repo).
 
 ## Test plans
 

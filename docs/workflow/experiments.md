@@ -100,16 +100,16 @@ uv run jupyter lab
 
 ```bash
 # Run notebook and upload to catalog
-uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb
+uv run deriva-ml-run-notebook notebooks/analysis.ipynb
 
 # With configuration overrides
-uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb assets=different_assets
+uv run deriva-ml-run-notebook notebooks/analysis.ipynb assets=different_assets
 ```
 
 ### View Configuration Options
 
 ```bash
-uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb --list-configs
+uv run deriva-ml-run-notebook notebooks/analysis.ipynb --list-configs
 ```
 
 ## Monitoring Progress

@@ -1,7 +1,7 @@
 # Model Design Documents
 
 One Markdown design document per model, named `<slug>.md` (e.g.
-`cifar10-2layer-cnn.md`). Write the design **before** you author the model
+`2layer-cnn.md`). Write the design **before** you author the model
 function and its config — it is the up-front contract the model code and
 `model_config` then implement.
 
