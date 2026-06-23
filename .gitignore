@@ -175,3 +175,7 @@ cython_debug/
 # Hydra outputs
 outputs/
 multirun/
+
+# Session scratch (superpowers SDD ledger/reports) and local MCP config
+.superpowers/
+.mcp.json
