@@ -1,6 +1,10 @@
 # Tacit-knowledge merge drivers (see capture-tacit-knowledge D12).
-# Log and topic CV union-merge (both branches append); the derived index is
-# regenerated post-merge, never hand-merged.
+# All three union-merge. Log and topic CV union because both branches
+# append; the derived index unions too — it's a cache, so a union'd
+# merge is harmless and gets discarded whole by the next
+# capture-triggered rebuild. merge=union needs no extra git config
+# (it's a built-in driver); merge=ours would need per-clone config
+# nothing here registers.
 tacit-knowledge.md             merge=union
 docs/tacit-knowledge/topics.md merge=union
-docs/tacit-knowledge/index.md  merge=ours
+docs/tacit-knowledge/index.md  merge=union
