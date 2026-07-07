@@ -1,3 +1,13 @@
+---
+type: Log
+title: Tacit Knowledge — DerivaML Model Template
+description: >
+  The why behind this project's DerivaML decisions — rationale, dead ends, and
+  cross-discipline consequences that the catalog records but does not explain.
+  Append-only; each entry is a dated tk-… decision record.
+tags: [tacit-knowledge, provenance, deriva-ml]
+---
+
 # Tacit Knowledge
 
 This file records **tacit knowledge** — the *why*, the *intent*, and the

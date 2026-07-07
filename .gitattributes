@@ -1,0 +1,6 @@
+# Tacit-knowledge merge drivers (see capture-tacit-knowledge D12).
+# Log and topic CV union-merge (both branches append); the derived index is
+# regenerated post-merge, never hand-merged.
+tacit-knowledge.md             merge=union
+docs/tacit-knowledge/topics.md merge=union
+docs/tacit-knowledge/index.md  merge=ours
