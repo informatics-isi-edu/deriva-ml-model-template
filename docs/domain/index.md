@@ -1,5 +1,5 @@
 ---
-type: Index
+type: ConceptBundle
 title: Domain Background
 description: >
   Semantic, refined-in-place background about the target domain — facts,

@@ -1,5 +1,5 @@
 ---
-type: Index
+type: RetrievalIndex
 title: Tacit Knowledge — retrieval index
 description: >
   Derived candidate index over tacit-knowledge.md. Cache, not record —

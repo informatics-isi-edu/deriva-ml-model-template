@@ -1,5 +1,5 @@
 ---
-type: Index
+type: Vocabulary
 title: Tacit Knowledge — topic controlled vocabulary
 description: >
   Repo-local controlled vocabulary the LLM classifies tacit-knowledge
