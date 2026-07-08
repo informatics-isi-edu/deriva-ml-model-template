@@ -5,6 +5,6 @@
 # capture-triggered rebuild. merge=union needs no extra git config
 # (it's a built-in driver); merge=ours would need per-clone config
 # nothing here registers.
-tacit-knowledge.md             merge=union
-docs/tacit-knowledge/topics.md merge=union
-docs/tacit-knowledge/index.md  merge=union
+tacit-knowledge.md                      merge=union
+docs/tacit-knowledge/topics.md          merge=union
+docs/tacit-knowledge/retrieval-index.md merge=union
