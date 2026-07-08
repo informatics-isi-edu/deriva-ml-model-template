@@ -10,8 +10,16 @@ tags: [tacit-knowledge, provenance, deriva-ml]
 
 # Tacit Knowledge
 
-This file records **tacit knowledge** — the *why*, the *intent*, and the
-*background* behind decisions made about this project's models and data.
+**Tacit knowledge** is knowledge gained through experience and practice —
+context-dependent, and hard to codify or transfer through documentation
+(Polanyi). Its fully embodied core (intuition, pattern-recognition earned by
+doing) cannot be written down; what *can* be captured is the **externalizable
+shell** around it — the decisions made, the alternatives weighed and rejected,
+and the *why* a future teammate would otherwise have to reconstruct or re-learn
+the hard way. This file captures that shell and points at the rest.
+
+It records the *why*, the *intent*, and the *background* behind decisions made
+about this project's models and data.
 
 The **catalog** is the source of record for everything else: data contents,
 RIDs, dataset versions, workflow URLs and checksums, executions, lineage.
