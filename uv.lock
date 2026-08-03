@@ -306,7 +306,7 @@ wheels = [
 [[package]]
 name = "bdbag"
 version = "1.9.0.dev0"
-source = { git = "https://github.com/fair-research/bdbag?rev=1.9.0-dev#4de3a48b2132afb7e0ee26768b745da5cfd6cbe6" }
+source = { git = "https://github.com/fair-research/bdbag.git?rev=1.9.0-dev#4de3a48b2132afb7e0ee26768b745da5cfd6cbe6" }
 dependencies = [
     { name = "bagit" },
     { name = "bagit-profile" },
@@ -881,7 +881,7 @@ wheels = [
 [[package]]
 name = "deriva"
 version = "2.0.0.dev0"
-source = { git = "https://github.com/informatics-isi-edu/deriva-py?branch=deriva-ml#a8d42c80d96061a414428b36635bc3011e4437a9" }
+source = { git = "https://github.com/informatics-isi-edu/deriva-py?rev=0913e84959f34129c7d502c8416b72ad140c9924#0913e84959f34129c7d502c8416b72ad140c9924" }
 dependencies = [
     { name = "bdbag" },
     { name = "fair-identifiers-client" },
@@ -894,14 +894,15 @@ dependencies = [
     { name = "pydantic" },
     { name = "python-dateutil" },
     { name = "requests" },
+    { name = "setuptools" },
     { name = "sqlalchemy" },
     { name = "urllib3" },
 ]
 
 [[package]]
 name = "deriva-ml"
-version = "1.45.0.post1+g4d56677da"
-source = { git = "https://github.com/informatics-isi-edu/deriva-ml.git#4d56677dadd8a2ae55d936e89fb8662179b96908" }
+version = "1.55.1"
+source = { git = "https://github.com/informatics-isi-edu/deriva-ml.git#d2c5bc8e95050c7eb74b4e143cd1b333319c0ccd" }
 dependencies = [
     { name = "bdbag" },
     { name = "bump-my-version" },
